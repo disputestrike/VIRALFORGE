@@ -12,8 +12,16 @@ export class HttpError extends Error {
   }
 }
 
-// Convenience constructors
-export const BadRequestError = (msg: string) => new HttpError(400, msg);
-export const UnauthorizedError = (msg: string) => new HttpError(401, msg);
-export const ForbiddenError = (msg: string) => new HttpError(403, msg);
-export const NotFoundError = (msg: string) => new HttpError(404, msg);
+// Convenience error classes
+export class BadRequestError extends HttpError {
+  constructor(msg: string) { super(400, msg); this.name = "BadRequestError"; }
+}
+export class UnauthorizedError extends HttpError {
+  constructor(msg: string) { super(401, msg); this.name = "UnauthorizedError"; }
+}
+export class ForbiddenError extends HttpError {
+  constructor(msg: string) { super(403, msg); this.name = "ForbiddenError"; }
+}
+export class NotFoundError extends HttpError {
+  constructor(msg: string) { super(404, msg); this.name = "NotFoundError"; }
+}

@@ -107,7 +107,7 @@ export function registerOAuthRoutes(app: Express) {
       "https://www.googleapis.com/auth/userinfo.profile",
     ];
 
-    const authUrl = googleClient.generateAuthUrl({
+    const authUrl = getGoogleClient().generateAuthUrl({
       access_type: "offline",
       scope: scopes,
     });

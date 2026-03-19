@@ -1,291 +1,150 @@
 /**
  * Test Database Setup for ApexAI
- * Uses SQLite in-memory for fast, isolated testing
- * No external dependencies, all data reset between tests
+ * Provides mock DB helpers for unit testing without a live MySQL connection.
  */
 
-import { drizzle, BetterSqlite3Database } from "drizzle-orm/better-sqlite3";
-import Database from "better-sqlite3";
-import {
-  activityLogs,
-  campaigns,
-  leads,
-  users,
-  templates,
-  testimonials,
-  messages,
-  campaignContacts,
-  callRecordings,
-  onboardings,
-  analyticsSnapshots,
-  systemConfig,
-} from "../drizzle/schema";
+import { vi } from "vitest";
 
-let testDb: BetterSqlite3Database | null = null;
+// ─── Mock fixtures ────────────────────────────────────────────────────────────
 
-/**
- * Initialize an in-memory test database
- * Creates all tables and seeds with test data
- */
-export function initializeTestDb(): BetterSqlite3Database {
-  const db = new Database(":memory:");
-  const drizzleDb = drizzle(db);
+export const TEST_USER = {
+  id: 1,
+  openId: "test-user-123",
+  name: "Test User",
+  email: "test@example.com",
+  loginMethod: "oauth" as const,
+  role: "admin" as "user" | "admin",
+  createdAt: new Date("2024-01-01"),
+  updatedAt: new Date("2024-01-01"),
+  lastSignedIn: new Date("2024-01-01"),
+};
 
-  // Enable foreign keys
-  db.pragma("foreign_keys = ON");
+export const TEST_LEAD = {
+  id: 1,
+  firstName: "Jane",
+  lastName: "Smith",
+  email: "jane@example.com",
+  phone: "555-0001",
+  company: "Acme Corp",
+  industry: "Technology",
+  title: "CEO",
+  linkedinUrl: null,
+  website: null,
+  city: "Austin",
+  state: "TX",
+  country: "US",
+  score: 80,
+  segment: "hot" as "hot" | "warm" | "cold" | "unqualified",
+  verificationStatus: "verified" as "verified" | "unverified" | "bounced" | "pending",
+  status: "new" as "new" | "contacted" | "qualified" | "converted" | "lost",
+  source: "manual",
+  notes: null,
+  tags: null,
+  customFields: null,
+  createdAt: new Date("2024-01-01"),
+  updatedAt: new Date("2024-01-01"),
+};
 
-  // Create tables manually (since migrations are SQL)
-  const schema = `
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      openId TEXT UNIQUE NOT NULL,
-      name TEXT,
-      email TEXT,
-      loginMethod TEXT,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+export const TEST_CAMPAIGN = {
+  id: 1,
+  name: "Test Campaign",
+  description: "A test campaign",
+  channels: JSON.stringify(["email", "sms"]),
+  status: "draft" as "draft" | "active" | "paused" | "completed" | "archived",
+  goal: "appointments" as "appointments" | "demos" | "sales" | "awareness" | "follow_up",
+  industry: "Technology",
+  startDate: null,
+  endDate: null,
+  dailyLimit: 100,
+  totalContacts: 0,
+  sentCount: 0,
+  responseCount: 0,
+  scheduledCount: 0,
+  showCount: 0,
+  convertedCount: 0,
+  revenueGenerated: 0,
+  settings: null,
+  createdBy: 1,
+  createdAt: new Date("2024-01-01"),
+  updatedAt: new Date("2024-01-01"),
+};
 
-    CREATE TABLE IF NOT EXISTS leads (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      userId INTEGER NOT NULL,
-      firstName TEXT NOT NULL,
-      lastName TEXT NOT NULL,
-      email TEXT,
-      phone TEXT,
-      company TEXT,
-      industry TEXT,
-      title TEXT,
-      linkedinUrl TEXT,
-      website TEXT,
-      city TEXT,
-      state TEXT,
-      country TEXT,
-      source TEXT,
-      notes TEXT,
-      score INTEGER DEFAULT 0,
-      segment TEXT DEFAULT 'cold',
-      status TEXT DEFAULT 'new',
-      verificationStatus TEXT DEFAULT 'unverified',
-      tags TEXT,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (userId) REFERENCES users(id)
-    );
+export const TEST_TEMPLATE = {
+  id: 1,
+  name: "Test Template",
+  channel: "email" as "email" | "sms" | "voice" | "social",
+  subject: "Hello {{firstName}}",
+  body: "Hi {{firstName}} {{lastName}}, welcome!",
+  variables: null,
+  isActive: true,
+  createdBy: 1,
+  createdAt: new Date("2024-01-01"),
+  updatedAt: new Date("2024-01-01"),
+};
 
-    CREATE TABLE IF NOT EXISTS campaigns (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      userId INTEGER NOT NULL,
-      name TEXT NOT NULL,
-      description TEXT,
-      status TEXT DEFAULT 'draft',
-      channels TEXT,
-      dailyLimit INTEGER,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (userId) REFERENCES users(id)
-    );
+export const TEST_TESTIMONIAL = {
+  id: 1,
+  clientName: "John Doe",
+  industry: "Technology",
+  company: "TechCorp",
+  quote: "ApexAI changed our outbound game!",
+  beforeMetric: "10% response rate",
+  afterMetric: "45% response rate",
+  specificResult: "3x more appointments",
+  resultValue: "$500k pipeline",
+  avatarUrl: null,
+  isActive: true,
+  featured: true,
+  sortOrder: 0,
+  createdAt: new Date("2024-01-01"),
+  updatedAt: new Date("2024-01-01"),
+};
 
-    CREATE TABLE IF NOT EXISTS templates (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      userId INTEGER NOT NULL,
-      name TEXT NOT NULL,
-      subject TEXT,
-      body TEXT NOT NULL,
-      deletedAt DATETIME,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (userId) REFERENCES users(id)
-    );
+// ─── Mock DB factory ──────────────────────────────────────────────────────────
 
-    CREATE TABLE IF NOT EXISTS testimonials (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      userId INTEGER NOT NULL,
-      author TEXT NOT NULL,
-      content TEXT NOT NULL,
-      featured BOOLEAN DEFAULT 0,
-      deletedAt DATETIME,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (userId) REFERENCES users(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campaignId INTEGER NOT NULL,
-      leadId INTEGER NOT NULL,
-      body TEXT NOT NULL,
-      channel TEXT,
-      status TEXT DEFAULT 'pending',
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (campaignId) REFERENCES campaigns(id),
-      FOREIGN KEY (leadId) REFERENCES leads(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS campaignContacts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campaignId INTEGER NOT NULL,
-      leadId INTEGER NOT NULL,
-      status TEXT DEFAULT 'active',
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (campaignId) REFERENCES campaigns(id),
-      FOREIGN KEY (leadId) REFERENCES leads(id),
-      UNIQUE(campaignId, leadId)
-    );
-
-    CREATE TABLE IF NOT EXISTS callRecordings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      leadId INTEGER NOT NULL,
-      url TEXT,
-      transcript TEXT,
-      duration INTEGER,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (leadId) REFERENCES leads(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS onboardings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      userId INTEGER NOT NULL,
-      step TEXT,
-      completed BOOLEAN DEFAULT 0,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (userId) REFERENCES users(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS analyticsSnapshots (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campaignId INTEGER NOT NULL,
-      sends INTEGER DEFAULT 0,
-      opens INTEGER DEFAULT 0,
-      clicks INTEGER DEFAULT 0,
-      conversions INTEGER DEFAULT 0,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (campaignId) REFERENCES campaigns(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS activityLogs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      userId INTEGER NOT NULL,
-      entityType TEXT,
-      entityId INTEGER,
-      action TEXT NOT NULL,
-      description TEXT,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (userId) REFERENCES users(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS systemConfig (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL,
-      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-  `;
-
-  // Execute schema creation
-  db.exec(schema);
-
-  testDb = drizzleDb;
-  return drizzleDb;
+export function createMockDb() {
+  return {
+    getUserByOpenId: vi.fn().mockResolvedValue(TEST_USER),
+    upsertUser: vi.fn().mockResolvedValue(undefined),
+    getLeads: vi.fn().mockResolvedValue([TEST_LEAD]),
+    getLeadById: vi.fn().mockResolvedValue(TEST_LEAD),
+    createLead: vi.fn().mockResolvedValue({ insertId: 1 }),
+    updateLead: vi.fn().mockResolvedValue(undefined),
+    deleteLead: vi.fn().mockResolvedValue(undefined),
+    getCampaigns: vi.fn().mockResolvedValue([TEST_CAMPAIGN]),
+    getCampaignById: vi.fn().mockResolvedValue(TEST_CAMPAIGN),
+    createCampaign: vi.fn().mockResolvedValue({ insertId: 1 }),
+    updateCampaign: vi.fn().mockResolvedValue(undefined),
+    deleteCampaign: vi.fn().mockResolvedValue(undefined),
+    getTemplates: vi.fn().mockResolvedValue([TEST_TEMPLATE]),
+    getTemplateById: vi.fn().mockResolvedValue(TEST_TEMPLATE),
+    createTemplate: vi.fn().mockResolvedValue({ insertId: 1 }),
+    updateTemplate: vi.fn().mockResolvedValue(undefined),
+    deleteTemplate: vi.fn().mockResolvedValue(undefined),
+    getMessages: vi.fn().mockResolvedValue([]),
+    createMessage: vi.fn().mockResolvedValue({ insertId: 1 }),
+    updateMessage: vi.fn().mockResolvedValue(undefined),
+    getCallRecordings: vi.fn().mockResolvedValue([]),
+    createCallRecording: vi.fn().mockResolvedValue({ insertId: 1 }),
+    getTestimonials: vi.fn().mockResolvedValue([TEST_TESTIMONIAL]),
+    createTestimonial: vi.fn().mockResolvedValue({ insertId: 1 }),
+    updateTestimonial: vi.fn().mockResolvedValue(undefined),
+    deleteTestimonial: vi.fn().mockResolvedValue(undefined),
+    getOnboarding: vi.fn().mockResolvedValue(null),
+    createOnboarding: vi.fn().mockResolvedValue({ insertId: 1 }),
+    updateOnboarding: vi.fn().mockResolvedValue(undefined),
+    getAnalyticsSnapshots: vi.fn().mockResolvedValue([]),
+    createAnalyticsSnapshot: vi.fn().mockResolvedValue({ insertId: 1 }),
+    logActivity: vi.fn().mockResolvedValue(undefined),
+    getActivityLogs: vi.fn().mockResolvedValue([]),
+    getSystemConfig: vi.fn().mockResolvedValue([]),
+    setSystemConfig: vi.fn().mockResolvedValue(undefined),
+    getCampaignContacts: vi.fn().mockResolvedValue([]),
+    addCampaignContact: vi.fn().mockResolvedValue({ insertId: 1 }),
+    removeCampaignContact: vi.fn().mockResolvedValue(undefined),
+    getUsers: vi.fn().mockResolvedValue([TEST_USER]),
+    updateUser: vi.fn().mockResolvedValue(undefined),
+  };
 }
 
-/**
- * Get or initialize test database
- */
-export function getTestDb(): BetterSqlite3Database {
-  if (!testDb) {
-    testDb = initializeTestDb();
-  }
-  return testDb;
-}
-
-/**
- * Reset database (clear all data)
- */
-export function resetTestDb(): void {
-  if (testDb) {
-    const db = testDb._.client as Database.Database;
-    db.exec(`
-      DELETE FROM messages;
-      DELETE FROM campaignContacts;
-      DELETE FROM callRecordings;
-      DELETE FROM analyticsSnapshots;
-      DELETE FROM activityLogs;
-      DELETE FROM onboardings;
-      DELETE FROM testimonials;
-      DELETE FROM templates;
-      DELETE FROM campaigns;
-      DELETE FROM leads;
-      DELETE FROM systemConfig;
-      DELETE FROM users;
-    `);
-  }
-}
-
-/**
- * Cleanup test database
- */
-export function closeTestDb(): void {
-  if (testDb) {
-    const db = testDb._.client as Database.Database;
-    db.close();
-    testDb = null;
-  }
-}
-
-/**
- * Seed test data
- */
-export async function seedTestData() {
-  const db = getTestDb();
-
-  // Create test user
-  await db.insert(users).values({
-    openId: "test-user-123",
-    name: "Test User",
-    email: "test@example.com",
-    loginMethod: "oauth",
-  });
-
-  // Create test leads
-  const leadIds = [];
-  for (let i = 0; i < 5; i++) {
-    const result = await db.insert(leads).values({
-      userId: 1,
-      firstName: `Lead${i}`,
-      lastName: `Test${i}`,
-      email: `lead${i}@example.com`,
-      phone: `555-000${i}`,
-      company: `Company${i}`,
-      title: i === 0 ? "CEO" : i === 1 ? "VP" : "Manager",
-      score: 50 + i * 10,
-      segment: i < 2 ? "hot" : i < 4 ? "warm" : "cold",
-      status: "new",
-    });
-    leadIds.push(result[0]);
-  }
-
-  // Create test campaign
-  await db.insert(campaigns).values({
-    userId: 1,
-    name: "Test Campaign",
-    description: "A test campaign for validation",
-    status: "draft",
-    channels: JSON.stringify(["email", "sms"]),
-    dailyLimit: 100,
-  });
-
-  // Create test template
-  await db.insert(templates).values({
-    userId: 1,
-    name: "Test Template",
-    subject: "Hello {{firstName}}",
-    body: "Hi {{firstName}} {{lastName}}, welcome to our platform!",
-  });
-
-  // Create test testimonial
-  await db.insert(testimonials).values({
-    userId: 1,
-    author: "John Doe",
-    content: "ApexAI changed our outbound game!",
-    featured: true,
-  });
-
-  return { leadIds };
-}
+export type MockDb = ReturnType<typeof createMockDb>;

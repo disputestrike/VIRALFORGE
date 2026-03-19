@@ -8,4 +8,6 @@ export const ENV = {
   // Google OAuth
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+  // Owner bootstrap (first user auto-promoted to admin)
+  ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
 };

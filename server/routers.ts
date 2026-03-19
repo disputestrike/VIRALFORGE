@@ -145,7 +145,7 @@ const campaignsRouter = router({
     .input(z.object({
       name: z.string().min(1),
       description: z.string().optional(),
-      channels: z.array(z.enum(["sms", "email", "voice", "social"])),
+      channels: z.array(z.enum(["sms", "email", "voice", "social"])).optional().default([]),
       goal: z.enum(["appointments", "demos", "sales", "awareness", "follow_up"]).default("appointments"),
       industry: z.string().optional(),
       startDate: z.string().optional(),
