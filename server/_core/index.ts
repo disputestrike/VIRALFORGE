@@ -67,6 +67,54 @@ async function startServer() {
   // Run migrations before starting the server
   await runMigrations();
 
+  // INTEGRATION: Initialize job queue and workers
+  console.log("[Server] Initializing job queue and workers...");
+  try {
+    const { queues, redis } = await import("./_core/services/queue");
+    const { Worker } = await import("bullmq");
+    const { initiateCall } = await import("./_core/services/twilioService");
+
+    // Call worker
+    const callWorker = new Worker(
+      "calls",
+      async (job) => {
+        console.log(`[CallWorker] Processing job ${job.id}: Lead ${job.data.leadId}`);
+        try {
+          const lead = await db.getLeadById(job.data.leadId);
+          if (!lead?.phone) {
+            throw new Error(`Lead ${job.data.leadId} has no phone number`);
+          }
+
+          const result = await initiateCall({
+            leadId: lead.id,
+            phoneNumber: lead.phone,
+            campaignId: job.data.campaignId,
+          });
+
+          console.log(`[CallWorker] Call initiated for lead ${job.data.leadId}: ${result.callSid}`);
+          return result;
+        } catch (error) {
+          console.error(`[CallWorker] Job ${job.id} failed:`, error);
+          throw error;
+        }
+      },
+      { connection: redis }
+    );
+
+    callWorker.on("completed", (job) => {
+      console.log(`[CallWorker] Job ${job.id} completed`);
+    });
+
+    callWorker.on("failed", (job, err) => {
+      console.error(`[CallWorker] Job ${job?.id} failed:`, err);
+    });
+
+    console.log("[Server] Job queue and call worker initialized");
+  } catch (error) {
+    console.warn("[Server] Job queue initialization warning:", error);
+    // Don't crash if queue fails to initialize
+  }
+
   const app = express();
   const server = createServer(app);
 
@@ -81,6 +129,39 @@ async function startServer() {
       timestamp: new Date().toISOString(),
       env: process.env.NODE_ENV,
     });
+  });
+
+  // INTEGRATION: Voice webhook routes for Twilio callbacks
+  app.post("/api/voice/start", (req, res) => {
+    console.log("[Voice] Call started");
+    const leadId = req.query.leadId as string;
+    const sessionId = req.query.sessionId as string;
+
+    // Respond with TwiML to start voice stream
+    res.type("text/xml");
+    res.send(`
+      <Response>
+        <Say>Connecting to agent...</Say>
+        <Connect>
+          <Stream url="wss://${req.get("host")}/api/voice-stream?sessionId=${sessionId}" />
+        </Connect>
+      </Response>
+    `);
+  });
+
+  app.post("/api/voice/status", (req, res) => {
+    console.log("[Voice] Status callback:", {
+      CallSid: req.body.CallSid,
+      CallStatus: req.body.CallStatus,
+    });
+    // Handle call status updates
+    res.send("OK");
+  });
+
+  app.post("/api/voice/recording", (req, res) => {
+    console.log("[Voice] Recording available:", req.body.RecordingUrl);
+    // Handle recording callback
+    res.send("OK");
   });
 
   // OAuth callback under /api/oauth/callback

@@ -7,6 +7,12 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import * as db from "./db";
 import { sql } from "drizzle-orm";
+// INTEGRATION: Import new services
+import * as queueService from "./_core/services/queue";
+import * as decisionEngine from "./_core/services/decisionEngine";
+import * as twilioService from "./_core/services/twilioService";
+import * as voiceSessionManager from "./_core/services/voiceSessionManager";
+import * as followUpEngine from "./_core/services/followUpEngine";
 
 // ─── Admin guard ──────────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -347,39 +353,62 @@ const voiceAIRouter = router({
       if (!lead) throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
       if (!lead.phone) throw new TRPCError({ code: "BAD_REQUEST", message: "Lead does not have a phone number" });
 
-      // Generate AI conversation script
-      const scriptResponse = await invokeLLM({
-        messages: [
-          { role: "system", content: "You are a professional AI sales assistant making outbound calls. Generate a realistic call transcript for a sales appointment setting call. Include the AI agent's opening, handling objections, and scheduling an appointment. Make it sound natural and human." },
-          { role: "user", content: `Generate a call transcript for: ${lead.firstName} ${lead.lastName}, ${lead.title ?? "Decision Maker"} at ${lead.company ?? "their company"} in the ${lead.industry ?? "business"} industry. ${input.script ? `Script context: ${input.script}` : ""}` },
-        ],
-      });
+      try {
+        // INTEGRATION: Evaluate if lead is ready to call using Decision Engine
+        const decision = await decisionEngine.decideLeadAction({
+          lead,
+          campaign: input.campaignId ? await db.getCampaignById(input.campaignId) : undefined,
+          previousAttempts: 0,
+          lastContactedAt: Date.now(),
+        });
 
-      const transcript = scriptResponse.choices[0].message.content as string;
-      const duration = Math.floor(Math.random() * 300) + 60; // 1-6 minutes
-      const outcomes = ["interested", "scheduled", "callback", "not_interested", "voicemail"] as const;
-      const outcome = outcomes[Math.floor(Math.random() * 3)]; // Bias toward positive
-      const scheduled = outcome === "scheduled";
+        // If decision is not to call now, return decision
+        if (decision !== 'CALL_NOW' && decision !== 'RETRY_CALL') {
+          console.log(`[voiceAI] Lead ${lead.id} decision: ${decision} - not calling now`);
+          return {
+            success: false,
+            reason: decision,
+            message: `Lead not ready to call: ${decision}`,
+          };
+        }
 
-      const recording = await db.createCallRecording({
-        leadId: input.leadId,
-        campaignId: input.campaignId,
-        duration,
-        status: "completed",
-        outcome,
-        transcript,
-        aiSummary: `AI call with ${lead.firstName} ${lead.lastName}. Duration: ${Math.floor(duration / 60)}m ${duration % 60}s. Outcome: ${outcome}.`,
-        sentiment: scheduled ? "positive" : outcome === "not_interested" ? "negative" : "neutral",
-        scheduledAppointment: scheduled,
-        calledAt: new Date(),
-      });
+        // INTEGRATION: Queue the call job (asynchronous)
+        const callJob = await queueService.addCallJob(
+          {
+            leadId: input.leadId,
+            campaignId: input.campaignId,
+            script: input.script,
+          },
+          {
+            priority: lead.segment === 'hot' ? 100 : 50,
+            attempts: 3,
+          }
+        );
 
-      if (input.campaignId && scheduled) {
-        await db.updateCampaign(input.campaignId, { scheduledCount: db_sql_increment("scheduledCount") as unknown as number });
+        console.log(`[voiceAI] Call queued for lead ${lead.id}, job ID: ${callJob.id}`);
+
+        // INTEGRATION: Log activity
+        await db.logActivity({
+          userId: ctx.user.id,
+          entityType: "call",
+          entityId: lead.id,
+          action: "queued",
+          description: `Call queued for ${lead.firstName} ${lead.lastName} (Job: ${callJob.id})`,
+        });
+
+        return {
+          success: true,
+          jobId: callJob.id,
+          message: `Call queued for ${lead.firstName} ${lead.lastName}`,
+          decision,
+        };
+      } catch (error) {
+        console.error('[voiceAI] Error queuing call:', error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Failed to queue call: ${(error as Error).message}`,
+        });
       }
-
-      await db.logActivity({ userId: ctx.user.id, entityType: "call", action: "initiated", description: `AI call to ${lead.firstName} ${lead.lastName}: ${outcome}` });
-      return { success: true, outcome, duration, scheduled, transcript };
     }),
 
   generateScript: protectedProcedure
@@ -652,6 +681,9 @@ const adminRouter = router({
     }),
 });
 
+// INTEGRATION: Import webhooks router
+import { webhooksRouter } from "./routers/webhooksRouter";
+
 // ─── App Router ───────────────────────────────────────────────────────────────
 export const appRouter = router({
   system: systemRouter,
@@ -672,6 +704,8 @@ export const appRouter = router({
   testimonials: testimonialsRouter,
   onboarding: onboardingRouter,
   admin: adminRouter,
+  // INTEGRATION: Add Omni AI webhook endpoints
+  webhooks: webhooksRouter,
 });
 
 export type AppRouter = typeof appRouter;
