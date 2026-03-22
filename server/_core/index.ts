@@ -10,6 +10,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import * as voiceSessionManager from "./services/voiceSessionManager";
 import * as voiceProcessingService from "./services/voiceProcessingService";
+import { startSessionPersistenceInterval } from "./services/voiceSessionManager";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -325,10 +326,40 @@ async function startServer() {
     const { CallSid, From, To } = req.body;
     console.log(`[Inbound] Call received from ${From}`);
 
+    // FIX 6: Create or find lead from incoming phone number
+    try {
+      const db = await import("../db");
+      let lead = await db.getLead({ phone: From } as any);
+
+      if (!lead) {
+        // Create new inbound lead
+        lead = await db.createLead({
+          firstName: "Inbound",
+          lastName: From.slice(-4), // Last 4 digits of phone
+          phone: From,
+          source: "inbound_call",
+          status: "new",
+          score: 60, // Inbound = warm lead
+          segment: "warm",
+        });
+        console.log(`[Inbound] Created new lead ${lead.id} from ${From}`);
+      }
+
+      // FIX 6: Create voice session IMMEDIATELY for inbound
+      const sessionId = CallSid;
+      voiceSessionManager.createSession(lead.id, sessionId, lead.firstName || "Caller");
+      console.log(`[Inbound] Created session ${sessionId} for lead ${lead.id}`);
+      
+      // Start persistence interval
+      startSessionPersistenceInterval(sessionId);
+    } catch (error) {
+      console.error("[Inbound] Error setting up inbound call:", error);
+    }
+
     res.type("text/xml");
 
     // Play IVR menu
-    const ivrMenu = `Thank you for calling. Press 1 for sales, 2 for support, or 3 to leave a voicemail.`;
+    const ivrMenu = `Thank you for calling ApexAI. Press 1 for sales, 2 for support, or 3 to leave a voicemail.`;
     res.send(`
       <Response>
         <Say>${ivrMenu}</Say>

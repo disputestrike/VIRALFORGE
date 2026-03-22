@@ -15,6 +15,9 @@ import {
   confirmAndBookAppointment 
 } from "./conversationEngine";
 import * as voiceSessionManager from "./voiceSessionManager";
+import * as appointmentConfirmationDetector from "./appointmentConfirmationDetector";
+import * as adminNotifications from "./adminNotificationService";
+import { startSessionPersistenceInterval, persistSessionToDatabase } from "./voiceSessionManager";
 
 export async function processAudioMessage(
   callId: string,
@@ -31,46 +34,59 @@ export async function processAudioMessage(
       userText = await transcribeAudio(audioBuffer);
     } catch (error) {
       console.error("[VoiceProcessing] Transcription failed:", error);
-      userText = "[Unable to transcribe audio]";
+      // FIX 6: Fallback if Whisper fails
+      const fallbackMessage = "I'm having trouble hearing you. Could you repeat that?";
+      try {
+        const fallbackAudio = await synthesizeSpeech(fallbackMessage, VOICES.bella);
+        return fallbackAudio;
+      } catch (ttsError) {
+        console.error("[VoiceProcessing] TTS fallback also failed:", ttsError);
+        return Buffer.alloc(0);
+      }
     }
 
     console.log(`[VoiceProcessing] Transcribed: "${userText}"`);
 
-    // Step 2: Add user message to session
+    // Step 2: Add user message to session and persist
     const session = voiceSessionManager.getSession(callId);
     if (session) {
       voiceSessionManager.addMessage(callId, {
         role: "user",
         content: userText,
       });
+      
+      // Start persistence interval on first message
+      if (session.turnCount === 1) {
+        startSessionPersistenceInterval(callId);
+      }
+      
+      // Persist this turn
+      await persistSessionToDatabase(callId);
     }
 
-    // Step 3: Check if this is appointment confirmation
+    // Step 3: FIX 5 - Check if this is appointment confirmation using SMART detector
     let aiResponseText = "";
     let appointmentBooked = false;
 
     if ((session as any)?.proposedSlots && (session as any).proposedSlots.length > 0) {
-      // User may be confirming appointment
-      const proposedSlots = (session as any).proposedSlots;
-      
-      // Simple heuristic: if they said yes/confirmed/works
-      const confirmationIndicators = [
-        'yes', 'yep', 'yeah', 'perfect', 'works', 'good', 'great',
-        'sounds', 'confirms', 'tuesday', 'wednesday', 'thursday', 'friday',
-        'monday', 'morning', 'afternoon', '1', '2', '3', 'first', 'second', 'third'
-      ];
-      
-      const isConfirming = confirmationIndicators.some(word => 
-        userText.toLowerCase().includes(word)
+      // Use smart confirmation detector instead of naive keyword matching
+      const confirmationResult = appointmentConfirmationDetector.detectAppointmentConfirmation(
+        userText,
+        {
+          hasProposedSlots: true,
+          lastAIMessage: session?.conversationHistory?.[session.conversationHistory.length - 1]?.content,
+          waitingForTimeSelection: true,
+        }
       );
 
-      if (isConfirming) {
-        // Extract which slot they want (default to first)
-        const numberMatch = userText.match(/(\d)/);
-        const slotIndex = numberMatch ? parseInt(numberMatch[1]) - 1 : 0;
-        const selectedSlot = proposedSlots[slotIndex] || proposedSlots[0];
+      console.log(`[VoiceProcessing] Confirmation detection: confidence=${confirmationResult.confidence}, isConfirming=${confirmationResult.isConfirming}, reason=${confirmationResult.reason}`);
 
-        // Book the appointment
+      // Only book if high confidence (0.7+)
+      if (confirmationResult.isConfirming && confirmationResult.confidence >= 0.7) {
+        const proposedSlots = (session as any).proposedSlots;
+        const selectedIndex = confirmationResult.selectedSlotIndex !== undefined ? confirmationResult.selectedSlotIndex : 0;
+        const selectedSlot = proposedSlots[selectedIndex];
+
         if (selectedSlot) {
           const bookResult = await confirmAndBookAppointment(
             callId,
@@ -82,43 +98,79 @@ export async function processAudioMessage(
           if (bookResult.success) {
             aiResponseText = bookResult.message;
             appointmentBooked = true;
+            
+            // Notify admin of successful booking
+            try {
+              await adminNotifications.notifyAppointmentBooked(
+                session.leadName || `Lead ${context.leadId}`,
+                context.leadEmail || '',
+                selectedSlot,
+                Date.now() - session.startTime,
+                'high'
+              );
+            } catch (notifyError) {
+              console.error("[VoiceProcessing] Failed to notify admin:", notifyError);
+            }
+
             console.log(`[VoiceProcessing] Appointment booked: ${bookResult.appointmentId}`);
           } else {
             aiResponseText = bookResult.message;
           }
         }
+      } else if (confirmationResult.isConfirming && confirmationResult.requiresExplicitConfirmation) {
+        // Ambiguous - ask for confirmation
+        aiResponseText = appointmentConfirmationDetector.generateConfirmationQuestion(
+          confirmationResult,
+          (session as any).proposedSlots.map((s: any) => ({
+            time: s.toISOString(),
+            display: s.toLocaleString('en-US', {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+            }),
+          }))
+        );
       }
     }
 
     // Step 4: Generate AI response if appointment not booked
     let aiResponse;
-    if (!appointmentBooked) {
+    if (!appointmentBooked && !aiResponseText) {
       console.log(`[VoiceProcessing] Step 2: Generating AI response...`);
-      aiResponse = await generateConversationResponse(userText, {
-        ...context,
-        conversationHistory: session?.conversationHistory || [],
-      });
-      aiResponseText = aiResponse.text;
+      try {
+        aiResponse = await generateConversationResponse(userText, {
+          ...context,
+          conversationHistory: session?.conversationHistory || [],
+        });
+        aiResponseText = aiResponse.text;
 
-      // Step 4b: Check if AI wants to propose appointments
-      if (aiResponse.suggestedNextAction === "book_appointment" && !appointmentBooked) {
-        console.log(`[VoiceProcessing] AI wants to propose appointments`);
-        const appointmentProposal = await proposeAppointmentTimes(
-          callId,
-          context.leadId || 0,
-          context.campaignId
-        );
-        
-        if (appointmentProposal.slots.length > 0) {
-          aiResponseText = appointmentProposal.message;
-          console.log(`[VoiceProcessing] Proposed ${appointmentProposal.slots.length} slots`);
+        // Check if AI wants to propose appointments
+        if (aiResponse.suggestedNextAction === "book_appointment" && !appointmentBooked) {
+          console.log(`[VoiceProcessing] AI wants to propose appointments`);
+          const appointmentProposal = await proposeAppointmentTimes(
+            callId,
+            context.leadId || 0,
+            context.campaignId
+          );
+          
+          if (appointmentProposal.slots.length > 0) {
+            aiResponseText = appointmentProposal.message;
+            console.log(`[VoiceProcessing] Proposed ${appointmentProposal.slots.length} slots`);
+          }
         }
+      } catch (claudeError) {
+        console.error("[VoiceProcessing] Claude LLM failed:", claudeError);
+        // FIX 6: Fallback if Claude times out
+        aiResponseText = "I need a moment to think. Could you wait just a second?";
       }
     }
 
-    console.log(`[VoiceProcessing] Generated: "${aiResponseText}"`);
+    console.log(`[VoiceProcessing] Generated: "${aiResponseText.substring(0, 50)}..."`);
 
-    // Step 5: Add AI response to session
+    // Step 5: Add AI response to session and persist
     if (session) {
       voiceSessionManager.addMessage(callId, {
         role: "assistant",
@@ -136,6 +188,9 @@ export async function processAudioMessage(
       // Update sentiment
       const sentiment = detectSentiment(userText);
       voiceSessionManager.updateSentiment(callId, sentiment);
+      
+      // Persist turn
+      await persistSessionToDatabase(callId);
     }
 
     // Step 6: Synthesize response to speech (ELEVENLABS)
@@ -143,26 +198,42 @@ export async function processAudioMessage(
     let audioResponse: Buffer;
     try {
       audioResponse = await synthesizeSpeech(aiResponseText, VOICES.bella);
-    } catch (error) {
-      console.error("[VoiceProcessing] Synthesis failed:", error);
-      audioResponse = Buffer.alloc(0);
+    } catch (synthesisError) {
+      console.error("[VoiceProcessing] Synthesis failed:", synthesisError);
+      // FIX 6: Fallback if ElevenLabs down
+      const fallbackMessage = "I'm experiencing technical difficulties. Let me transfer you to someone who can help.";
+      try {
+        audioResponse = await synthesizeSpeech(fallbackMessage, VOICES.bella);
+      } catch (fallbackError) {
+        console.error("[VoiceProcessing] All TTS failed:", fallbackError);
+        audioResponse = Buffer.alloc(0);
+      }
     }
 
     console.log(
       `[VoiceProcessing] Synthesized: ${audioResponse.length} bytes`
     );
 
-    // Step 7: Log the turn
+    // Step 7: Final logging
     console.log(`[VoiceProcessing] Complete conversation turn`);
-    console.log(`  User said: "${userText}"`);
-    console.log(`  AI said: "${aiResponseText}"`);
-    if (!appointmentBooked && aiResponse) {
-      console.log(`  Intent: ${aiResponse.intent}`);
-    }
+    console.log(`  User said: "${userText.substring(0, 50)}..."`);
+    console.log(`  AI said: "${aiResponseText.substring(0, 50)}..."`);
 
     return audioResponse;
   } catch (error) {
     console.error("[VoiceProcessing] Fatal error:", error);
+    
+    // Try to notify admin of critical failure
+    try {
+      await adminNotifications.notifyCriticalError(
+        'VoiceProcessing Fatal Error',
+        (error as Error).message,
+        { callId, context }
+      );
+    } catch (notifyError) {
+      console.error("[VoiceProcessing] Failed to notify admin of error:", notifyError);
+    }
+    
     return Buffer.alloc(0);
   }
 }
