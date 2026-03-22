@@ -1,0 +1,497 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "ApexAI SaaS Platform API",
+    "version": "1.0.0",
+    "description": "Complete API for multi-tenant AI-powered sales automation platform",
+    "contact": {
+      "name": "ApexAI Support",
+      "email": "support@apexai.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.apexai.com/v1",
+      "description": "Production"
+    },
+    {
+      "url": "http://localhost:3000/v1",
+      "description": "Development"
+    }
+  ],
+  "securityDefinitions": {
+    "ApiKeyAuth": {
+      "type": "apiKey",
+      "in": "header",
+      "name": "Authorization",
+      "description": "Bearer token for API authentication"
+    }
+  },
+  "paths": {
+    "/customers": {
+      "post": {
+        "summary": "Create new customer (signup)",
+        "tags": ["Customers"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["companyName", "email", "phone", "industry", "plan"],
+                "properties": {
+                  "companyName": { "type": "string", "minLength": 2 },
+                  "email": { "type": "string", "format": "email" },
+                  "phone": { "type": "string" },
+                  "industry": { "type": "string" },
+                  "plan": {
+                    "type": "string",
+                    "enum": ["starter", "growth", "enterprise"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Customer created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "customerId": { "type": "string" },
+                    "apiKey": { "type": "string" },
+                    "apiSecret": { "type": "string" },
+                    "plan": { "type": "string" },
+                    "monthlyLimit": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/me": {
+      "get": {
+        "summary": "Get authenticated customer info",
+        "tags": ["Customers"],
+        "security": [{ "ApiKeyAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Customer details"
+          },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/customers/usage": {
+      "get": {
+        "summary": "Get current monthly usage",
+        "tags": ["Customers"],
+        "security": [{ "ApiKeyAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Usage metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "leadsUsed": { "type": "number" },
+                    "leadsLimit": { "type": "number" },
+                    "percentage": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lead-sources/google-ads/authorize": {
+      "get": {
+        "summary": "Start Google Ads OAuth flow",
+        "tags": ["Lead Sources"],
+        "parameters": [
+          {
+            "name": "customerId",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "302": { "description": "Redirect to Google OAuth" }
+        }
+      }
+    },
+    "/lead-sources/facebook/authorize": {
+      "get": {
+        "summary": "Start Facebook Lead Forms OAuth flow",
+        "tags": ["Lead Sources"],
+        "parameters": [
+          {
+            "name": "customerId",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "302": { "description": "Redirect to Facebook OAuth" }
+        }
+      }
+    },
+    "/lead-sources/instagram/authorize": {
+      "get": {
+        "summary": "Start Instagram Business OAuth flow",
+        "tags": ["Lead Sources"],
+        "parameters": [
+          {
+            "name": "customerId",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "302": { "description": "Redirect to Instagram OAuth" }
+        }
+      }
+    },
+    "/lead-sources": {
+      "get": {
+        "summary": "List connected lead sources",
+        "tags": ["Lead Sources"],
+        "security": [{ "ApiKeyAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Connected sources",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "provider": { "type": "string" },
+                      "status": { "type": "string" },
+                      "createdAt": { "type": "string", "format": "date-time" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/leads": {
+      "get": {
+        "summary": "List customer's leads",
+        "tags": ["Leads"],
+        "security": [{ "ApiKeyAuth": [] }],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "number", "default": 50 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": { "type": "number", "default": 0 }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of leads"
+          }
+        }
+      }
+    },
+    "/leads/{id}": {
+      "get": {
+        "summary": "Get single lead",
+        "tags": ["Leads"],
+        "security": [{ "ApiKeyAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "number" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Lead details" },
+          "404": { "description": "Lead not found" }
+        }
+      },
+      "patch": {
+        "summary": "Update lead",
+        "tags": ["Leads"],
+        "security": [{ "ApiKeyAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "number" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": { "type": "string" },
+                  "score": { "type": "number" },
+                  "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Lead updated" }
+        }
+      }
+    },
+    "/webhooks/leads": {
+      "post": {
+        "summary": "Ingest lead from external source",
+        "tags": ["Webhooks"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["firstName", "lastName", "source"],
+                "properties": {
+                  "firstName": { "type": "string" },
+                  "lastName": { "type": "string" },
+                  "email": { "type": "string", "format": "email" },
+                  "phone": { "type": "string" },
+                  "source": { "type": "string" },
+                  "sourceId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Lead created" },
+          "400": { "description": "Invalid input" }
+        }
+      }
+    },
+    "/dashboard/stats": {
+      "get": {
+        "summary": "Get dashboard statistics",
+        "tags": ["Dashboard"],
+        "security": [{ "ApiKeyAuth": [] }],
+        "parameters": [
+          {
+            "name": "dateRange",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["today", "week", "month", "year"],
+              "default": "month"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dashboard stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "leads": { "type": "number" },
+                    "callsMade": { "type": "number" },
+                    "appointmentsBooked": { "type": "number" },
+                    "appointmentsShowed": { "type": "number" },
+                    "revenueGenerated": { "type": "number" },
+                    "showRate": { "type": "number" },
+                    "bookingRate": { "type": "number" },
+                    "callSuccessRate": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dashboard/lead-sources": {
+      "get": {
+        "summary": "Get lead source performance metrics",
+        "tags": ["Dashboard"],
+        "security": [{ "ApiKeyAuth": [] }],
+        "responses": {
+          "200": { "description": "Lead source metrics" }
+        }
+      }
+    },
+    "/dashboard/roi": {
+      "get": {
+        "summary": "Calculate ROI",
+        "tags": ["Dashboard"],
+        "security": [{ "ApiKeyAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "ROI metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "totalAdSpend": { "type": "number" },
+                    "totalRevenue": { "type": "number" },
+                    "profit": { "type": "number" },
+                    "roiPercentage": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/invoice": {
+      "get": {
+        "summary": "Get current invoice",
+        "tags": ["Billing"],
+        "security": [{ "ApiKeyAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Current invoice details"
+          }
+        }
+      }
+    },
+    "/billing/history": {
+      "get": {
+        "summary": "Get billing history",
+        "tags": ["Billing"],
+        "security": [{ "ApiKeyAuth": [] }],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "number", "default": 10 }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Invoice history" }
+        }
+      }
+    },
+    "/billing/pricing": {
+      "get": {
+        "summary": "Get pricing information",
+        "tags": ["Billing"],
+        "responses": {
+          "200": {
+            "description": "Pricing details"
+          }
+        }
+      }
+    },
+    "/webhooks/stripe": {
+      "post": {
+        "summary": "Stripe webhook endpoint",
+        "tags": ["Webhooks"],
+        "description": "Receives Stripe events. Must verify signature with Stripe webhook secret.",
+        "parameters": [
+          {
+            "name": "stripe-signature",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Webhook received" },
+          "400": { "description": "Invalid signature" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "Bearer token format: Bearer {apiKey}"
+      }
+    },
+    "schemas": {
+      "Lead": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "number" },
+          "customerId": { "type": "string" },
+          "firstName": { "type": "string" },
+          "lastName": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "phone": { "type": "string" },
+          "source": { "type": "string" },
+          "status": { "type": "string", "enum": ["new", "contacted", "qualified", "converted", "lost"] },
+          "score": { "type": "number" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Customer": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "companyName": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "plan": { "type": "string", "enum": ["starter", "growth", "enterprise"] },
+          "status": { "type": "string", "enum": ["trial", "active", "paused", "cancelled"] },
+          "monthlyLeadLimit": { "type": "number" },
+          "monthlyLeadsUsed": { "type": "number" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "Customers", "description": "Customer management" },
+    { "name": "Lead Sources", "description": "Lead source integrations" },
+    { "name": "Leads", "description": "Lead management" },
+    { "name": "Dashboard", "description": "Analytics and metrics" },
+    { "name": "Billing", "description": "Billing and invoicing" },
+    { "name": "Webhooks", "description": "Webhook endpoints" }
+  ]
+}
