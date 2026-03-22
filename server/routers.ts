@@ -13,6 +13,7 @@ import * as decisionEngine from "./_core/services/decisionEngine";
 import * as twilioService from "./_core/services/twilioService";
 import * as voiceSessionManager from "./_core/services/voiceSessionManager";
 import * as followUpEngine from "./_core/services/followUpEngine";
+import { saasRouter } from "./routers/saasRouter";
 
 // ─── Admin guard ──────────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -708,6 +709,7 @@ export const appRouter = router({
   testimonials: testimonialsRouter,
   onboarding: onboardingRouter,
   admin: adminRouter,
+  saas: saasRouter,
   // INTEGRATION: Add Omni AI webhook endpoints
   webhooks: webhooksRouter,
 });
