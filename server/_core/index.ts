@@ -3,10 +3,13 @@ import express from "express";
 import { createServer } from "http";
 import net from "net";
 import path from "path";
+import { WebSocketServer } from "ws";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import * as voiceSessionManager from "./services/voiceSessionManager";
+import * as voiceProcessingService from "./services/voiceProcessingService";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -175,6 +178,131 @@ async function startServer() {
       createContext,
     })
   );
+
+  // ─── WebSocket Handler for Voice Streaming ────────────────────────────────
+  // This handles real-time audio from Twilio and processes it
+  const wss = new WebSocketServer({ noServer: true });
+
+  server.on("upgrade", async (request, socket, head) => {
+    if (request.url?.startsWith("/api/voice-stream")) {
+      const url = new URL(request.url, `http://${request.headers.host}`);
+      const sessionId = url.searchParams.get("sessionId");
+      const leadId = url.searchParams.get("leadId");
+      const isInbound = url.searchParams.get("inbound") === "true";
+
+      console.log(`[Voice] WebSocket upgrade: ${sessionId} (inbound: ${isInbound})`);
+
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        console.log(`[Voice] WebSocket connected: ${sessionId}`);
+
+        let streamSid: string | null = null;
+        const audioChunks: Buffer[] = [];
+
+        ws.on("message", async (data: Buffer) => {
+          try {
+            const message = JSON.parse(data.toString());
+
+            // Handle connection start
+            if (message.event === "start") {
+              streamSid = message.start.streamSid;
+              console.log(`[Voice] Stream started: ${streamSid}`);
+
+              // Create session if needed
+              if (sessionId && !voiceSessionManager.getSession(sessionId)) {
+                voiceSessionManager.createSession(
+                  leadId ? parseInt(leadId) : 0,
+                  sessionId,
+                  ""
+                );
+              }
+
+              return;
+            }
+
+            // Handle media (audio) packets
+            if (message.event === "media") {
+              const audioPayload = message.media.payload; // Base64
+              const audioBuffer = Buffer.from(audioPayload, "base64");
+              audioChunks.push(audioBuffer);
+
+              // Process when we have enough audio (accumulate 1-2 seconds)
+              const totalLength = audioChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+              if (totalLength > 16000) {
+                // ~1 second at 16kHz
+                const completeAudio = Buffer.concat(audioChunks);
+                audioChunks.length = 0; // Clear for next batch
+
+                // Get session
+                const session = voiceSessionManager.getSession(sessionId || "");
+                if (!session) {
+                  console.error(`[Voice] Session not found: ${sessionId}`);
+                  return;
+                }
+
+                // Process audio: STT → Claude → TTS
+                try {
+                  const responseAudio = await voiceProcessingService.processAudioMessage(
+                    sessionId || "",
+                    completeAudio,
+                    {
+                      leadId: session.leadId,
+                      leadName: session.leadName || `Lead ${session.leadId}`,
+                      conversationHistory: session.conversationHistory,
+                      goal: { primary: isInbound ? "lead_qualification" : "appointment_setting" },
+                    }
+                  );
+
+                  // Send response audio back through Twilio
+                  if (responseAudio.length > 0) {
+                    const responsePayload = responseAudio.toString("base64");
+
+                    ws.send(
+                      JSON.stringify({
+                        event: "media",
+                        streamSid: message.streamSid,
+                        media: {
+                          payload: responsePayload,
+                        },
+                      })
+                    );
+
+                    console.log(`[Voice] Sent response audio: ${responseAudio.length} bytes`);
+                  }
+                } catch (error) {
+                  console.error("[Voice] Error processing audio:", error);
+                }
+              }
+            }
+
+            // Handle call stop
+            if (message.event === "stop") {
+              console.log(`[Voice] Stream stopped: ${streamSid}`);
+
+              const session = voiceSessionManager.getSession(sessionId || "");
+              if (session) {
+                voiceSessionManager.completeSession(sessionId || "", {
+                  aiSummary: `Call completed. Sentiment: ${session.sentiment}. Turns: ${session.turnCount}`,
+                });
+              }
+            }
+          } catch (error) {
+            console.error("[Voice] Error processing WebSocket message:", error);
+          }
+        });
+
+        ws.on("error", (error) => {
+          console.error("[Voice] WebSocket error:", error);
+        });
+
+        ws.on("close", () => {
+          console.log(`[Voice] WebSocket closed: ${sessionId}`);
+          voiceSessionManager.endSession(sessionId || "");
+        });
+      });
+    } else {
+      socket.destroy();
+    }
+  });
 
   // Production: vite-prod.ts has NO vite imports — safe to bundle and run without vite installed
   // Development: load vite module via a computed path so esbuild cannot statically bundle it
