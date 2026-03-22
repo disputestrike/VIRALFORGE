@@ -19,6 +19,8 @@ export interface ConversationMessage {
 export interface VoiceSessionState {
   leadId: number;
   callId: string;
+  voiceSessionId?: number; // Database record ID
+  campaignId?: number;
   status: 'initiated' | 'ringing' | 'in_progress' | 'completed' | 'failed';
   conversationHistory: ConversationMessage[];
   startTime: number;
@@ -28,6 +30,7 @@ export interface VoiceSessionState {
   // Call metadata
   phoneNumber?: string;
   phoneNumberFrom?: string;
+  leadName?: string;
   
   // AI state
   currentTopic?: string;
@@ -38,9 +41,13 @@ export interface VoiceSessionState {
     decision_maker: boolean;
     objections?: string[];
   };
+  
+  // Appointment management
+  proposedSlots?: Date[]; // Available times offered to lead
   appointmentProposed?: {
     time: number;
     confirmed: boolean;
+    appointmentId?: number; // DB appointment booking ID
   };
   
   // Quality tracking
@@ -53,6 +60,10 @@ export interface VoiceSessionState {
   recordingUrl?: string;
   transcript?: string;
   aiSummary?: string;
+  
+  // Database persistence tracking
+  dbPersisted: boolean; // Whether this session is saved to database
+  lastDbSync: number; // Timestamp of last database write
 }
 
 /**
@@ -402,6 +413,90 @@ export function cleanupExpiredSessions() {
   }
   
   return toDelete.length;
+}
+
+/**
+ * FIX 2: Persist session to database
+ */
+export async function persistSessionToDatabase(callId: string): Promise<number | null> {
+  const session = getSession(callId);
+  if (!session) {
+    console.error(`[VoiceSessionManager] Session not found for persistence: ${callId}`);
+    return null;
+  }
+
+  try {
+    const { query } = await import('../db');
+    
+    // Convert conversation history to JSON
+    const conversationJSON = JSON.stringify(session.conversationHistory.map(msg => ({
+      role: msg.role,
+      content: msg.content,
+      timestamp: msg.timestamp,
+      sentiment: msg.sentiment,
+    })));
+
+    const result = await query(
+      `INSERT INTO voice_sessions 
+        (leadId, callId, conversationHistory, status, duration, sentiment, turnCount, aiSummary)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE 
+        conversationHistory = VALUES(conversationHistory),
+        status = VALUES(status),
+        duration = VALUES(duration),
+        sentiment = VALUES(sentiment),
+        turnCount = VALUES(turnCount),
+        aiSummary = VALUES(aiSummary),
+        updatedAt = NOW()`,
+      [
+        session.leadId,
+        session.callId,
+        conversationJSON,
+        session.status,
+        session.duration,
+        session.sentiment,
+        session.turnCount,
+        session.aiSummary || '',
+      ]
+    );
+
+    // Store voiceSessionId for reference
+    const sessionId = (result as any).insertId || (result as any).affectedRows > 0 ? session.voiceSessionId : null;
+    session.voiceSessionId = sessionId as any;
+    session.dbPersisted = true;
+    session.lastDbSync = Date.now();
+
+    console.log(`[VoiceSessionManager] Session ${callId} persisted to database (ID: ${sessionId})`);
+    return sessionId;
+  } catch (error) {
+    console.error(`[VoiceSessionManager] Error persisting session ${callId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * FIX 2B: Auto-persist sessions every 30 seconds during call
+ */
+export function startSessionPersistenceInterval(callId: string, intervalMs: number = 30000) {
+  const interval = setInterval(async () => {
+    const session = getSession(callId);
+    if (!session) {
+      clearInterval(interval);
+      return;
+    }
+
+    if (session.status === 'completed' || session.status === 'failed') {
+      clearInterval(interval);
+      // Final persist
+      await persistSessionToDatabase(callId);
+      return;
+    }
+
+    // Auto-persist every 30 seconds
+    await persistSessionToDatabase(callId);
+  }, intervalMs);
+
+  return interval;
 }
 
 // Run cleanup every 5 minutes
