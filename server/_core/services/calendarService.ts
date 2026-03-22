@@ -5,7 +5,7 @@
  * No Calendly needed - you control everything
  */
 
-import * as db from "../db";
+import * as db from '../../db';;
 
 export interface TimeSlot {
   dayOfWeek: number; // 0-6

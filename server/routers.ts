@@ -401,6 +401,10 @@ const voiceAIRouter = router({
           jobId: callJob.id,
           message: `Call queued for ${lead.firstName} ${lead.lastName}`,
           decision,
+          outcome: 'call_queued',
+          scheduled: false,
+          transcript: '',
+          duration: 0,
         };
       } catch (error) {
         console.error('[voiceAI] Error queuing call:', error);

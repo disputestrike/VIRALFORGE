@@ -55,12 +55,13 @@ export async function notifyAppointmentBooked(
   `;
 
   await queueService.addEmailJob({
+    leadId: 0, // Admin notification doesn't have a lead
     email: ADMIN_EMAIL,
     type: 'admin_alert',
     subject,
     html,
     leadName: ADMIN_NAME,
-  });
+  } as any);
 }
 
 /**

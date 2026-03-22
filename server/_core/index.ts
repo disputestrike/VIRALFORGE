@@ -329,7 +329,7 @@ async function startServer() {
     // FIX 6: Create or find lead from incoming phone number
     try {
       const db = await import("../db");
-      let lead = await db.getLead({ phone: From } as any);
+      let lead = await db.getLeadByPhone(From);
 
       if (!lead) {
         // Create new inbound lead

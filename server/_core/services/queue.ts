@@ -13,7 +13,7 @@
 
 import { Queue, Worker, QueueEvents } from 'bullmq';
 import { Redis } from 'ioredis';
-import { ENV } from './env';
+import { ENV } from '../env';
 
 // Initialize Redis connection
 const redis = new Redis(ENV.redisUrl || 'redis://localhost:6379', {

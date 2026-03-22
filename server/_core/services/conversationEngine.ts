@@ -9,7 +9,7 @@
  * - Detects intents
  */
 
-import { invokeLLM } from './llm';
+import { invokeLLM } from '../llm';
 import * as voiceSessionManager from './voiceSessionManager';
 import * as decisionEngine from './decisionEngine';
 import * as appointmentService from './appointmentService';

@@ -8,13 +8,13 @@
  * - Performance metrics
  */
 
-import { router, protectedProcedure, publicProcedure } from './../trpc';
+import { router, protectedProcedure, publicProcedure } from '../_core/trpc';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import * as db from '../db';
-import * as queue from './queue';
-import * as decisionEngine from './decisionEngine';
-import * as followUpEngine from './followUpEngine';
+import * as queue from '../_core/services/queue';
+import * as decisionEngine from '../_core/services/decisionEngine';
+import * as followUpEngine from '../_core/services/followUpEngine';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 

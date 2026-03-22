@@ -8,7 +8,7 @@
  * - Handles dead leads
  */
 
-import * as db from '../db';
+import * as db from '../../db';
 import * as decisionEngine from './decisionEngine';
 import * as queue from './queue';
 import { Lead, Campaign } from '../../shared/types';

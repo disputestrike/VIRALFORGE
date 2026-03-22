@@ -107,6 +107,13 @@ export async function getLeadById(id: number) {
   return result[0];
 }
 
+export async function getLeadByPhone(phone: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(leads).where(eq(leads.phone, phone)).limit(1);
+  return result[0];
+}
+
 export async function createLead(data: typeof leads.$inferInsert) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

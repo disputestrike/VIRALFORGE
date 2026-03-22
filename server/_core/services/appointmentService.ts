@@ -5,7 +5,7 @@
  * Integrates with SMS/Email queues for notifications
  */
 
-import * as db from "../db";
+import * as db from '../../db';;
 import * as queueService from "./queue";
 
 export interface AppointmentBooking {

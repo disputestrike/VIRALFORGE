@@ -5,7 +5,7 @@
  * Routes callers to AI, human queue, or voicemail
  */
 
-import * as db from "../db";
+import * as db from '../../db';;
 import * as queueService from "./queue";
 
 export interface IVRRoute {

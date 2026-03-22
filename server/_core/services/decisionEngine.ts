@@ -9,7 +9,7 @@
  * - Determines follow-up strategy
  */
 
-import * as db from '../db';
+import * as db from '../../db';
 import { Lead, Campaign } from '../../shared/types';
 
 export type LeadAction =

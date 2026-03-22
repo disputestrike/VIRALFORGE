@@ -9,9 +9,9 @@
  */
 
 import twilio from 'twilio';
-import { ENV } from './env';
+import { ENV } from '../env';
 import * as voiceSessionManager from './voiceSessionManager';
-import * as db from '../db';
+import * as db from '../../db';
 
 // Initialize Twilio client
 const twilioClient = twilio(
