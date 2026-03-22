@@ -3,11 +3,17 @@
  * 
  * Orchestrates the complete conversation flow:
  * Audio → Whisper (STT) → Claude (LLM) → ElevenLabs (TTS) → Audio
+ * 
+ * Also handles appointment detection and booking
  */
 
 import { transcribeAudio } from "./sttService";
 import { synthesizeSpeech, VOICES } from "./ttsService";
-import { generateConversationResponse } from "./conversationEngine";
+import { 
+  generateConversationResponse, 
+  proposeAppointmentTimes,
+  confirmAndBookAppointment 
+} from "./conversationEngine";
 import * as voiceSessionManager from "./voiceSessionManager";
 
 export async function processAudioMessage(
@@ -25,7 +31,6 @@ export async function processAudioMessage(
       userText = await transcribeAudio(audioBuffer);
     } catch (error) {
       console.error("[VoiceProcessing] Transcription failed:", error);
-      // Fallback response if transcription fails
       userText = "[Unable to transcribe audio]";
     }
 
@@ -40,24 +45,88 @@ export async function processAudioMessage(
       });
     }
 
-    // Step 3: Generate AI response (CLAUDE)
-    console.log(`[VoiceProcessing] Step 2: Generating AI response...`);
-    const aiResponse = await generateConversationResponse(userText, {
-      ...context,
-      conversationHistory: session?.conversationHistory || [],
-    });
+    // Step 3: Check if this is appointment confirmation
+    let aiResponseText = "";
+    let appointmentBooked = false;
 
-    console.log(`[VoiceProcessing] Generated: "${aiResponse.text}"`);
+    if ((session as any)?.proposedSlots && (session as any).proposedSlots.length > 0) {
+      // User may be confirming appointment
+      const proposedSlots = (session as any).proposedSlots;
+      
+      // Simple heuristic: if they said yes/confirmed/works
+      const confirmationIndicators = [
+        'yes', 'yep', 'yeah', 'perfect', 'works', 'good', 'great',
+        'sounds', 'confirms', 'tuesday', 'wednesday', 'thursday', 'friday',
+        'monday', 'morning', 'afternoon', '1', '2', '3', 'first', 'second', 'third'
+      ];
+      
+      const isConfirming = confirmationIndicators.some(word => 
+        userText.toLowerCase().includes(word)
+      );
 
-    // Step 4: Add AI response to session
+      if (isConfirming) {
+        // Extract which slot they want (default to first)
+        const numberMatch = userText.match(/(\d)/);
+        const slotIndex = numberMatch ? parseInt(numberMatch[1]) - 1 : 0;
+        const selectedSlot = proposedSlots[slotIndex] || proposedSlots[0];
+
+        // Book the appointment
+        if (selectedSlot) {
+          const bookResult = await confirmAndBookAppointment(
+            callId,
+            context.leadId || 0,
+            selectedSlot,
+            context.campaignId
+          );
+
+          if (bookResult.success) {
+            aiResponseText = bookResult.message;
+            appointmentBooked = true;
+            console.log(`[VoiceProcessing] Appointment booked: ${bookResult.appointmentId}`);
+          } else {
+            aiResponseText = bookResult.message;
+          }
+        }
+      }
+    }
+
+    // Step 4: Generate AI response if appointment not booked
+    let aiResponse;
+    if (!appointmentBooked) {
+      console.log(`[VoiceProcessing] Step 2: Generating AI response...`);
+      aiResponse = await generateConversationResponse(userText, {
+        ...context,
+        conversationHistory: session?.conversationHistory || [],
+      });
+      aiResponseText = aiResponse.text;
+
+      // Step 4b: Check if AI wants to propose appointments
+      if (aiResponse.suggestedNextAction === "book_appointment" && !appointmentBooked) {
+        console.log(`[VoiceProcessing] AI wants to propose appointments`);
+        const appointmentProposal = await proposeAppointmentTimes(
+          callId,
+          context.leadId || 0,
+          context.campaignId
+        );
+        
+        if (appointmentProposal.slots.length > 0) {
+          aiResponseText = appointmentProposal.message;
+          console.log(`[VoiceProcessing] Proposed ${appointmentProposal.slots.length} slots`);
+        }
+      }
+    }
+
+    console.log(`[VoiceProcessing] Generated: "${aiResponseText}"`);
+
+    // Step 5: Add AI response to session
     if (session) {
       voiceSessionManager.addMessage(callId, {
         role: "assistant",
-        content: aiResponse.text,
+        content: aiResponseText,
       });
 
       // Update qualification if needed
-      if (aiResponse.qualificationUpdate) {
+      if (!appointmentBooked && aiResponse?.qualificationUpdate) {
         voiceSessionManager.updateLeadQualification(
           callId,
           aiResponse.qualificationUpdate
@@ -69,14 +138,13 @@ export async function processAudioMessage(
       voiceSessionManager.updateSentiment(callId, sentiment);
     }
 
-    // Step 5: Synthesize response to speech (ELEVENLABS)
+    // Step 6: Synthesize response to speech (ELEVENLABS)
     console.log(`[VoiceProcessing] Step 3: Synthesizing speech...`);
     let audioResponse: Buffer;
     try {
-      audioResponse = await synthesizeSpeech(aiResponse.text, VOICES.bella);
+      audioResponse = await synthesizeSpeech(aiResponseText, VOICES.bella);
     } catch (error) {
       console.error("[VoiceProcessing] Synthesis failed:", error);
-      // Fallback audio if synthesis fails
       audioResponse = Buffer.alloc(0);
     }
 
@@ -84,16 +152,17 @@ export async function processAudioMessage(
       `[VoiceProcessing] Synthesized: ${audioResponse.length} bytes`
     );
 
-    // Step 6: Log the conversation turn
+    // Step 7: Log the turn
     console.log(`[VoiceProcessing] Complete conversation turn`);
     console.log(`  User said: "${userText}"`);
-    console.log(`  AI said: "${aiResponse.text}"`);
-    console.log(`  Intent: ${aiResponse.intent}`);
+    console.log(`  AI said: "${aiResponseText}"`);
+    if (!appointmentBooked && aiResponse) {
+      console.log(`  Intent: ${aiResponse.intent}`);
+    }
 
     return audioResponse;
   } catch (error) {
     console.error("[VoiceProcessing] Fatal error:", error);
-    // Return silence on error
     return Buffer.alloc(0);
   }
 }
@@ -105,9 +174,9 @@ function detectSentiment(
   text: string
 ): "positive" | "neutral" | "negative" {
   const positive =
-    /great|excellent|perfect|love|amazing|awesome|interested|yes|definitely/i;
+    /great|excellent|perfect|love|amazing|awesome|interested|yes|definitely|sounds good|works/i;
   const negative =
-    /terrible|hate|awful|bad|problem|no thanks|not interested|pass|decline/i;
+    /terrible|hate|awful|bad|problem|no thanks|not interested|pass|decline|can't/i;
 
   if (negative.test(text)) return "negative";
   if (positive.test(text)) return "positive";
@@ -121,14 +190,13 @@ export function detectUserInterruption(audioBuffer: Buffer): boolean {
   const view = new Uint8Array(audioBuffer);
   let sum = 0;
 
-  // Calculate RMS (root mean square) of audio samples
   for (let i = 0; i < view.length; i += 2) {
     const sample = (view[i] | (view[i + 1] << 8)) - 32768;
     sum += sample * sample;
   }
 
   const rms = Math.sqrt(sum / (view.length / 2));
-  const threshold = 8000; // Adjust based on testing
+  const threshold = 8000;
 
   return rms > threshold;
 }
@@ -138,7 +206,7 @@ export function detectUserInterruption(audioBuffer: Buffer): boolean {
  */
 export function formatConversationLog(
   callId: string,
-  sessionData: ReturnType<typeof voiceSessionManager.getSessionStats>
+  sessionData: any
 ): string {
   if (!sessionData) return "";
 

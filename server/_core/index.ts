@@ -113,6 +113,158 @@ async function startServer() {
     });
 
     console.log("[Server] Job queue and call worker initialized");
+
+    // SMS worker
+    const smsWorker = new Worker(
+      "sms",
+      async (job) => {
+        console.log(`[SMSWorker] Processing job ${job.id}: ${job.data.type} to ${job.data.phone}`);
+        try {
+          const twilio = await import("twilio");
+          const twilioClient = twilio.default(
+            process.env.TWILIO_ACCOUNT_SID,
+            process.env.TWILIO_AUTH_TOKEN
+          );
+
+          const { phone, type, leadName, scheduledTime } = job.data;
+          const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER || "+1234567890";
+
+          // Generate message based on type
+          let message = "";
+          if (type === "appointment_confirmation") {
+            message = `Hi ${leadName || "there"}! Your appointment is confirmed for ${scheduledTime || "your scheduled time"}. Reply STOP to cancel.`;
+          } else if (type === "appointment_reminder") {
+            message = `Reminder ${leadName || "there"}: Your appointment is ${scheduledTime || "coming up"}. See you soon!`;
+          } else if (type === "follow_up") {
+            message = `Hi ${leadName || "there"}! Following up on our call. Still interested? Reply YES or let me know how I can help.`;
+          } else if (type === "no_show_followup") {
+            message = `Hi ${leadName || "there"}, we missed you at your appointment. Would you like to reschedule?`;
+          } else {
+            message = `Hi ${leadName || "there"}, this is a message from ApexAI.`;
+          }
+
+          // Send SMS
+          const result = await twilioClient.messages.create({
+            body: message,
+            from: twilioPhoneNumber,
+            to: phone,
+          });
+
+          console.log(`[SMSWorker] Sent SMS ${result.sid} to ${phone}`);
+          return { success: true, messageSid: result.sid };
+        } catch (error) {
+          console.error(`[SMSWorker] Job ${job.id} failed:`, error);
+          throw error;
+        }
+      },
+      { connection: redis, concurrency: 5 }
+    );
+
+    smsWorker.on("completed", (job) => {
+      console.log(`[SMSWorker] Job ${job.id} completed`);
+    });
+
+    smsWorker.on("failed", (job, err) => {
+      console.error(`[SMSWorker] Job ${job?.id} failed:`, err);
+    });
+
+    // Email worker
+    const emailWorker = new Worker(
+      "email",
+      async (job) => {
+        console.log(`[EmailWorker] Processing job ${job.id}: ${job.data.type} to ${job.data.email}`);
+        try {
+          const { Resend } = await import("resend");
+          const resend = new Resend(process.env.RESEND_API_KEY);
+
+          const { email, type, leadName, scheduledTime, calendarLink } = job.data;
+          const SENDER_EMAIL = "noreply@apexai.com";
+          const SENDER_NAME = "ApexAI";
+
+          let subject = "";
+          let html = "";
+
+          if (type === "appointment_confirmation") {
+            const formattedTime = new Date(scheduledTime || Date.now()).toLocaleString("en-US", {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true,
+            });
+
+            subject = `Appointment Confirmed: ${formattedTime}`;
+            html = `
+              <html>
+                <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <h2>Your Appointment is Confirmed!</h2>
+                    <p>Hi ${leadName || "there"},</p>
+                    <p>We're excited to meet with you on <strong>${formattedTime}</strong>.</p>
+                    <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                      <p><strong>Date & Time:</strong> ${formattedTime}</p>
+                      <p><strong>Duration:</strong> 30 minutes</p>
+                    </div>
+                    <p>If you need to reschedule, just reply to this email.</p>
+                    <p>Best regards,<br><strong>${SENDER_NAME} Team</strong></p>
+                  </div>
+                </body>
+              </html>
+            `;
+          } else if (type === "appointment_reminder") {
+            const formattedTime = new Date(scheduledTime || Date.now()).toLocaleString("en-US", {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true,
+            });
+
+            subject = `Reminder: Your Appointment is Tomorrow`;
+            html = `
+              <html>
+                <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <h2>Appointment Reminder</h2>
+                    <p>Hi ${leadName || "there"},</p>
+                    <p>Just a friendly reminder that your appointment is coming up tomorrow at ${formattedTime}!</p>
+                    <p>We're looking forward to speaking with you.</p>
+                    <p>Best regards,<br><strong>${SENDER_NAME} Team</strong></p>
+                  </div>
+                </body>
+              </html>
+            `;
+          } else {
+            subject = "Message from ApexAI";
+            html = `<p>Hi ${leadName || "there"},</p><p>Thank you for your interest!</p>`;
+          }
+
+          // Send email
+          const result = await resend.emails.send({
+            from: `${SENDER_NAME} <${SENDER_EMAIL}>`,
+            to: email,
+            subject: subject,
+            html: html,
+          });
+
+          console.log(`[EmailWorker] Sent email to ${email}`);
+          return { success: true, emailId: result.id };
+        } catch (error) {
+          console.error(`[EmailWorker] Job ${job.id} failed:`, error);
+          throw error;
+        }
+      },
+      { connection: redis, concurrency: 10 }
+    );
+
+    emailWorker.on("completed", (job) => {
+      console.log(`[EmailWorker] Job ${job.id} completed`);
+    });
+
+    emailWorker.on("failed", (job, err) => {
+      console.error(`[EmailWorker] Job ${job?.id} failed:`, err);
+    });
+
+    console.log("[Server] SMS and Email workers initialized");
   } catch (error) {
     console.warn("[Server] Job queue initialization warning:", error);
     // Don't crash if queue fails to initialize
@@ -165,6 +317,97 @@ async function startServer() {
     console.log("[Voice] Recording available:", req.body.RecordingUrl);
     // Handle recording callback
     res.send("OK");
+  });
+
+  // ─── INBOUND CALL ROUTES ──────────────────────────────────────────────────────
+
+  app.post("/api/voice/inbound", async (req, res) => {
+    const { CallSid, From, To } = req.body;
+    console.log(`[Inbound] Call received from ${From}`);
+
+    res.type("text/xml");
+
+    // Play IVR menu
+    const ivrMenu = `Thank you for calling. Press 1 for sales, 2 for support, or 3 to leave a voicemail.`;
+    res.send(`
+      <Response>
+        <Say>${ivrMenu}</Say>
+        <Gather 
+          numDigits="1"
+          action="/api/voice/inbound-dtmf"
+          method="POST"
+          timeout="10">
+          <Say>Please make a selection.</Say>
+        </Gather>
+        <Redirect>/api/voice/inbound</Redirect>
+      </Response>
+    `);
+  });
+
+  app.post("/api/voice/inbound-dtmf", async (req, res) => {
+    const { CallSid, From, Digits } = req.body;
+    const selection = parseInt(Digits);
+
+    console.log(`[Inbound] DTMF selection: ${selection} from ${From}`);
+
+    res.type("text/xml");
+
+    if (selection === 1) {
+      // Transfer to AI sales
+      res.send(`
+        <Response>
+          <Say>Connecting you to our AI agent...</Say>
+          <Connect>
+            <Stream url="wss://${req.get("host")}/api/voice-stream?sessionId=${CallSid}&fromNumber=${From}&inbound=true" />
+          </Connect>
+        </Response>
+      `);
+    } else if (selection === 2) {
+      // Transfer to support queue
+      res.send(`
+        <Response>
+          <Say>Please hold while we connect you to an agent...</Say>
+          <Enqueue waitUrl="/api/voice/queue-wait">
+            support
+          </Enqueue>
+        </Response>
+      `);
+    } else {
+      // Voicemail
+      res.send(`
+        <Response>
+          <Say>Please leave a message after the beep.</Say>
+          <Record 
+            action="/api/voice/voicemail-received"
+            method="POST"
+            transcribe="true"
+            transcribeCallback="/api/voice/voicemail-transcribed" />
+        </Response>
+      `);
+    }
+  });
+
+  app.post("/api/voice/voicemail-received", async (req, res) => {
+    const { CallSid, From, RecordingUrl, TranscriptionText } = req.body;
+
+    console.log(`[Voicemail] Received from ${From}`);
+
+    res.type("text/xml");
+    res.send(`
+      <Response>
+        <Say>Thank you for your message. We'll get back to you soon!</Say>
+        <Hangup />
+      </Response>
+    `);
+  });
+
+  app.post("/api/voice/queue-wait", (req, res) => {
+    res.type("text/xml");
+    res.send(`
+      <Response>
+        <Say>Thank you for waiting. Please stay on the line.</Say>
+      </Response>
+    `);
   });
 
   // OAuth callback under /api/oauth/callback

@@ -12,6 +12,10 @@
 import { invokeLLM } from './llm';
 import * as voiceSessionManager from './voiceSessionManager';
 import * as decisionEngine from './decisionEngine';
+import * as appointmentService from './appointmentService';
+import * as calendarService from './calendarService';
+import * as sttService from './sttService';
+import * as ttsService from './ttsService';
 
 export interface ConversationGoal {
   primary: 'appointment_setting' | 'lead_qualification' | 'objection_handling' | 'follow_up';
@@ -450,9 +454,137 @@ function buildContextSection(context: ConversationContext): string {
   return section;
 }
 
+/**
+ * Detect if user is confirming an appointment time slot
+ */
+function extractAppointmentConfirmation(
+  userText: string,
+  proposedSlots: Date[]
+): { confirmed: boolean; selectedSlot?: Date } {
+  const lower = userText.toLowerCase();
+
+  // Check for explicit confirmation
+  if (lower.includes('perfect') || lower.includes('yes') || lower.includes('works for me') || 
+      lower.includes('sounds good') || lower.includes('that works')) {
+    // Assume first slot if multiple proposed
+    if (proposedSlots.length > 0) {
+      return { confirmed: true, selectedSlot: proposedSlots[0] };
+    }
+    return { confirmed: true };
+  }
+
+  // Check for numbered selection (e.g., "2" or "second one" or "option 2")
+  const numberMatch = userText.match(/(?:first|second|third|option\s*)?\s*(\d)\b/);
+  if (numberMatch) {
+    const index = parseInt(numberMatch[1]) - 1;
+    if (index >= 0 && index < proposedSlots.length) {
+      return { confirmed: true, selectedSlot: proposedSlots[index] };
+    }
+  }
+
+  return { confirmed: false };
+}
+
+/**
+ * Propose available appointment times
+ */
+export async function proposeAppointmentTimes(
+  callId: string,
+  leadId: number,
+  campaignId?: number
+): Promise<{ slots: Date[]; message: string }> {
+  try {
+    // Get next 3 available slots
+    const slots = await calendarService.getNextAvailableSlots(3);
+
+    if (slots.length === 0) {
+      return {
+        slots: [],
+        message:
+          "I apologize, but I don't have any availability right now. Can I get your email to send you available times?",
+      };
+    }
+
+    // Format slots for speech
+    const slotMessages = slots.map((s) => calendarService.formatTimeslotForSpeech(s)).join(", or ");
+
+    const message = `Perfect! I have a few times available: ${slotMessages}. Which works best for you?`;
+
+    // Store proposed slots in session for later confirmation
+    const session = voiceSessionManager.getSession(callId);
+    if (session) {
+      (session as any).proposedSlots = slots;
+    }
+
+    return { slots, message };
+  } catch (error) {
+    console.error("[ConversationEngine] Error proposing appointments:", error);
+    return {
+      slots: [],
+      message: "I'm having trouble checking my calendar. Can I call you back with available times?",
+    };
+  }
+}
+
+/**
+ * Book appointment when confirmed
+ */
+export async function confirmAndBookAppointment(
+  callId: string,
+  leadId: number,
+  appointmentTime: Date,
+  campaignId?: number
+): Promise<{ success: boolean; appointmentId?: number; message: string }> {
+  try {
+    // Validate time is during business hours
+    if (!calendarService.isValidAppointmentTime(appointmentTime)) {
+      return {
+        success: false,
+        message: "That time is outside our business hours. Let me suggest some other options.",
+      };
+    }
+
+    // Book the appointment
+    const appointment = await appointmentService.bookAppointment(
+      leadId,
+      appointmentTime,
+      campaignId,
+      undefined // voiceSessionId - would be populated if we had it
+    );
+
+    console.log(
+      `[ConversationEngine] Appointment booked: ${appointment.id} for lead ${leadId} at ${appointmentTime.toISOString()}`
+    );
+
+    // Update session
+    const session = voiceSessionManager.getSession(callId);
+    if (session) {
+      session.appointmentProposed = {
+        time: appointmentTime.getTime(),
+        confirmed: true,
+      };
+    }
+
+    const timeStr = calendarService.formatTimeSlot(appointmentTime);
+    return {
+      success: true,
+      appointmentId: appointment.id,
+      message: `Excellent! Your appointment is confirmed for ${timeStr}. You'll receive a confirmation SMS and email shortly with all the details.`,
+    };
+  } catch (error) {
+    console.error("[ConversationEngine] Error booking appointment:", error);
+    return {
+      success: false,
+      message: "I'm having trouble booking your appointment. Can I get your email and someone will follow up with you?",
+    };
+  }
+}
+
 export default {
   generateConversationResponse,
   processUserMessage,
+  proposeAppointmentTimes,
+  confirmAndBookAppointment,
   detectIntent,
   extractQualificationData,
   detectSentiment,
