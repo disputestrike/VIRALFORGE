@@ -54,22 +54,10 @@ export default function About() {
 
           <div className="border-t border-border pt-12">
             <h2 className="text-3xl font-bold mb-8">The Team</h2>
-            <p className="text-muted-foreground mb-12">
-              ApexAI is built by AI engineers, sales ops experts, and startup founders who've been in the trenches.
-              We understand the problems we're solving because we've lived them.
+            <p className="text-muted-foreground">
+              ApexAI is built by a dedicated team of AI engineers, sales ops experts, and startup founders.
+              More team details coming soon.
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {[
-                { name: "Ben Adayehi", role: "CEO & Founder", bio: "15+ years building AI platforms. Previously led sales at 3 startups to exit." },
-                { name: "Engineering Team", role: "AI & Infrastructure", bio: "Ex-Google, Ex-OpenAI engineers. Built systems that process 100M+ leads per month." },
-              ].map((member) => (
-                <div key={member.name} className="p-6 rounded-xl bg-card border border-border">
-                  <h3 className="font-bold text-lg mb-1">{member.name}</h3>
-                  <p className="text-sm text-primary font-medium mb-3">{member.role}</p>
-                  <p className="text-sm text-muted-foreground">{member.bio}</p>
-                </div>
-              ))}
-            </div>
           </div>
 
           <div className="mt-20 pt-12 border-t border-border">
