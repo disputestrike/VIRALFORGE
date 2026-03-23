@@ -148,15 +148,13 @@ export default function LandingPageFull() {
             Expert setup day one · 30-day dedicated support · $249/month to start
           </p>
 
-          {/* Image placeholder - for AI-generated schematic */}
-          <div className="mt-16 p-8 rounded-xl border border-primary/20 bg-card/30 backdrop-blur-sm">
-            <div className="aspect-video bg-gradient-to-br from-primary/10 to-blue-400/10 rounded-lg flex items-center justify-center border border-primary/20">
-              <div className="text-center">
-                <Zap className="w-16 h-16 text-primary/30 mx-auto mb-4" />
-                <p className="text-sm text-muted-foreground">ApexAI Architecture Diagram</p>
-                <p className="text-xs text-muted-foreground mt-2">Lead → AI Qualification → Multi-Channel Outreach → Appointment Booking</p>
-              </div>
-            </div>
+          {/* Hero Image - AI Sales Agent */}
+          <div className="mt-16 p-0 rounded-xl border border-primary/20 overflow-hidden">
+            <img 
+              src="https://images.unsplash.com/photo-1552664730-d307ca884978?w=1200&h=600&fit=crop" 
+              alt="AI Sales Dashboard"
+              className="w-full h-auto object-cover rounded-lg"
+            />
           </div>
         </div>
       </section>
@@ -190,43 +188,65 @@ export default function LandingPageFull() {
             <p className="text-muted-foreground text-lg">No integrations. No Zapier. No outside tools. Pure, native AI automation.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map(({ icon: Icon, title, desc }) => (
-              <div key={title} className="p-6 rounded-xl bg-card border border-border hover:border-primary/30 transition-all group">
-                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
-                  <Icon className="w-6 h-6 text-primary" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-12">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {features.map(({ icon: Icon, title, desc }) => (
+                <div key={title} className="p-6 rounded-xl bg-card border border-border hover:border-primary/30 transition-all group">
+                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
+                    <Icon className="w-6 h-6 text-primary" />
+                  </div>
+                  <h3 className="font-bold text-lg mb-2">{title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
                 </div>
-                <h3 className="font-bold text-lg mb-2">{title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
-              </div>
-            ))}
+              ))}
+            </div>
+
+            <div className="rounded-xl border border-primary/20 overflow-hidden">
+              <img 
+                src="https://images.unsplash.com/photo-1552664730-d307ca884978?w=600&h=600&fit=crop" 
+                alt="ApexAI Dashboard"
+                className="w-full h-auto object-cover"
+              />
+            </div>
           </div>
         </div>
       </section>
 
       {/* SECTION 4: Competitive Advantage */}
       <section className="py-16 px-6">
-        <div className="max-w-5xl mx-auto text-center">
-          <h2 className="text-3xl font-bold mb-4">Other tools connect 100+ integrations.</h2>
-          <p className="text-4xl font-black text-primary mb-12">ApexAI is your entire stack.</p>
+        <div className="max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <h2 className="text-3xl font-bold mb-4">Other tools connect 100+ integrations.</h2>
+              <p className="text-4xl font-black text-primary mb-12">ApexAI is your entire stack.</p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[
-              { title: "Voice AI Calls", desc: "Human-like, no voicemail bombing" },
-              { title: "Smart Lead Qualification", desc: "AI pre-scores every lead" },
-              { title: "Multi-Channel Outreach", desc: "Voice + SMS + Email in one platform" },
-              { title: "30-Day Done-For-You", desc: "We set it up, optimize it, hand it off" },
-              { title: "Real-Time Analytics", desc: "See every metric live" },
-              { title: "Expert Support", desc: "Dedicated team for 30 days" },
-            ].map((item) => (
-              <div key={item.title} className="flex items-start gap-3 p-4 rounded-xl bg-card border border-border text-left hover:border-primary/30 transition-colors">
-                <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold text-sm mb-1">{item.title}</p>
-                  <p className="text-xs text-muted-foreground">{item.desc}</p>
-                </div>
+              <div className="grid grid-cols-1 gap-4">
+                {[
+                  { title: "Voice AI Calls", desc: "Human-like, no voicemail bombing" },
+                  { title: "Smart Lead Qualification", desc: "AI pre-scores every lead" },
+                  { title: "Multi-Channel Outreach", desc: "Voice + SMS + Email in one platform" },
+                  { title: "30-Day Done-For-You", desc: "We set it up, optimize it, hand it off" },
+                  { title: "Real-Time Analytics", desc: "See every metric live" },
+                  { title: "Expert Support", desc: "Dedicated team for 30 days" },
+                ].map((item) => (
+                  <div key={item.title} className="flex items-start gap-3 p-4 rounded-xl bg-card border border-border text-left hover:border-primary/30 transition-colors">
+                    <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-sm mb-1">{item.title}</p>
+                      <p className="text-xs text-muted-foreground">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+
+            <div className="rounded-xl border border-primary/20 overflow-hidden">
+              <img 
+                src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=600&h=600&fit=crop" 
+                alt="Integration Ecosystem"
+                className="w-full h-auto object-cover"
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -239,43 +259,53 @@ export default function LandingPageFull() {
             <p className="text-muted-foreground text-lg">Every result follows the same pattern: specific numbers, before and after.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {displayTestimonials.map((t: any, i: number) => (
-              <div key={i} className="p-6 rounded-xl bg-card border border-border hover:border-primary/30 transition-colors">
-                <div className="flex items-center gap-1 mb-4">
-                  {[...Array(5)].map((_, j) => (
-                    <Star key={j} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                  ))}
-                </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start mb-12">
+            <div className="rounded-xl border border-primary/20 overflow-hidden">
+              <img 
+                src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&h=600&fit=crop" 
+                alt="Sales Growth Metrics"
+                className="w-full h-auto object-cover"
+              />
+            </div>
 
-                <p className="font-bold text-primary text-lg mb-4 leading-relaxed">
-                  {t.resultValue ?? t.result}
-                </p>
-
-                <div className="space-y-3 mb-6 p-4 bg-background/50 rounded-lg border border-border/50">
-                  <div className="text-xs">
-                    <span className="text-red-400 font-semibold">Before: </span>
-                    <span className="text-muted-foreground">{t.beforeMetric ?? t.before}</span>
+            <div className="grid grid-cols-1 gap-6">
+              {displayTestimonials.map((t: any, i: number) => (
+                <div key={i} className="p-6 rounded-xl bg-card border border-border hover:border-primary/30 transition-colors">
+                  <div className="flex items-center gap-1 mb-4">
+                    {[...Array(5)].map((_, j) => (
+                      <Star key={j} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                    ))}
                   </div>
-                  <div className="text-xs">
-                    <span className="text-green-400 font-semibold">After: </span>
-                    <span className="text-muted-foreground">{t.afterMetric ?? t.after}</span>
+
+                  <p className="font-bold text-primary text-lg mb-4 leading-relaxed">
+                    {t.resultValue ?? t.result}
+                  </p>
+
+                  <div className="space-y-3 mb-6 p-4 bg-background/50 rounded-lg border border-border/50">
+                    <div className="text-xs">
+                      <span className="text-red-400 font-semibold">Before: </span>
+                      <span className="text-muted-foreground">{t.beforeMetric ?? t.before}</span>
+                    </div>
+                    <div className="text-xs">
+                      <span className="text-green-400 font-semibold">After: </span>
+                      <span className="text-muted-foreground">{t.afterMetric ?? t.after}</span>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-border pt-4">
+                    <p className="text-sm font-semibold">{t.clientName ?? t.name}</p>
+                    <p className="text-xs text-muted-foreground">{t.industry} Industry</p>
                   </div>
                 </div>
-
-                <div className="border-t border-border pt-4">
-                  <p className="text-sm font-semibold">{t.clientName ?? t.name}</p>
-                  <p className="text-xs text-muted-foreground">{t.industry} Industry</p>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
       {/* SECTION 6: How It Works */}
       <section className="py-20 px-6">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-3">Not Just Software. A Done-For-You System.</h2>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
@@ -283,20 +313,30 @@ export default function LandingPageFull() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              { day: "Day 1", title: "Expert Setup", desc: "Dedicated specialist configures your campaigns, templates, and targeting from scratch." },
-              { day: "Days 2–14", title: "Sales Optimization", desc: "We analyze early data, refine messaging, and optimize your conversion funnel." },
-              { day: "Days 15–30", title: "Scale & Handoff", desc: "Full system running at peak performance with complete documentation and training." },
-            ].map((step) => (
-              <div key={step.day} className="p-6 rounded-xl bg-card border border-border hover:border-primary/30 transition-colors">
-                <Badge variant="outline" className="mb-4 text-primary border-primary/30 bg-primary/5">
-                  {step.day}
-                </Badge>
-                <h3 className="font-bold text-lg mb-3">{step.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{step.desc}</p>
-              </div>
-            ))}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+            <div className="grid grid-cols-1 gap-6">
+              {[
+                { day: "Day 1", title: "Expert Setup", desc: "Dedicated specialist configures your campaigns, templates, and targeting from scratch." },
+                { day: "Days 2–14", title: "Sales Optimization", desc: "We analyze early data, refine messaging, and optimize your conversion funnel." },
+                { day: "Days 15–30", title: "Scale & Handoff", desc: "Full system running at peak performance with complete documentation and training." },
+              ].map((step) => (
+                <div key={step.day} className="p-6 rounded-xl bg-card border border-border hover:border-primary/30 transition-colors">
+                  <Badge variant="outline" className="mb-4 text-primary border-primary/30 bg-primary/5">
+                    {step.day}
+                  </Badge>
+                  <h3 className="font-bold text-lg mb-3">{step.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{step.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-xl border border-primary/20 overflow-hidden">
+              <img 
+                src="https://images.unsplash.com/photo-1552664730-d307ca884978?w=600&h=600&fit=crop" 
+                alt="Onboarding Process"
+                className="w-full h-auto object-cover"
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -369,6 +409,14 @@ export default function LandingPageFull() {
       <section id="about" className="py-20 px-6">
         <div className="max-w-5xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+            <div className="rounded-xl border border-primary/20 overflow-hidden">
+              <img 
+                src="https://images.unsplash.com/photo-1552664730-d307ca884978?w=600&h=600&fit=crop" 
+                alt="ApexAI Team"
+                className="w-full h-auto object-cover"
+              />
+            </div>
+
             <div>
               <h2 className="text-3xl md:text-4xl font-bold mb-6">Built by Sales People. For Sales People.</h2>
               <p className="text-muted-foreground mb-4 leading-relaxed">
@@ -382,26 +430,26 @@ export default function LandingPageFull() {
                 We're not a side project. We're investing $5M+ to make ApexAI the default platform for outbound sales automation.
               </p>
             </div>
+          </div>
 
-            <div className="space-y-4">
-              <div className="p-6 rounded-xl bg-card border border-border">
-                <h3 className="font-bold text-lg mb-2 text-primary">Our Mission</h3>
-                <p className="text-sm text-muted-foreground">
-                  Make world-class AI sales automation accessible to every business, regardless of size or industry.
-                </p>
-              </div>
-              <div className="p-6 rounded-xl bg-card border border-border">
-                <h3 className="font-bold text-lg mb-2 text-primary">Our Vision</h3>
-                <p className="text-sm text-muted-foreground">
-                  A world where sales teams focus on closing deals, not dialing phones. AI handles the noise. Humans close the deals.
-                </p>
-              </div>
-              <div className="p-6 rounded-xl bg-card border border-border">
-                <h3 className="font-bold text-lg mb-2 text-primary">Our Values</h3>
-                <p className="text-sm text-muted-foreground">
-                  Transparency. Speed. Results. We measure success by your success: more appointments, more revenue, more freedom.
-                </p>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-16">
+            <div className="p-6 rounded-xl bg-card border border-border">
+              <h3 className="font-bold text-lg mb-2 text-primary">Our Mission</h3>
+              <p className="text-sm text-muted-foreground">
+                Make world-class AI sales automation accessible to every business, regardless of size or industry.
+              </p>
+            </div>
+            <div className="p-6 rounded-xl bg-card border border-border">
+              <h3 className="font-bold text-lg mb-2 text-primary">Our Vision</h3>
+              <p className="text-sm text-muted-foreground">
+                A world where sales teams focus on closing deals, not dialing phones. AI handles the noise. Humans close the deals.
+              </p>
+            </div>
+            <div className="p-6 rounded-xl bg-card border border-border">
+              <h3 className="font-bold text-lg mb-2 text-primary">Our Values</h3>
+              <p className="text-sm text-muted-foreground">
+                Transparency. Speed. Results. We measure success by your success: more appointments, more revenue, more freedom.
+              </p>
             </div>
           </div>
         </div>
