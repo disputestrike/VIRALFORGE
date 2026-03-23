@@ -18,12 +18,18 @@ import Testimonials from "./pages/Testimonials";
 import Onboarding from "./pages/Onboarding";
 import Admin from "./pages/Admin";
 import AppLayout from "./components/AppLayout";
+import Login from "./pages/login";
+import About from "./pages/About";
+import Pricing from "./pages/Pricing";
 
 function Router() {
   return (
     <Switch>
-      {/* Public marketing landing page */}
+      {/* Public pages */}
       <Route path="/" component={LandingPage} />
+      <Route path="/login" component={Login} />
+      <Route path="/about" component={About} />
+      <Route path="/pricing" component={Pricing} />
 
       {/* App home (authenticated users) */}
       <Route path="/app" component={Home} />

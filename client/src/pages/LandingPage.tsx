@@ -481,7 +481,7 @@ export default function LandingPageFull() {
               <h4 className="font-semibold mb-4 text-sm">Product</h4>
               <ul className="space-y-2 text-xs text-muted-foreground">
                 <li><a href="#features" className="hover:text-foreground">Features</a></li>
-                <li><a href="#pricing" className="hover:text-foreground">Pricing</a></li>
+                <li><Link href="/pricing" className="hover:text-foreground">Pricing</Link></li>
                 <li><a href="#case-studies" className="hover:text-foreground">Case Studies</a></li>
                 <li><a href="#" className="hover:text-foreground">Roadmap</a></li>
               </ul>
@@ -490,7 +490,7 @@ export default function LandingPageFull() {
             <div>
               <h4 className="font-semibold mb-4 text-sm">Company</h4>
               <ul className="space-y-2 text-xs text-muted-foreground">
-                <li><a href="#about" className="hover:text-foreground">About</a></li>
+                <li><Link href="/about" className="hover:text-foreground">About</Link></li>
                 <li><a href="#" className="hover:text-foreground">Blog</a></li>
                 <li><a href="#" className="hover:text-foreground">Careers</a></li>
                 <li><a href="#contact" className="hover:text-foreground">Contact</a></li>
