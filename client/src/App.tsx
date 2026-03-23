@@ -4,6 +4,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import LandingPage from "./pages/LandingPage";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
@@ -21,8 +22,11 @@ import AppLayout from "./components/AppLayout";
 function Router() {
   return (
     <Switch>
-      {/* Public landing page */}
-      <Route path="/" component={Home} />
+      {/* Public marketing landing page */}
+      <Route path="/" component={LandingPage} />
+
+      {/* App home (authenticated users) */}
+      <Route path="/app" component={Home} />
 
       {/* App routes — wrapped in AppLayout */}
       <Route path="/dashboard">
