@@ -154,7 +154,8 @@ export function getAllQueuesStatus() {
  * Remove call from queue
  */
 export function removeCallFromQueue(callId: string): boolean {
-  for (const queueName of callQueues.keys()) {
+  const queueNames = Array.from(callQueues.keys());
+  for (const queueName of queueNames) {
     const queue = callQueues.get(queueName) || [];
     const index = queue.findIndex((c) => c.callId === callId);
 

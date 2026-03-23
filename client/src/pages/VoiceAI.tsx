@@ -234,12 +234,12 @@ export default function VoiceAI() {
                   {callMutation.data.scheduled ? "✓ Appointment Scheduled!" : `Outcome: ${callMutation.data.outcome}`}
                 </div>
                 <div className="text-xs">
-                  Duration: {Math.floor(callMutation.data.duration / 60)}m {callMutation.data.duration % 60}s
+                  Duration: {Math.floor((callMutation.data?.duration || 0) / 60)}m {(callMutation.data?.duration || 0) % 60}s
                 </div>
                 <Button
                   variant="ghost" size="sm"
                   className="mt-2 text-xs h-6 px-2"
-                  onClick={() => setShowTranscript(callMutation.data!.transcript)}
+                  onClick={() => setShowTranscript(callMutation.data?.transcript || '')}
                 >
                   View Transcript
                 </Button>

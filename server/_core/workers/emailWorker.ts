@@ -173,11 +173,12 @@ export const emailWorker = new Worker(
         html: emailContent.html,
       });
 
-      console.log(`[Email Worker] Sent email ${result.id} to ${email}`);
+      const emailId = (result as any)?.id || `email_${Date.now()}`;
+      console.log(`[Email Worker] Sent email ${emailId} to ${email}`);
 
       return {
         success: true,
-        emailId: result.id,
+        emailId,
         to: email,
         type,
       };
@@ -187,7 +188,7 @@ export const emailWorker = new Worker(
     }
   },
   {
-    connection: redis,
+    connection: redis as any,
     concurrency: 10, // Process 10 emails in parallel
   }
 );

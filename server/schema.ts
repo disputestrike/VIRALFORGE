@@ -1,10 +1,9 @@
-import { drizzle } from "drizzle-orm/mysql-core";
 import {
   bigint,
   varchar,
   text,
   timestamp,
-  enum as mysqlEnum,
+  
   decimal,
   int,
   boolean,
@@ -37,8 +36,8 @@ export const customers = mysqlTable(
     teamSize: int("team_size").default(1),
     
     // Subscription
-    status: mysqlEnum("status", ["trial", "active", "paused", "cancelled"]).notNull().default("trial"),
-    plan: mysqlEnum("plan", ["starter", "growth", "enterprise"]).notNull().default("starter"),
+    status: varchar("status", ["trial", "active", "paused", "cancelled"]).notNull().default("trial"),
+    plan: varchar("plan", ["starter", "growth", "enterprise"]).notNull().default("starter"),
     
     // Limits
     monthlyLeadLimit: int("monthly_lead_limit").notNull().default(5000),
@@ -92,11 +91,11 @@ export const leads = mysqlTable(
     
     // Lead scoring
     score: int("score").default(0),
-    segment: mysqlEnum("segment", ["hot", "warm", "cold", "unqualified"]).default("warm"),
+    segment: varchar("segment", ["hot", "warm", "cold", "unqualified"]).default("warm"),
     
     // Status
-    status: mysqlEnum("status", ["new", "contacted", "qualified", "converted", "lost"]).default("new"),
-    verificationStatus: mysqlEnum("verification_status", ["verified", "unverified", "bounced", "pending"]).default("pending"),
+    status: varchar("status", ["new", "contacted", "qualified", "converted", "lost"]).default("new"),
+    verificationStatus: varchar("verification_status", ["verified", "unverified", "bounced", "pending"]).default("pending"),
     
     // Campaign
     campaignId: int("campaign_id"),
@@ -136,14 +135,14 @@ export const voiceSessions = mysqlTable(
     leadId: bigint("lead_id", { mode: "number" }).notNull(),
     
     callId: varchar("call_id", { length: 255 }).notNull().unique(),
-    status: mysqlEnum("status", ["initiated", "ringing", "in_progress", "completed", "failed"]).notNull().default("initiated"),
+    status: varchar("status", ["initiated", "ringing", "in_progress", "completed", "failed"]).notNull().default("initiated"),
     
     phoneNumber: varchar("phone_number", { length: 20 }),
     phoneNumberFrom: varchar("phone_number_from", { length: 20 }),
     
     // AI State
     conversationHistory: json("conversation_history"),
-    sentiment: mysqlEnum("sentiment", ["positive", "neutral", "negative"]).default("neutral"),
+    sentiment: varchar("sentiment", ["positive", "neutral", "negative"]).default("neutral"),
     
     // Appointment
     appointmentProposed: json("appointment_proposed"),
@@ -154,7 +153,7 @@ export const voiceSessions = mysqlTable(
     recordingUrl: varchar("recording_url", { length: 500 }),
     recordingDuration: int("recording_duration"), // seconds
     transcript: text("transcript"),
-    transcriptionStatus: mysqlEnum("transcription_status", ["pending", "completed", "failed"]).default("pending"),
+    transcriptionStatus: varchar("transcription_status", ["pending", "completed", "failed"]).default("pending"),
     
     // Metrics
     duration: int("duration").default(0), // seconds
@@ -200,11 +199,11 @@ export const appointmentBookings = mysqlTable(
     timezone: varchar("timezone", { length: 50 }).notNull().default("America/New_York"),
     
     // Status
-    confirmationStatus: mysqlEnum("confirmation_status", ["proposed", "confirmed", "declined", "cancelled", "completed"]).notNull().default("proposed"),
-    showStatus: mysqlEnum("show_status", ["pending", "showed", "no_show", "rescheduled"]).notNull().default("pending"),
+    confirmationStatus: varchar("confirmation_status", ["proposed", "confirmed", "declined", "cancelled", "completed"]).notNull().default("proposed"),
+    showStatus: varchar("show_status", ["pending", "showed", "no_show", "rescheduled"]).notNull().default("pending"),
     
     // Confirmation
-    confirmationMethod: mysqlEnum("confirmation_method", ["sms", "email", "call"]),
+    confirmationMethod: varchar("confirmation_method", ["sms", "email", "call"]),
     confirmationSent: boolean("confirmation_sent").default(false),
     confirmationSentAt: timestamp("confirmation_sent_at"),
     reminderSent: boolean("reminder_sent").default(false),
@@ -244,7 +243,7 @@ export const leadSourceConnections = mysqlTable(
     customerId: varchar("customer_id", { length: 64 }).notNull(),
     
     provider: varchar("provider", { length: 50 }).notNull(), // google_ads, facebook, instagram, etc
-    status: mysqlEnum("status", ["connecting", "connected", "error", "disconnected"]).notNull().default("connecting"),
+    status: varchar("status", ["connecting", "connected", "error", "disconnected"]).notNull().default("connecting"),
     
     // Encrypted tokens
     accessToken: text("access_token").notNull(),
@@ -283,7 +282,7 @@ export const jobQueue = mysqlTable(
     customerId: varchar("customer_id", { length: 64 }).notNull(),
     
     jobId: varchar("job_id", { length: 255 }).notNull().unique(),
-    jobType: mysqlEnum("job_type", [
+    jobType: varchar("job_type", [
       "call_lead",
       "send_sms",
       "send_email",
@@ -293,7 +292,7 @@ export const jobQueue = mysqlTable(
       "reminder",
     ]).notNull(),
     
-    status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).notNull().default("pending"),
+    status: varchar("status", ["pending", "processing", "completed", "failed"]).notNull().default("pending"),
     priority: int("priority").default(50),
     
     data: json("data"),
@@ -334,7 +333,7 @@ export const invoices = mysqlTable(
     amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
     currency: varchar("currency", { length: 3 }).default("usd"),
     
-    status: mysqlEnum("status", ["draft", "open", "paid", "void", "uncollectible"]).notNull().default("open"),
+    status: varchar("status", ["draft", "open", "paid", "void", "uncollectible"]).notNull().default("open"),
     dueDate: timestamp("due_date"),
     paidAt: timestamp("paid_at"),
     
@@ -364,12 +363,12 @@ export const billingTransactions = mysqlTable(
     customerId: varchar("customer_id", { length: 64 }).notNull(),
     
     stripeTransactionId: varchar("stripe_transaction_id", { length: 255 }).unique().notNull(),
-    type: mysqlEnum("type", ["monthly_plan", "success_fee", "overage", "refund"]).notNull(),
+    type: varchar("type", ["monthly_plan", "success_fee", "overage", "refund"]).notNull(),
     
     amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
     currency: varchar("currency", { length: 3 }).default("usd"),
     
-    status: mysqlEnum("status", ["pending", "completed", "failed", "refunded"]).notNull().default("pending"),
+    status: varchar("status", ["pending", "completed", "failed", "refunded"]).notNull().default("pending"),
     idempotencyKey: varchar("idempotency_key", { length: 255 }).unique(),
     
     description: text("description"),
@@ -439,7 +438,7 @@ export const webhookEvents = mysqlTable(
     payload: json("payload"),
     signatureVerified: boolean("signature_verified").default(false),
     
-    status: mysqlEnum("status", ["received", "processing", "completed", "failed"]).notNull().default("received"),
+    status: varchar("status", ["received", "processing", "completed", "failed"]).notNull().default("received"),
     errorMessage: text("error_message"),
     
     processedAt: timestamp("processed_at"),

@@ -7,12 +7,12 @@
 
 import { Worker } from "bullmq";
 import { Redis } from "ioredis";
-import * as twilio from "twilio";
+import { Twilio } from "twilio";
 
 const redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
 
 // Initialize Twilio client
-const twilioClient = twilio(
+const twilioClient = new Twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
 );
@@ -104,7 +104,7 @@ export const smsWorker = new Worker(
     }
   },
   {
-    connection: redis,
+    connection: redis as any,
     concurrency: 5, // Process 5 SMS in parallel
   }
 );

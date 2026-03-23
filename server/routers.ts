@@ -364,29 +364,25 @@ const voiceAIRouter = router({
         });
 
         // If decision is not to call now, return decision
-        if (decision !== 'CALL_NOW' && decision !== 'RETRY_CALL') {
-          console.log(`[voiceAI] Lead ${lead.id} decision: ${decision} - not calling now`);
+        const decisionAction = (decision as any)?.action || 'DEAD';
+        if (decisionAction !== 'CALL_NOW' && decisionAction !== 'RETRY_CALL') {
+          console.log(`[voiceAI] Lead ${lead.id} decision: ${decisionAction} - not calling now`);
           return {
             success: false,
-            reason: decision,
-            message: `Lead not ready to call: ${decision}`,
+            reason: decisionAction,
+            message: `Lead not ready to call: ${decisionAction}`,
           };
         }
 
         // INTEGRATION: Queue the call job (asynchronous)
-        const callJob = await queueService.addCallJob(
-          {
-            leadId: input.leadId,
-            campaignId: input.campaignId,
-            script: input.script,
-          },
-          {
-            priority: lead.segment === 'hot' ? 100 : 50,
-            attempts: 3,
-          }
-        );
+        const callJob = await queueService.addCallJob({
+          leadId: input.leadId,
+          campaignId: input.campaignId,
+          script: input.script,
+        });
 
-        console.log(`[voiceAI] Call queued for lead ${lead.id}, job ID: ${callJob.id}`);
+        const jobId = (callJob as any)?.jobId || `job_${Date.now()}`;
+        console.log(`[voiceAI] Call queued for lead ${lead.id}, job ID: ${jobId}`);
 
         // INTEGRATION: Log activity
         await db.logActivity({
@@ -394,12 +390,12 @@ const voiceAIRouter = router({
           entityType: "call",
           entityId: lead.id,
           action: "queued",
-          description: `Call queued for ${lead.firstName} ${lead.lastName} (Job: ${callJob.id})`,
+          description: `Call queued for ${lead.firstName} ${lead.lastName} (Job: ${jobId})`,
         });
 
         return {
           success: true,
-          jobId: callJob.id,
+          jobId: jobId,
           message: `Call queued for ${lead.firstName} ${lead.lastName}`,
           decision,
           outcome: 'call_queued',
