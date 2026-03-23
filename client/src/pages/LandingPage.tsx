@@ -203,7 +203,7 @@ export default function LandingPageFull() {
 
             <div className="rounded-xl border border-primary/20 overflow-hidden">
               <img 
-                src="https://images.unsplash.com/photo-1552664730-d307ca884978?w=600&h=600&fit=crop" 
+                src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&h=600&fit=crop" 
                 alt="ApexAI Dashboard"
                 className="w-full h-auto object-cover"
               />
@@ -242,7 +242,7 @@ export default function LandingPageFull() {
 
             <div className="rounded-xl border border-primary/20 overflow-hidden">
               <img 
-                src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=600&h=600&fit=crop" 
+                src="https://images.unsplash.com/photo-1460925895917-adf4ee868993?w=600&h=600&fit=crop" 
                 alt="Integration Ecosystem"
                 className="w-full h-auto object-cover"
               />
@@ -262,7 +262,7 @@ export default function LandingPageFull() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start mb-12">
             <div className="rounded-xl border border-primary/20 overflow-hidden">
               <img 
-                src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&h=600&fit=crop" 
+                src="https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=600&h=600&fit=crop" 
                 alt="Sales Growth Metrics"
                 className="w-full h-auto object-cover"
               />
@@ -332,7 +332,7 @@ export default function LandingPageFull() {
 
             <div className="rounded-xl border border-primary/20 overflow-hidden">
               <img 
-                src="https://images.unsplash.com/photo-1552664730-d307ca884978?w=600&h=600&fit=crop" 
+                src="https://images.unsplash.com/photo-1516321554475-5fefbe802b06?w=600&h=600&fit=crop" 
                 alt="Onboarding Process"
                 className="w-full h-auto object-cover"
               />
@@ -411,7 +411,7 @@ export default function LandingPageFull() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
             <div className="rounded-xl border border-primary/20 overflow-hidden">
               <img 
-                src="https://images.unsplash.com/photo-1552664730-d307ca884978?w=600&h=600&fit=crop" 
+                src="https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&h=600&fit=crop" 
                 alt="ApexAI Team"
                 className="w-full h-auto object-cover"
               />
