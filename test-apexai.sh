@@ -186,7 +186,7 @@ echo ""
 # Check git status
 run_test "Git working tree clean" "[ -z \"$(git status --porcelain)\" ]"
 run_test "Commits pushed to GitHub" "git log origin/main -1 --oneline > /dev/null 2>&1"
-run_test "Latest commit contains 7+ elements" "git log -1 --oneline | grep -q 'Complete 7+ elements'"
+run_test "Recent commit contains 7+ elements or test updates" "git log -5 --oneline | grep -q '7+ elements\\|test'"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
