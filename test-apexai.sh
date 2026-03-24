@@ -221,7 +221,7 @@ run_test "LiveTicker has useState" "grep -q 'useState' client/src/components/Liv
 run_test "LiveTicker has useEffect" "grep -q 'useEffect' client/src/components/LiveTicker.tsx"
 run_test "ROICalculator has real-time calculation" "grep -q 'setAppointments' client/src/components/ROICalculator.tsx"
 run_test "RiskReversal has Shield icon" "grep -q 'Shield' client/src/components/RiskReversal.tsx"
-run_test "CommunityWins has icon mapping" "grep -q 'icon: Icon' client/src/components/CommunityWins.tsx"
+run_test "CommunityWins has icon mapping" "grep -q '{ icon:' client/src/components/CommunityWins.tsx"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
