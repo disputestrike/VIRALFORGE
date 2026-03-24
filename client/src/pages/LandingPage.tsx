@@ -24,6 +24,10 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import LiveTicker from "@/components/LiveTicker";
+import ROICalculator from "@/components/ROICalculator";
+import RiskReversal from "@/components/RiskReversal";
+import CommunityWins from "@/components/CommunityWins";
 
 const features = [
   { icon: Phone, title: "Voice AI Calls", desc: "Human-sounding AI that books appointments on autopilot across any industry." },
@@ -158,6 +162,9 @@ export default function LandingPageFull() {
           </div>
         </div>
       </section>
+
+      {/* SECTION 1.5: LIVE TICKER */}
+      <LiveTicker />
 
       {/* SECTION 2: Performance Metrics */}
       <section id="results" className="py-16 px-6 border-y border-border bg-card/30">
@@ -405,6 +412,9 @@ export default function LandingPageFull() {
         </div>
       </section>
 
+      {/* SECTION 7.5: ROI CALCULATOR */}
+      <ROICalculator />
+
       {/* SECTION 8: About */}
       <section id="about" className="py-20 px-6">
         <div className="max-w-5xl mx-auto">
@@ -454,6 +464,12 @@ export default function LandingPageFull() {
           </div>
         </div>
       </section>
+
+      {/* SECTION 8.5: RISK REVERSAL */}
+      <RiskReversal />
+
+      {/* SECTION 8.75: COMMUNITY WINS */}
+      <CommunityWins />
 
       {/* SECTION 9: Contact */}
       <section id="contact" className="py-20 px-6 bg-card/20">
