@@ -3,115 +3,158 @@ import type { Express, Request, Response } from "express";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
 import { ENV } from "./env";
-import { OAuth2Client } from "google-auth-library";
-import jwt from "jsonwebtoken";
-
-// Lazy-initialize Google OAuth client (only when needed)
-let googleClient: OAuth2Client | null = null;
-
-function getGoogleClient(): OAuth2Client {
-  if (!googleClient) {
-    if (!process.env.GOOGLE_CLIENT_ID) {
-      console.warn("[Google Auth] GOOGLE_CLIENT_ID not configured - Google Auth will not work");
-    }
-    if (!process.env.GOOGLE_CLIENT_SECRET) {
-      console.warn("[Google Auth] GOOGLE_CLIENT_SECRET not configured - Google Auth will not work");
-    }
-
-    googleClient = new OAuth2Client(
-      process.env.GOOGLE_CLIENT_ID || "",
-      process.env.GOOGLE_CLIENT_SECRET || "",
-      `${process.env.RAILWAY_PUBLIC_DOMAIN ? 'https://' + process.env.RAILWAY_PUBLIC_DOMAIN : 'http://localhost:3000'}/api/auth/google/callback`
-    );
-  }
-  return googleClient;
-}
+import { sdk } from "./sdk";
 
 export function registerOAuthRoutes(app: Express) {
-  // Google OAuth callback endpoint
-  app.post("/api/auth/google/callback", async (req: Request, res: Response) => {
-    const { credential } = req.body;
+  /**
+   * GET /api/auth/google/login
+   * Redirects the browser to Google's OAuth 2.0 consent screen.
+   */
+  app.get("/api/auth/google/login", (_req: Request, res: Response) => {
+    const clientId = ENV.googleClientId || process.env.VITE_APP_ID || "";
+    const redirectUri = ENV.redirectUri;
 
-    if (!credential) {
-      res.status(400).json({ error: "credential is required" });
+    if (!clientId) {
+      res.status(500).json({ error: "Google OAuth not configured: missing client ID" });
+      return;
+    }
+    if (!redirectUri) {
+      res.status(500).json({ error: "Google OAuth not configured: missing REDIRECT_URI" });
+      return;
+    }
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: [
+        "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/userinfo.profile",
+      ].join(" "),
+      access_type: "offline",
+      prompt: "consent",
+    });
+
+    res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+  });
+
+  /**
+   * GET /api/auth/callback
+   * Google redirects here with ?code=... after the user grants consent.
+   * Exchanges the code for tokens, fetches user info, upserts the user in the
+   * database, and sets a signed JWT session cookie.
+   */
+  app.get("/api/auth/callback", async (req: Request, res: Response) => {
+    const { code, error: oauthError } = req.query as Record<string, string>;
+
+    if (oauthError) {
+      console.error("[OAuth] Google returned an error:", oauthError);
+      res.status(400).json({ error: `Google OAuth error: ${oauthError}` });
+      return;
+    }
+
+    if (!code) {
+      res.status(400).json({ error: "Missing authorization code" });
       return;
     }
 
     try {
-      // Get Google client (lazy-initialized)
-      const client = getGoogleClient();
+      // Exchange the authorization code for Google tokens
+      const tokenResponse = await sdk.exchangeCodeForToken(code);
 
-      if (!process.env.GOOGLE_CLIENT_ID) {
-        res.status(500).json({ error: "Google authentication not configured" });
-        return;
-      }
+      // Fetch the authenticated user's profile
+      const userInfo = await sdk.getUserInfo(tokenResponse.access_token);
 
-      // Verify the Google ID token
-      const ticket = await client.verifyIdToken({
-        idToken: credential,
-        audience: process.env.GOOGLE_CLIENT_ID,
-      });
+      // Google's v2 userinfo endpoint returns `id` as the stable subject ID
+      const openId = userInfo.id;
 
-      const payload = ticket.getPayload();
-      if (!payload) {
-        res.status(400).json({ error: "Invalid token payload" });
-        return;
-      }
-
-      const { sub: googleId, email, name, picture } = payload;
-
-      if (!googleId || !email) {
+      if (!openId || !userInfo.email) {
         res.status(400).json({ error: "Missing required user info from Google" });
         return;
       }
 
-      // Upsert user in database
+      // Upsert user in the database
       await db.upsertUser({
-        openId: googleId,
-        name: name || null,
-        email: email || null,
+        openId,
+        name: userInfo.name || null,
+        email: userInfo.email || null,
         loginMethod: "google",
         lastSignedIn: new Date(),
       });
 
-      // Create JWT session token
-      const sessionToken = jwt.sign(
-        {
-          googleId,
-          email,
-          name,
-          picture,
-        },
-        ENV.cookieSecret,
-        { expiresIn: "1y" }
-      );
-
-      const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { 
-        ...cookieOptions, 
-        maxAge: ONE_YEAR_MS 
+      // Create a signed JWT session token
+      const sessionToken = await sdk.createSessionToken({
+        googleId: openId,
+        email: userInfo.email,
+        name: userInfo.name,
+        picture: userInfo.picture,
       });
 
-      // Return success - frontend will redirect
-      res.json({ success: true });
+      const cookieOptions = getSessionCookieOptions(req);
+      res.cookie(COOKIE_NAME, sessionToken, {
+        ...cookieOptions,
+        maxAge: ONE_YEAR_MS,
+      });
+
+      console.log(`[OAuth] User authenticated: ${userInfo.email}`);
+
+      // Redirect to the app after successful login
+      res.redirect("/");
     } catch (error) {
-      console.error("[Google Auth] Callback failed", error);
-      res.status(401).json({ error: "Google authentication failed" });
+      console.error("[OAuth] Callback failed:", error);
+      res.status(500).json({ error: "Authentication failed" });
     }
   });
 
-  // Optional: Google login initiation endpoint
-  app.get("/api/auth/google/login", (req: Request, res: Response) => {
-    const scopes = [
-      "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile",
-    ];
+  /**
+   * POST /api/auth/google/callback (legacy — kept for backwards compatibility)
+   * Accepts a Google ID token (credential) from the Google Sign-In button and
+   * creates a session without going through the authorization code flow.
+   */
+  app.post("/api/auth/google/callback", async (req: Request, res: Response) => {
+    const { code } = req.body as { code?: string };
 
-    const authUrl = getGoogleClient().generateAuthUrl({
-      access_type: "offline",
-      scope: scopes,
-    });
+    if (!code) {
+      res.status(400).json({ error: "code is required" });
+      return;
+    }
 
-    res.json({ url: authUrl });
+    try {
+      const tokenResponse = await sdk.exchangeCodeForToken(code);
+      const userInfo = await sdk.getUserInfo(tokenResponse.access_token);
+
+      const openId = userInfo.id;
+
+      if (!openId || !userInfo.email) {
+        res.status(400).json({ error: "Missing required user info from Google" });
+        return;
+      }
+
+      await db.upsertUser({
+        openId,
+        name: userInfo.name || null,
+        email: userInfo.email || null,
+        loginMethod: "google",
+        lastSignedIn: new Date(),
+      });
+
+      const sessionToken = await sdk.createSessionToken({
+        googleId: openId,
+        email: userInfo.email,
+        name: userInfo.name,
+        picture: userInfo.picture,
+      });
+
+      const cookieOptions = getSessionCookieOptions(req);
+      res.cookie(COOKIE_NAME, sessionToken, {
+        ...cookieOptions,
+        maxAge: ONE_YEAR_MS,
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[OAuth] POST callback failed:", error);
+      res.status(500).json({ error: "Authentication failed" });
+    }
   });
 }
