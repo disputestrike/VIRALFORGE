@@ -135,7 +135,7 @@ export default function LandingPageFull() {
 
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
             AI-powered outbound calling, SMS, email, and social outreach that books appointments on autopilot — for any industry.
-            No integrations. No Zapier. Just results.
+            <span className="text-foreground font-semibold"> We handle everything. You just close deals.</span>
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
@@ -323,9 +323,9 @@ export default function LandingPageFull() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
             <div className="grid grid-cols-1 gap-6">
               {[
-                { day: "Day 1", title: "Expert Setup", desc: "Dedicated specialist configures your campaigns, templates, and targeting from scratch." },
-                { day: "Days 2–14", title: "Sales Optimization", desc: "We analyze early data, refine messaging, and optimize your conversion funnel." },
-                { day: "Days 15–30", title: "Scale & Handoff", desc: "Full system running at peak performance with complete documentation and training." },
+                { day: "Day 1", title: "Expert Setup", desc: "WE configure everything: campaigns, templates, targeting, and AI scripts. Zero work on your end." },
+                { day: "Days 2–14", title: "Sales Optimization", desc: "WE analyze data, refine messaging, optimize conversions. YOU focus on closing." },
+                { day: "Days 15–30", title: "Scale & Handoff", desc: "System running at peak performance. WE hand you a fully built, proven machine. YOU just scale." },
               ].map((step) => (
                 <div key={step.day} className="p-6 rounded-xl bg-card border border-border hover:border-primary/30 transition-colors">
                   <Badge variant="outline" className="mb-4 text-primary border-primary/30 bg-primary/5">
@@ -353,7 +353,7 @@ export default function LandingPageFull() {
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-3">Simple, Linear Pricing</h2>
-            <p className="text-muted-foreground text-lg">$249 per 50 leads per month. Scale as you grow. No surprises.</p>
+            <p className="text-muted-foreground text-lg">$249 per 50 leads per month. Fully managed. No surprises.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
@@ -393,6 +393,7 @@ export default function LandingPageFull() {
             <h3 className="text-xl font-bold mb-6">All plans include:</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
+                "✓ Fully managed setup & optimization",
                 "AI voice calls (human-sounding)",
                 "SMS outreach & automation",
                 "Email automation",
@@ -400,7 +401,6 @@ export default function LandingPageFull() {
                 "Real-time analytics",
                 "24/7 automation",
                 "30-day dedicated support",
-                "Custom templates",
               ].map((feature) => (
                 <div key={feature} className="flex items-start gap-3">
                   <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
@@ -564,15 +564,20 @@ export default function LandingPageFull() {
             <div>
               <h4 className="font-semibold mb-4 text-sm">Legal</h4>
               <ul className="space-y-2 text-xs text-muted-foreground">
-                <li><a href="#" className="hover:text-foreground">Privacy</a></li>
-                <li><a href="#" className="hover:text-foreground">Terms</a></li>
-                <li><a href="#" className="hover:text-foreground">Security</a></li>
-                <li><a href="#" className="hover:text-foreground">Compliance</a></li>
+                <li><Link href="/privacy" className="hover:text-foreground">Privacy Policy</Link></li>
+                <li><Link href="/terms" className="hover:text-foreground">Terms of Service</Link></li>
+                <li><Link href="/security" className="hover:text-foreground">Security & Compliance</Link></li>
+                <li><a href="mailto:legal@apexai.io" className="hover:text-foreground">DPA Request</a></li>
               </ul>
             </div>
           </div>
 
           <div className="border-t border-border pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <span className="px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-400">✓ SOC 2 Type II</span>
+              <span className="px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">✓ GDPR</span>
+              <span className="px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400">✓ TCPA</span>
+            </div>
             <p className="text-xs text-muted-foreground">© 2026 ApexAI. All rights reserved. Built by CrucibAI.</p>
             <div className="flex items-center gap-6 text-xs text-muted-foreground">
               <a href="#" className="hover:text-foreground">Twitter</a>

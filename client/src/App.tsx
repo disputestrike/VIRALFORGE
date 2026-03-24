@@ -21,6 +21,9 @@ import AppLayout from "./components/AppLayout";
 import Login from "./pages/login";
 import About from "./pages/About";
 import Pricing from "./pages/Pricing";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
+import Security from "./pages/Security";
 
 function Router() {
   return (
@@ -30,6 +33,9 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/about" component={About} />
       <Route path="/pricing" component={Pricing} />
+      <Route path="/privacy" component={Privacy} />
+      <Route path="/terms" component={Terms} />
+      <Route path="/security" component={Security} />
 
       {/* App home (authenticated users) */}
       <Route path="/app" component={Home} />
