@@ -6,29 +6,119 @@ import { ENV } from "./env";
 import { OAuth2Client } from "google-auth-library";
 import jwt from "jsonwebtoken";
 
-// Lazy-initialize Google OAuth client (only when needed)
 let googleClient: OAuth2Client | null = null;
 
 function getGoogleClient(): OAuth2Client {
   if (!googleClient) {
     if (!process.env.GOOGLE_CLIENT_ID) {
-      console.warn("[Google Auth] GOOGLE_CLIENT_ID not configured - Google Auth will not work");
+      console.warn("[Google Auth] GOOGLE_CLIENT_ID not configured");
     }
     if (!process.env.GOOGLE_CLIENT_SECRET) {
-      console.warn("[Google Auth] GOOGLE_CLIENT_SECRET not configured - Google Auth will not work");
+      console.warn("[Google Auth] GOOGLE_CLIENT_SECRET not configured");
     }
-
     googleClient = new OAuth2Client(
       process.env.GOOGLE_CLIENT_ID || "",
       process.env.GOOGLE_CLIENT_SECRET || "",
-      `${process.env.RAILWAY_PUBLIC_DOMAIN ? 'https://' + process.env.RAILWAY_PUBLIC_DOMAIN : 'http://localhost:3000'}/api/auth/google/callback`
+      `${ENV.publicUrl}/api/auth/google/callback`
     );
   }
   return googleClient;
 }
 
+async function handleGoogleUser(
+  googleId: string,
+  email: string,
+  name: string | undefined,
+  picture: string | undefined,
+  req: Request,
+  res: Response
+) {
+  await db.upsertUser({
+    openId: googleId,
+    name: name || null,
+    email: email || null,
+    loginMethod: "google",
+    lastSignedIn: new Date(),
+  });
+
+  const sessionToken = jwt.sign(
+    { googleId, email, name, picture },
+    ENV.cookieSecret,
+    { expiresIn: "1y" }
+  );
+
+  const cookieOptions = getSessionCookieOptions(req);
+  res.cookie(COOKIE_NAME, sessionToken, {
+    ...cookieOptions,
+    maxAge: ONE_YEAR_MS,
+  });
+
+  console.log(`[Google Auth] Login success | openId: ${googleId} | email: ${email}`);
+  return sessionToken;
+}
+
 export function registerOAuthRoutes(app: Express) {
-  // Google OAuth callback endpoint
+
+  // ── Flow 1: Google redirect flow (standard OAuth2) ────────────────────────
+  // Step 1: Redirect user to Google consent screen
+  app.get("/api/auth/google/login", (_req: Request, res: Response) => {
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+      res.status(503).json({ error: "Google OAuth not configured — add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to Railway Variables" });
+      return;
+    }
+    const authUrl = getGoogleClient().generateAuthUrl({
+      access_type: "offline",
+      scope: [
+        "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/userinfo.profile",
+      ],
+      prompt: "select_account",
+    });
+    res.redirect(authUrl);
+  });
+
+  // Step 2: Google redirects back here with ?code= (GET — this is what Google sends)
+  app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
+    const code = req.query.code as string;
+    const error = req.query.error as string;
+
+    if (error) {
+      console.error("[Google Auth] OAuth error:", error);
+      res.redirect("/?auth_error=" + encodeURIComponent(error));
+      return;
+    }
+
+    if (!code) {
+      res.redirect("/?auth_error=missing_code");
+      return;
+    }
+
+    try {
+      const { tokens } = await getGoogleClient().getToken(code);
+      const client = getGoogleClient();
+      client.setCredentials(tokens);
+
+      const ticket = await client.verifyIdToken({
+        idToken: tokens.id_token!,
+        audience: process.env.GOOGLE_CLIENT_ID!,
+      });
+
+      const payload = ticket.getPayload();
+      if (!payload || !payload.sub || !payload.email) {
+        res.redirect("/?auth_error=invalid_token");
+        return;
+      }
+
+      await handleGoogleUser(payload.sub, payload.email, payload.name, payload.picture, req, res);
+      res.redirect("/dashboard");
+    } catch (err) {
+      console.error("[Google Auth] Callback GET failed:", err);
+      res.redirect("/?auth_error=callback_failed");
+    }
+  });
+
+  // ── Flow 2: Google Identity Services (one-tap / credential POST) ──────────
+  // Used by the frontend Google button that posts a credential token directly
   app.post("/api/auth/google/callback", async (req: Request, res: Response) => {
     const { credential } = req.body;
 
@@ -38,80 +128,33 @@ export function registerOAuthRoutes(app: Express) {
     }
 
     try {
-      // Get Google client (lazy-initialized)
-      const client = getGoogleClient();
-
       if (!process.env.GOOGLE_CLIENT_ID) {
         res.status(500).json({ error: "Google authentication not configured" });
         return;
       }
 
-      // Verify the Google ID token
-      const ticket = await client.verifyIdToken({
+      const ticket = await getGoogleClient().verifyIdToken({
         idToken: credential,
         audience: process.env.GOOGLE_CLIENT_ID,
       });
 
       const payload = ticket.getPayload();
-      if (!payload) {
+      if (!payload || !payload.sub || !payload.email) {
         res.status(400).json({ error: "Invalid token payload" });
         return;
       }
 
-      const { sub: googleId, email, name, picture } = payload;
-
-      if (!googleId || !email) {
-        res.status(400).json({ error: "Missing required user info from Google" });
-        return;
-      }
-
-      // Upsert user in database
-      await db.upsertUser({
-        openId: googleId,
-        name: name || null,
-        email: email || null,
-        loginMethod: "google",
-        lastSignedIn: new Date(),
-      });
-
-      // Create JWT session token
-      const sessionToken = jwt.sign(
-        {
-          googleId,
-          email,
-          name,
-          picture,
-        },
-        ENV.cookieSecret,
-        { expiresIn: "1y" }
-      );
-
-      const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { 
-        ...cookieOptions, 
-        maxAge: ONE_YEAR_MS 
-      });
-
-      // Return success - frontend will redirect
+      await handleGoogleUser(payload.sub, payload.email, payload.name, payload.picture, req, res);
       res.json({ success: true });
     } catch (error) {
-      console.error("[Google Auth] Callback failed", error);
+      console.error("[Google Auth] Callback POST failed:", error);
       res.status(401).json({ error: "Google authentication failed" });
     }
   });
 
-  // Optional: Google login initiation endpoint
-  app.get("/api/auth/google/login", (req: Request, res: Response) => {
-    const scopes = [
-      "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile",
-    ];
-
-    const authUrl = getGoogleClient().generateAuthUrl({
-      access_type: "offline",
-      scope: scopes,
-    });
-
-    res.json({ url: authUrl });
+  // ── Logout ────────────────────────────────────────────────────────────────
+  app.post("/api/auth/logout", (req: Request, res: Response) => {
+    res.clearCookie(COOKIE_NAME);
+    res.json({ success: true });
   });
 }

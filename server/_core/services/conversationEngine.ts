@@ -142,10 +142,15 @@ export async function confirmAndBookAppointment(
   leadId: number,
   time: Date
 ): Promise<{ appointmentId: number; time: Date; status: string }> {
-  // Real booking would integrate with Google Calendar here
-  const appointmentId = Math.floor(Math.random() * 100000);
-  console.log(`[ConversationEngine] Booking appointment for lead ${leadId} at ${time}`);
-  return { appointmentId, time, status: "confirmed" };
+  const { bookAppointment } = await import("./appointmentService");
+  const result = await bookAppointment({
+    leadId,
+    scheduledTime: time,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York",
+    confirmationMethod: "voice",
+  });
+  console.log(`[ConversationEngine] Appointment booked | leadId: ${leadId} | id: ${result.id} | time: ${time}`);
+  return { appointmentId: result.id, time, status: result.status };
 }
 
 export default {
