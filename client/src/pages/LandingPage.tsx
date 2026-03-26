@@ -14,12 +14,12 @@ import ROICalculator from "@/components/ROICalculator";
 import CommunityWins from "@/components/CommunityWins";
 
 const features = [
-  { icon: Phone, title: "Voice AI Calls", desc: "Human-sounding AI that books appointments on autopilot across any industry.", img: "/voice_ai.png" },
-  { icon: MessageSquare, title: "SMS Outreach", desc: "Personalized SMS campaigns with intelligent follow-up sequences.", img: "/multichannel.png" },
-  { icon: Mail, title: "Email Automation", desc: "Multi-step email sequences with dynamic personalization at scale.", img: null },
-  { icon: Share2, title: "Lead Intelligence", desc: "AI qualifies and scores every lead. Focus only on real buyers.", img: "/lead_list.png" },
-  { icon: BarChart3, title: "Real-Time Analytics", desc: "Live dashboards tracking response rate, show rate, and ROI.", img: null },
-  { icon: Clock, title: "24/7 Automation", desc: "Your AI works while you sleep. Leads contacted instantly, every time.", img: null },
+  { icon: Phone, title: "Voice AI Calls", desc: "Human-sounding AI that books appointments on autopilot across any industry." },
+  { icon: MessageSquare, title: "SMS Outreach", desc: "Personalized SMS campaigns with intelligent follow-up sequences." },
+  { icon: Mail, title: "Email Automation", desc: "Multi-step email sequences with dynamic personalization at scale." },
+  { icon: Share2, title: "Lead Intelligence", desc: "AI qualifies and scores every lead. Focus only on real buyers." },
+  { icon: BarChart3, title: "Real-Time Analytics", desc: "Live dashboards tracking response rate, show rate, and ROI." },
+  { icon: Clock, title: "24/7 Automation", desc: "Your AI works while you sleep. Leads contacted instantly, every time." },
 ];
 
 const staticTestimonials = [
