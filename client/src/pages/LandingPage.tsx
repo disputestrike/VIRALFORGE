@@ -55,8 +55,15 @@ export default function LandingPageFull() {
         className="backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link href="/">
-            <div className="flex items-center gap-2.5 cursor-pointer hover:opacity-85 transition-opacity">
-              <img src="/logo.png" alt="ApexAI" className="h-8 w-auto" />
+            <div className="flex items-center gap-2.5 cursor-pointer hover:opacity-85 transition-opacity select-none">
+              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                <rect width="32" height="32" rx="8" fill="#1d6ff4"/>
+                <path d="M16 6L26 24H6L16 6Z" fill="white" opacity="0.95"/>
+                <path d="M16 12L21 22H11L16 12Z" fill="#1d6ff4"/>
+              </svg>
+              <span style={{ fontWeight: 800, fontSize: "1.2rem", letterSpacing: "-0.02em" }}>
+                <span style={{ color: "#ffffff" }}>Apex</span><span style={{ color: "#60a5fa" }}>AI</span>
+              </span>
             </div>
           </Link>
 
@@ -235,15 +242,26 @@ export default function LandingPageFull() {
               </p>
               <div className="flex items-center gap-3 p-4 rounded-xl"
                 style={{ backgroundColor: "#1a1e2a", border: "1px solid rgba(29,111,244,0.2)" }}>
-                <img src="/ai_chip.png" alt="AI" className="w-12 h-12 object-contain flex-shrink-0" />
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 text-white font-black text-sm" style={{ backgroundColor: "#1d6ff4" }}>AI</div>
                 <div>
                   <p className="font-semibold text-white text-sm">AI Lead Scoring</p>
                   <p className="text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>Every lead scored 0–100 before you spend a single call minute</p>
                 </div>
               </div>
             </div>
-            <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.1)" }}>
-              <img src="/lead_list.png" alt="Lead Management" className="w-full h-auto object-cover" />
+            <div className="rounded-xl overflow-hidden p-8 flex flex-col gap-4" style={{ border: "1px solid rgba(255,255,255,0.1)", backgroundColor: "#141820" }}>
+              {[["New", "#60a5fa"], ["Contacted", "#818cf8"], ["Qualified", "#34d399"], ["Follow Up", "#fb923c"], ["Closed", "#4ade80"]].map(([status, color]) => (
+                <div key={status} className="flex items-center justify-between p-3 rounded-lg" style={{ backgroundColor: "#1a1e2a" }}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ backgroundColor: "rgba(29,111,244,0.3)" }}>AI</div>
+                    <div>
+                      <p className="text-sm font-medium text-white">Lead #{Math.floor(Math.random() * 9000) + 1000}</p>
+                      <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>Score: {Math.floor(Math.random() * 40) + 60}/100</p>
+                    </div>
+                  </div>
+                  <span className="text-xs px-2 py-1 rounded-full font-medium" style={{ backgroundColor: `${color}22`, color }}>{status}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -420,15 +438,20 @@ export default function LandingPageFull() {
             ))}
           </div>
 
-          {/* Guarantee badge + plan inclusions */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-center p-8 rounded-2xl"
+          {/* Plan inclusions + guarantee */}
+          <div className="p-8 rounded-2xl"
             style={{ backgroundColor: "#141820", border: "1px solid rgba(255,255,255,0.08)" }}>
-            <div className="flex justify-center">
-              <img src="/guarantee_badge.png" alt="30-Day Risk-Free Guarantee" className="w-40 h-auto object-contain" />
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+              <h3 className="text-xl font-bold text-white">All plans include:</h3>
+              <div className="flex items-center gap-2 px-4 py-2 rounded-xl" style={{ backgroundColor: "rgba(29,111,244,0.12)", border: "1px solid rgba(29,111,244,0.25)" }}>
+                <span className="text-2xl font-black" style={{ color: "#1d6ff4" }}>30</span>
+                <div>
+                  <p className="text-xs font-bold text-white leading-tight">Day Risk-Free</p>
+                  <p className="text-xs leading-tight" style={{ color: "rgba(255,255,255,0.5)" }}>Appointment Guarantee</p>
+                </div>
+              </div>
             </div>
-            <div className="md:col-span-2">
-              <h3 className="text-xl font-bold text-white mb-4">All plans include:</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {[
                   "Fully managed setup & optimization",
                   "AI voice calls (human-sounding)",
@@ -445,7 +468,6 @@ export default function LandingPageFull() {
                   </div>
                 ))}
               </div>
-            </div>
           </div>
         </div>
       </section>
@@ -474,26 +496,15 @@ export default function LandingPageFull() {
             </div>
           </div>
 
-          {/* Global reach */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.1)" }}>
-              <img src="/global_reach.png" alt="Global Reach" className="w-full h-auto object-cover" />
-            </div>
-            <div>
-              <h3 className="text-2xl font-bold text-white mb-4">Any Industry. Any Country. Any Scale.</h3>
-              <p className="leading-relaxed mb-6" style={{ color: "rgba(255,255,255,0.55)" }}>
-                Solar, roofing, insurance, real estate, HVAC, financial services — if you need appointments, ApexAI works for you. We operate across 40+ countries, 24 hours a day.
-              </p>
-              <div className="grid grid-cols-3 gap-4">
-                {[["40+", "Countries"], ["500K+", "Appointments"], ["$1B+", "Pipeline Created"]].map(([v, l]) => (
-                  <div key={l} className="p-4 rounded-xl text-center"
-                    style={{ backgroundColor: "#1a1e2a", border: "1px solid rgba(255,255,255,0.07)" }}>
-                    <p className="text-2xl font-black text-white mb-1">{v}</p>
-                    <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{l}</p>
-                  </div>
-                ))}
+          {/* Stats row */}
+          <div className="grid grid-cols-3 gap-6 mt-4">
+            {[["Any Industry", "Solar, roofing, HVAC, insurance, real estate and more"], ["Any Scale", "From 50 leads/mo to 50,000 — same platform, no migration"], ["24/7 Operation", "AI never sleeps, never takes a day off, never misses a lead"]].map(([title, desc]) => (
+              <div key={title} className="p-6 rounded-xl text-center"
+                style={{ backgroundColor: "#1a1e2a", border: "1px solid rgba(255,255,255,0.07)" }}>
+                <p className="font-bold text-white mb-2">{title}</p>
+                <p className="text-xs leading-relaxed" style={{ color: "rgba(255,255,255,0.45)" }}>{desc}</p>
               </div>
-            </div>
+            ))}
           </div>
         </div>
       </section>
@@ -554,7 +565,16 @@ export default function LandingPageFull() {
         <div className="max-w-5xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             <div>
-              <img src="/logo.png" alt="ApexAI" className="h-8 w-auto mb-4" />
+              <div className="flex items-center gap-2 mb-4 select-none">
+                <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+                  <rect width="32" height="32" rx="8" fill="#1d6ff4"/>
+                  <path d="M16 6L26 24H6L16 6Z" fill="white" opacity="0.95"/>
+                  <path d="M16 12L21 22H11L16 12Z" fill="#1d6ff4"/>
+                </svg>
+                <span style={{ fontWeight: 800, fontSize: "1.1rem", letterSpacing: "-0.02em" }}>
+                  <span style={{ color: "#ffffff" }}>Apex</span><span style={{ color: "#60a5fa" }}>AI</span>
+                </span>
+              </div>
               <p className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
                 AI-powered sales automation for every industry.
               </p>
