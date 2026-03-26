@@ -229,7 +229,7 @@ export default function Templates() {
               {templates.map((t: any) => {
                 const ch = t.channel as Channel;
                 const vars: string[] = (() => {
-                  try { return JSON.parse(t.variables ?? "[]"); } catch { return []; }
+                  try { const p = JSON.parse(t.variables ?? "[]"); return Array.isArray(p) ? p : []; } catch { return []; }
                 })();
                 return (
                   <Card key={t.id} className="bg-card border-border hover:border-border/80 transition-colors">

@@ -87,7 +87,7 @@ export default function Onboarding() {
         <div className="space-y-4">
           <h2 className="text-base font-semibold">Active Onboardings</h2>
           {records.map((record) => {
-            const completedSteps: string[] = JSON.parse(record.completedSteps ?? "[]");
+            const completedSteps: string[] = (() => { try { const p = JSON.parse(record.completedSteps ?? "[]"); return Array.isArray(p) ? p : []; } catch { return []; } })();
             const progress = Math.round((completedSteps.length / ALL_STEPS.length) * 100);
             const daysLeft = record.supportEndDate ? Math.max(0, Math.ceil((new Date(record.supportEndDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 0;
             return (

@@ -689,7 +689,7 @@ const onboardingRouter = router({
       const onboarding = await db.getOnboardings(ctx.user.id);
       const record = onboarding.find((o) => o.id === input.id);
       if (!record) throw new TRPCError({ code: "NOT_FOUND" });
-      const steps: string[] = JSON.parse(record.completedSteps ?? "[]");
+      const steps: string[] = (() => { try { const p = JSON.parse(record.completedSteps ?? "[]"); return Array.isArray(p) ? p : []; } catch { return []; } })();
       const updatedSet = input.completed ? Array.from(new Set([...steps, input.step])) : steps.filter((s) => s !== input.step);
       const updated = updatedSet;
       const allSteps = ["account_setup", "campaign_config", "lead_import", "template_setup", "test_campaign", "go_live", "week1_review", "week2_optimization", "week3_scaling", "week4_handoff"];

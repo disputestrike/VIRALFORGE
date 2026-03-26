@@ -21,7 +21,7 @@ export default function CampaignDetail() {
   if (isLoading) return <div className="p-6 text-muted-foreground">Loading...</div>;
   if (!campaign) return <div className="p-6 text-muted-foreground">Campaign not found</div>;
 
-  const channels: string[] = JSON.parse(campaign.channels ?? "[]");
+  const channels: string[] = (() => { try { const r = campaign.channels ?? "[]"; const p = JSON.parse(r); return Array.isArray(p) ? p : [r]; } catch { return campaign.channels ? [campaign.channels] : []; } })();
   const channelIcons: Record<string, React.ReactNode> = { voice: <Phone className="w-3.5 h-3.5" />, sms: <MessageSquare className="w-3.5 h-3.5" />, email: <Mail className="w-3.5 h-3.5" />, social: <Share2 className="w-3.5 h-3.5" /> };
 
   return (

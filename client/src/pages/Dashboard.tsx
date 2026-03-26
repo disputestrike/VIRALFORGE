@@ -243,7 +243,13 @@ export default function Dashboard() {
           ) : (
             <div className="space-y-3">
               {campaignsData.campaigns.map((c) => {
-                const channels: string[] = JSON.parse(c.channels ?? "[]");
+                const channels: string[] = (() => {
+                  try {
+                    const raw = c.channels ?? "[]";
+                    const parsed = JSON.parse(raw);
+                    return Array.isArray(parsed) ? parsed : [raw];
+                  } catch { return c.channels ? [c.channels] : []; }
+                })();
                 const statusColors: Record<string, string> = { active: "apex-badge-active", draft: "apex-badge-draft", paused: "apex-badge-paused", completed: "text-blue-400 bg-blue-500/10 border-blue-500/30", archived: "text-gray-400 bg-gray-500/10 border-gray-500/30" };
                 const responseRate = c.sentCount && c.sentCount > 0 ? Math.round(((c.responseCount ?? 0) / c.sentCount) * 100) : 0;
                 return (
