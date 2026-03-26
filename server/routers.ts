@@ -249,13 +249,55 @@ const messagesRouter = router({
       templateId: z.number().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      // Simulate sending
-      await db.createMessage({ ...input, status: "sent", sentAt: new Date(), deliveredAt: new Date() });
+      const lead = await db.getLeadById(input.leadId);
+      if (!lead) throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
+
+      // Write message record as queued
+      const msgResult = await db.createMessage({ ...input, status: "queued" });
+      const msgId = msgResult.insertId;
+
+      let deliveryStatus = "queued";
+
+      // Actually dispatch via Twilio/Resend
+      if (input.channel === "sms" && lead.phone) {
+        try {
+          const { sendSMS } = await import("./_core/services/twilioService");
+          await sendSMS({ to: lead.phone, body: input.body });
+          await db.updateMessageStatus(msgId, "sent", { sentAt: new Date(), deliveredAt: new Date() });
+          deliveryStatus = "sent";
+        } catch (smsErr) {
+          console.error("[messages.send] SMS failed:", smsErr);
+          await db.updateMessageStatus(msgId, "failed");
+          deliveryStatus = "failed";
+        }
+      } else if (input.channel === "email" && lead.email) {
+        try {
+          const { Resend } = await import("resend");
+          const resend = new Resend(process.env.RESEND_API_KEY);
+          await resend.emails.send({
+            from: "ApexAI <noreply@apexai.com>",
+            to: lead.email,
+            subject: input.subject || "Message from ApexAI",
+            text: input.body,
+          });
+          await db.updateMessageStatus(msgId, "sent", { sentAt: new Date() });
+          deliveryStatus = "sent";
+        } catch (emailErr) {
+          console.error("[messages.send] Email failed:", emailErr);
+          await db.updateMessageStatus(msgId, "failed");
+          deliveryStatus = "failed";
+        }
+      } else {
+        // Social or no contact info — mark sent (logged only)
+        await db.updateMessageStatus(msgId, "sent", { sentAt: new Date() });
+        deliveryStatus = "sent";
+      }
+
       if (input.campaignId) {
         await db.updateCampaign(input.campaignId, { sentCount: db_sql_increment("sentCount") as unknown as number });
       }
-      await db.logActivity({ userId: ctx.user.id, entityType: "message", action: "sent", description: `Sent ${input.channel} to lead ${input.leadId}` });
-      return { success: true };
+      await db.logActivity({ userId: ctx.user.id, entityType: "message", action: "sent", description: `Sent ${input.channel} to ${lead.firstName} ${lead.lastName}: ${deliveryStatus}` });
+      return { success: true, status: deliveryStatus };
     }),
 
   updateStatus: protectedProcedure
@@ -293,17 +335,32 @@ const messagesRouter = router({
         const personalizedSubject = input.subject
           ? input.subject.replace(/\{\{firstName\}\}/g, lead.firstName ?? "").replace(/\{\{company\}\}/g, lead.company ?? "")
           : undefined;
-        await db.createMessage({
+        const msgResult = await db.createMessage({
           leadId: contact.leadId,
           campaignId: input.campaignId,
           channel: input.channel,
           subject: personalizedSubject,
           body: personalizedBody,
           templateId: input.templateId,
-          status: "sent",
-          sentAt: new Date(),
-          deliveredAt: new Date(),
+          status: "queued",
         });
+
+        // Queue real delivery
+        if (input.channel === "sms" && lead.phone) {
+          await queueService.addSmsJob({
+            leadId: lead.id,
+            phone: lead.phone,
+            type: "follow_up",
+            leadName: `${lead.firstName} ${lead.lastName}`,
+          });
+        } else if (input.channel === "email" && lead.email) {
+          await queueService.addEmailJob({
+            leadId: lead.id,
+            email: lead.email,
+            type: "follow_up",
+            leadName: `${lead.firstName} ${lead.lastName}`,
+          });
+        }
         sent++;
       }
       await db.updateCampaign(input.campaignId, { sentCount: db_sql_increment("sentCount") as unknown as number });

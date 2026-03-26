@@ -9,6 +9,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import * as voiceSessionManager from "./services/voiceSessionManager";
+import { apiRateLimiter, aiRateLimiter, authRateLimiter, webhookRateLimiter } from "./middleware/rateLimiter";
 import * as voiceProcessingService from "./services/voiceProcessingService";
 import { startSessionPersistenceInterval } from "./services/voiceSessionManager";
 
@@ -71,24 +72,31 @@ async function startServer() {
   // Run migrations before starting the server
   await runMigrations();
 
-  // INTEGRATION: Job queue disabled (fix async imports)
-  console.log("[Server] Job queue disabled (TODO: fix async imports)");
-
-  /* DISABLED - FIX ASYNC IMPORTS
   // INTEGRATION: Initialize job queue and workers
   console.log("[Server] Initializing job queue and workers...");
   try {
-    const { queues, redis } = await import("./_core/services/queue");
+    const { getQueues } = await import("./services/queue");
     const { Worker } = await import("bullmq");
-    const { initiateCall } = await import("./_core/services/twilioService");
+    const { initiateCall } = await import("./services/twilioService");
 
+    // Initialize queues
+    const queues = await getQueues();
+    if (!queues) {
+      console.warn("[Server] Redis not available — workers not started");
+    } else {
+      console.log("[Server] Starting BullMQ workers...");
+    }
+    const redisConnection = process.env.REDIS_URL ? { url: process.env.REDIS_URL } : null;
+
+    if (redisConnection) {
     // Call worker
     const callWorker = new Worker(
       "calls",
       async (job) => {
         console.log(`[CallWorker] Processing job ${job.id}: Lead ${job.data.leadId}`);
         try {
-          const lead = await db.getLeadById(job.data.leadId);
+          const dbMod = await import("../db");
+          const lead = await dbMod.getLeadById(job.data.leadId);
           if (!lead?.phone) {
             throw new Error(`Lead ${job.data.leadId} has no phone number`);
           }
@@ -106,7 +114,7 @@ async function startServer() {
           throw error;
         }
       },
-      { connection: redis }
+      { connection: redisConnection as any }
     );
 
     callWorker.on("completed", (job) => {
@@ -162,7 +170,7 @@ async function startServer() {
           throw error;
         }
       },
-      { connection: redis, concurrency: 5 }
+      { connection: redisConnection as any, concurrency: 5 }
     );
 
     smsWorker.on("completed", (job) => {
@@ -251,14 +259,15 @@ async function startServer() {
             html: html,
           });
 
+          const emailId = (result as any)?.data?.id || (result as any)?.id || 'sent';
           console.log(`[EmailWorker] Sent email to ${email}`);
-          return { success: true, emailId: result.id };
+          return { success: true, emailId };
         } catch (error) {
           console.error(`[EmailWorker] Job ${job.id} failed:`, error);
           throw error;
         }
       },
-      { connection: redis, concurrency: 10 }
+      { connection: redisConnection as any, concurrency: 10 }
     );
 
     emailWorker.on("completed", (job) => {
@@ -270,11 +279,11 @@ async function startServer() {
     });
 
     console.log("[Server] SMS and Email workers initialized");
+    } // end if(redisConnection)
   } catch (error) {
     console.warn("[Server] Job queue initialization warning:", error);
     // Don't crash if queue fails to initialize
   }
-  */
 
   const app = express();
   const server = createServer(app);
@@ -282,6 +291,24 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+  // ── Rate Limiting ────────────────────────────────────────────────────────────
+  app.use("/api/trpc", apiRateLimiter);
+  app.use("/api/auth", authRateLimiter);
+  app.use("/api/trpc/voiceAI", aiRateLimiter);
+  app.use("/api/trpc/leads.aiSearch", aiRateLimiter);
+  app.use("/api/trpc/messages.aiCompose", aiRateLimiter);
+  app.use("/api/trpc/templates.generateWithAI", aiRateLimiter);
+  app.use("/webhooks", webhookRateLimiter);
+
+  // ── Security Headers ──────────────────────────────────────────────────────────
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    next();
+  });
 
   // Health check endpoint — must respond immediately, before any DB or auth checks
   app.get("/api/health", (_req, res) => {
@@ -293,7 +320,31 @@ async function startServer() {
   });
 
   // INTEGRATION: Voice webhook routes for Twilio callbacks
-  app.post("/api/voice/start", (req, res) => {
+  // ── Twilio Webhook Signature Validation ──────────────────────────────────────
+  const validateTwilioSignature = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    // Skip validation in dev or when Twilio creds not set
+    if (!process.env.TWILIO_AUTH_TOKEN || process.env.NODE_ENV !== "production") {
+      return next();
+    }
+    const signature = req.headers["x-twilio-signature"] as string;
+    if (!signature) {
+      return res.status(403).json({ error: "Missing Twilio signature" });
+    }
+    try {
+      const { validateWebhookSignature } = await import("./services/twilioService");
+      const url = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
+      const isValid = await validateWebhookSignature(signature, url, req.body);
+      if (!isValid) {
+        console.warn("[Security] Invalid Twilio signature from", req.ip);
+        return res.status(403).json({ error: "Invalid Twilio signature" });
+      }
+    } catch {
+      return next(); // Don't block if validation fails unexpectedly
+    }
+    next();
+  };
+
+  app.post("/api/voice/start", validateTwilioSignature, (req, res) => {
     console.log("[Voice] Call started");
     const leadId = req.query.leadId as string;
     const sessionId = req.query.sessionId as string;
@@ -310,7 +361,7 @@ async function startServer() {
     `);
   });
 
-  app.post("/api/voice/status", (req, res) => {
+  app.post("/api/voice/status", validateTwilioSignature, (req, res) => {
     console.log("[Voice] Status callback:", {
       CallSid: req.body.CallSid,
       CallStatus: req.body.CallStatus,
@@ -319,7 +370,7 @@ async function startServer() {
     res.send("OK");
   });
 
-  app.post("/api/voice/recording", (req, res) => {
+  app.post("/api/voice/recording", validateTwilioSignature, (req, res) => {
     console.log("[Voice] Recording available:", req.body.RecordingUrl);
     // Handle recording callback
     res.send("OK");
@@ -327,7 +378,7 @@ async function startServer() {
 
   // ─── INBOUND CALL ROUTES ──────────────────────────────────────────────────────
 
-  app.post("/api/voice/inbound", async (req, res) => {
+  app.post("/api/voice/inbound", validateTwilioSignature, async (req, res) => {
     const { CallSid, From, To } = req.body;
     console.log(`[Inbound] Call received from ${From}`);
 
@@ -351,13 +402,12 @@ async function startServer() {
         console.log(`[Inbound] Created new lead ${(lead as any).id} from ${From}`);
       }
 
-      // FIX 6: Create voice session IMMEDIATELY for inbound
-      const sessionId = CallSid;
-      voiceSessionManager.createSession((lead as any).id, "default");
-      console.log(`[Inbound] Created session ${sessionId} for lead ${lead!.id}`);
+      // Create voice session bound to CallSid
+      const session = voiceSessionManager.createSession((lead as any).id ?? 0, "default", CallSid);
+      console.log(`[Inbound] Created session ${CallSid} for lead ${(lead as any)?.id}`);
       
       // Start persistence interval
-      voiceSessionManager.startSessionPersistenceInterval(sessionId);
+      voiceSessionManager.startSessionPersistenceInterval(CallSid);
     } catch (error) {
       console.error("[Inbound] Error setting up inbound call:", error);
     }
@@ -376,12 +426,12 @@ async function startServer() {
           timeout="10">
           <Say>Please make a selection.</Say>
         </Gather>
-        <Redirect>/api/voice/inbound</Redirect>
+        <Redirect method="POST">/api/voice/inbound</Redirect>
       </Response>
     `);
   });
 
-  app.post("/api/voice/inbound-dtmf", async (req, res) => {
+  app.post("/api/voice/inbound-dtmf", validateTwilioSignature, async (req, res) => {
     const { CallSid, From, Digits } = req.body;
     const selection = parseInt(Digits);
 
@@ -424,7 +474,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/voice/voicemail-received", async (req, res) => {
+  app.post("/api/voice/voicemail-received", validateTwilioSignature, async (req, res) => {
     const { CallSid, From, RecordingUrl, TranscriptionText } = req.body;
 
     console.log(`[Voicemail] Received from ${From}`);
@@ -522,11 +572,10 @@ async function startServer() {
                 try {
                   const audioResult = await voiceProcessingService.processAudioMessage(
                     sessionId || "",
-                    completeAudio?.toString?.() || ""
+                    completeAudio
                   );
                   
-                  const responseAudio = audioResult as any;
-                  const responsePayload = (responseAudio as any)?.toString?.("base64") || "";
+                  const responsePayload = (audioResult as any)?.audioPayload || "";
 
                   ws.send(
                     JSON.stringify({

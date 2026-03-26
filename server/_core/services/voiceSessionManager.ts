@@ -1,57 +1,159 @@
 /**
- * VOICE SESSION MANAGER - FIXED
+ * VOICE SESSION MANAGER — In-memory sessions with DB persistence
+ * Tracks live call state: conversation history, lead info, appointment state
  */
 
-import * as db from '../../db';
+import * as db from "../../db";
 
-export async function createSession(leadId: number, customerId: string) {
-  console.log(`[VoiceSession] Creating session for lead ${leadId}`);
-  return {
-    sessionId: `sess_${Date.now()}`,
+export interface VoiceSession {
+  sessionId: string;
+  leadId: number;
+  campaignId: string;
+  callSid?: string;
+  startTime: number;
+  endTime?: number;
+  status: "active" | "completed" | "failed";
+  conversationHistory: Array<{ role: "user" | "assistant"; content: string; timestamp: number }>;
+  proposedSlots: Array<{ time: Date; label: string }>;
+  appointmentBooked: boolean;
+  appointmentId?: number;
+  outcome?: "interested" | "not_interested" | "callback" | "scheduled" | "voicemail" | "no_answer";
+  sentiment?: "positive" | "neutral" | "negative";
+  transcript: string;
+}
+
+// In-memory session store (keyed by sessionId OR callSid)
+const sessions = new Map<string, VoiceSession>();
+
+export function createSession(leadId: number, campaignId: string, callSid?: string): VoiceSession {
+  const sessionId = callSid || `session_${leadId}_${Date.now()}`;
+  const session: VoiceSession = {
+    sessionId,
     leadId,
-    customerId,
-    status: 'initiated',
+    campaignId,
+    callSid,
+    startTime: Date.now(),
+    status: "active",
+    conversationHistory: [],
+    proposedSlots: [],
+    appointmentBooked: false,
+    transcript: "",
   };
+  sessions.set(sessionId, session);
+  if (callSid && callSid !== sessionId) {
+    sessions.set(callSid, session); // also index by callSid
+  }
+  console.log(`[VoiceSession] Created session ${sessionId} for lead ${leadId}`);
+  return session;
 }
 
-export async function updateSession(sessionId: string, data: any) {
-  console.log(`[VoiceSession] Updating session ${sessionId}`);
-  return { updated: true };
+export function getSession(sessionId: string): VoiceSession | null {
+  return sessions.get(sessionId) ?? null;
 }
 
-export async function persistSessionToDatabase(sessionId: string, data: any) {
-  console.log(`[VoiceSession] Persisting session ${sessionId}`);
-  return { persisted: true };
+export function addMessage(sessionId: string, role: "user" | "assistant", content: string): void {
+  const session = sessions.get(sessionId);
+  if (!session) {
+    console.warn(`[VoiceSession] Session not found: ${sessionId}`);
+    return;
+  }
+  session.conversationHistory.push({ role, content, timestamp: Date.now() });
+  // Update running transcript
+  const label = role === "user" ? "Lead" : "AI";
+  session.transcript += `${label}: ${content}\n`;
 }
 
-export async function getSession(sessionId: string) {
-  console.log(`[VoiceSession] Getting session ${sessionId}`);
-  return null;
+export function updateSession(sessionId: string, updates: Partial<VoiceSession>): void {
+  const session = sessions.get(sessionId);
+  if (!session) return;
+  Object.assign(session, updates);
+}
+
+export function completeSession(sessionId: string, outcome?: VoiceSession["outcome"]): void {
+  const session = sessions.get(sessionId);
+  if (!session) return;
+  session.status = "completed";
+  session.endTime = Date.now();
+  if (outcome) session.outcome = outcome;
+  console.log(`[VoiceSession] Session ${sessionId} completed. Outcome: ${outcome}`);
+}
+
+export function endSession(sessionId: string): void {
+  const session = sessions.get(sessionId);
+  if (session) {
+    session.status = "completed";
+    session.endTime = Date.now();
+    // Don't delete immediately — let persistence interval save it first
+    setTimeout(() => {
+      sessions.delete(sessionId);
+      if (session.callSid) sessions.delete(session.callSid);
+    }, 30000); // Keep for 30s after end
+  }
+}
+
+export async function persistSessionToDatabase(sessionId: string): Promise<void> {
+  const session = sessions.get(sessionId);
+  if (!session || !session.leadId) return;
+
+  try {
+    const durationSeconds = session.endTime
+      ? Math.floor((session.endTime - session.startTime) / 1000)
+      : Math.floor((Date.now() - session.startTime) / 1000);
+
+    await db.createCallRecording({
+      leadId: session.leadId,
+      campaignId: session.campaignId ? parseInt(session.campaignId) || undefined : undefined,
+      duration: durationSeconds,
+      status: session.status === "completed" ? "completed" : "failed",
+      outcome: session.outcome ?? "no_answer",
+      transcript: session.transcript || null,
+      aiSummary: session.conversationHistory.length > 0
+        ? `${session.conversationHistory.length} turns. Outcome: ${session.outcome ?? "unknown"}`
+        : null,
+      sentiment: session.sentiment ?? "neutral",
+      scheduledAppointment: session.appointmentBooked,
+      calledAt: new Date(session.startTime),
+    });
+
+    // Update lead status if outcome is known
+    if (session.outcome === "scheduled" || session.appointmentBooked) {
+      await db.updateLead(session.leadId, { status: "qualified" });
+    } else if (session.outcome === "not_interested") {
+      await db.updateLead(session.leadId, { status: "lost" });
+    } else if (session.outcome === "interested" || session.outcome === "callback") {
+      await db.updateLead(session.leadId, { status: "contacted" });
+    }
+
+    console.log(`[VoiceSession] Persisted session ${sessionId} to DB`);
+  } catch (error) {
+    console.error(`[VoiceSession] Failed to persist session ${sessionId}:`, error);
+  }
+}
+
+/** Periodically persist active sessions every 30s */
+export function startSessionPersistenceInterval(sessionId: string): void {
+  const interval = setInterval(async () => {
+    const session = sessions.get(sessionId);
+    if (!session || session.status === "completed") {
+      clearInterval(interval);
+      return;
+    }
+    await persistSessionToDatabase(sessionId);
+  }, 30000);
+}
+
+export function getActiveSessions(): VoiceSession[] {
+  return Array.from(sessions.values()).filter(s => s.status === "active");
 }
 
 export default {
   createSession,
-  updateSession,
-  persistSessionToDatabase,
   getSession,
+  addMessage,
+  updateSession,
+  completeSession,
+  endSession,
+  persistSessionToDatabase,
+  startSessionPersistenceInterval,
+  getActiveSessions,
 };
-
-export async function startSessionPersistenceInterval(sessionId: string) {
-  console.log(`[VoiceSession] Starting persistence interval for ${sessionId}`);
-  return true;
-}
-
-export async function completeSession(sessionId: string) {
-  console.log(`[VoiceSession] Completing session ${sessionId}`);
-  return { completed: true };
-}
-
-export async function endSession(sessionId: string) {
-  console.log(`[VoiceSession] Ending session ${sessionId}`);
-  return { ended: true };
-}
-
-export async function addMessage(sessionId: string, role: string, content: string) {
-  console.log(`[VoiceSession] Added message to ${sessionId}`);
-  return { added: true };
-}

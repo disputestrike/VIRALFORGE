@@ -7,6 +7,24 @@
 
 import * as queueService from './queue';
 
+const RESEND_KEY = process.env.RESEND_API_KEY;
+
+async function sendAdminEmailDirect(subject: string, html: string): Promise<void> {
+  if (!ADMIN_EMAIL) return;
+  if (RESEND_KEY) {
+    try {
+      const { Resend } = await import('resend');
+      const resend = new Resend(RESEND_KEY);
+      await resend.emails.send({ from: 'ApexAI <noreply@apexai.com>', to: ADMIN_EMAIL, subject, html });
+      return;
+    } catch (e) {
+      console.error('[AdminNotify] Resend failed:', e);
+    }
+  }
+  // Fallback: log to console
+  console.log(`[AdminNotify] ${subject}\n${html.replace(/<[^>]+>/g, ' ')}`);
+}
+
 // Admin email from environment
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || '';
 const ADMIN_NAME = process.env.ADMIN_NAME || 'Admin';
@@ -57,7 +75,7 @@ export async function notifyAppointmentBooked(
   await queueService.addEmailJob({
     leadId: 0, // Admin notification doesn't have a lead
     email: ADMIN_EMAIL,
-    type: 'admin_alert',
+    type: 'follow_up',
     subject,
     html,
     leadName: ADMIN_NAME,
@@ -92,13 +110,7 @@ export async function notifyCriticalError(
     </html>
   `;
 
-  await queueService.addEmailJob({
-    email: ADMIN_EMAIL,
-    type: 'admin_alert',
-    subject,
-    html,
-    leadName: ADMIN_NAME,
-  });
+  await sendAdminEmailDirect(subject, html);
 }
 
 /**
@@ -127,13 +139,7 @@ export async function notifyVoicemailReceived(
     </html>
   `;
 
-  await queueService.addEmailJob({
-    email: ADMIN_EMAIL,
-    type: 'admin_alert',
-    subject,
-    html,
-    leadName: ADMIN_NAME,
-  });
+  await sendAdminEmailDirect(subject, html);
 }
 
 /**
@@ -160,13 +166,7 @@ export async function notifyNoShow(
     </html>
   `;
 
-  await queueService.addEmailJob({
-    email: ADMIN_EMAIL,
-    type: 'admin_alert',
-    subject,
-    html,
-    leadName: ADMIN_NAME,
-  });
+  await sendAdminEmailDirect(subject, html);
 }
 
 /**
@@ -223,13 +223,7 @@ export async function notifyDailyStats(stats: {
     </html>
   `;
 
-  await queueService.addEmailJob({
-    email: ADMIN_EMAIL,
-    type: 'admin_alert',
-    subject,
-    html,
-    leadName: ADMIN_NAME,
-  });
+  await sendAdminEmailDirect(subject, html);
 }
 
 export default {

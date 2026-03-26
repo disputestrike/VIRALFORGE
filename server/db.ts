@@ -1,5 +1,7 @@
 import { and, desc, eq, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { ResultSetHeader } from "mysql2";
 import {
   InsertUser,
   activityLogs,
@@ -17,9 +19,9 @@ import {
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
-let _db: ReturnType<typeof drizzle> | null = null;
+let _db: MySql2Database | null = null;
 
-export async function getDb() {
+export async function getDb(): Promise<MySql2Database | null> {
   if (!_db && process.env.DATABASE_URL) {
     try {
       _db = drizzle(process.env.DATABASE_URL);
@@ -29,6 +31,18 @@ export async function getDb() {
     }
   }
   return _db;
+}
+
+/** Safe insert that returns the inserted row ID from MySQL ResultSetHeader */
+async function insertAndGetId<T extends Record<string, unknown>>(
+  db: MySql2Database,
+  table: Parameters<MySql2Database["insert"]>[0],
+  data: T
+): Promise<number> {
+  const result = await (db.insert(table) as any).values(data);
+  // Drizzle + MySQL2 returns [ResultSetHeader, ...]
+  const header = Array.isArray(result) ? result[0] : result;
+  return (header as ResultSetHeader).insertId ?? 0;
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────────
@@ -114,11 +128,11 @@ export async function getLeadByPhone(phone: string) {
   return result[0];
 }
 
-export async function createLead(data: typeof leads.$inferInsert) {
+export async function createLead(data: typeof leads.$inferInsert): Promise<{ insertId: number }> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(leads).values(data);
-  return result[0];
+  const insertId = await insertAndGetId(db, leads, data);
+  return { insertId };
 }
 
 export async function updateLead(id: number, data: Partial<typeof leads.$inferInsert>) {
@@ -154,11 +168,11 @@ export async function getCampaignById(id: number) {
   return result[0];
 }
 
-export async function createCampaign(data: typeof campaigns.$inferInsert) {
+export async function createCampaign(data: typeof campaigns.$inferInsert): Promise<{ insertId: number }> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(campaigns).values(data);
-  return result[0];
+  const insertId = await insertAndGetId(db, campaigns, data);
+  return { insertId };
 }
 
 export async function updateCampaign(id: number, data: Partial<typeof campaigns.$inferInsert>) {
@@ -211,11 +225,11 @@ export async function getMessages(opts?: { campaignId?: number; leadId?: number;
   return db.select().from(messages).where(where).orderBy(desc(messages.createdAt)).limit(opts?.limit ?? 100);
 }
 
-export async function createMessage(data: typeof messages.$inferInsert) {
+export async function createMessage(data: typeof messages.$inferInsert): Promise<{ insertId: number }> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(messages).values(data);
-  return result[0];
+  const insertId = await insertAndGetId(db, messages, data);
+  return { insertId };
 }
 
 export async function updateMessageStatus(id: number, status: typeof messages.$inferInsert["status"], extra?: Record<string, Date>) {
@@ -235,11 +249,11 @@ export async function getCallRecordings(opts?: { campaignId?: number; leadId?: n
   return db.select().from(callRecordings).where(where).orderBy(desc(callRecordings.calledAt)).limit(opts?.limit ?? 50);
 }
 
-export async function createCallRecording(data: typeof callRecordings.$inferInsert) {
+export async function createCallRecording(data: typeof callRecordings.$inferInsert): Promise<{ insertId: number }> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(callRecordings).values(data);
-  return result[0];
+  const insertId = await insertAndGetId(db, callRecordings, data);
+  return { insertId };
 }
 
 // ─── Templates ────────────────────────────────────────────────────────────────
@@ -251,11 +265,11 @@ export async function getTemplates(channel?: string) {
   return db.select().from(templates).where(and(...conditions)).orderBy(desc(templates.createdAt));
 }
 
-export async function createTemplate(data: typeof templates.$inferInsert) {
+export async function createTemplate(data: typeof templates.$inferInsert): Promise<{ insertId: number }> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(templates).values(data);
-  return result[0];
+  const insertId = await insertAndGetId(db, templates, data);
+  return { insertId };
 }
 
 export async function updateTemplate(id: number, data: Partial<typeof templates.$inferInsert>) {
@@ -350,11 +364,11 @@ export async function getOnboardings(userId?: number) {
   return db.select().from(onboardings).where(conditions.length > 0 ? and(...conditions) : undefined).orderBy(desc(onboardings.createdAt));
 }
 
-export async function createOnboarding(data: typeof onboardings.$inferInsert) {
+export async function createOnboarding(data: typeof onboardings.$inferInsert): Promise<{ insertId: number }> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(onboardings).values(data);
-  return result[0];
+  const insertId = await insertAndGetId(db, onboardings, data);
+  return { insertId };
 }
 
 export async function updateOnboarding(id: number, data: Partial<typeof onboardings.$inferInsert>) {
