@@ -106,9 +106,9 @@ async function startServer() {
     const callWorker = new Worker(
       "calls",
       async (job) => {
-        console.log(`[CallWorker] Processing job ${job.id}: Lead ${job.data.leadId}`);
+        console.log(`[CallWorker] ▶ QUEUED→PROCESSING | jobId: ${job.id} | leadId: ${job.data.leadId}`);
+        const dbMod = await import("../db");
         try {
-          const dbMod = await import("../db");
           const lead = await dbMod.getLeadById(job.data.leadId);
           if (!lead?.phone) {
             throw new Error(`Lead ${job.data.leadId} has no phone number`);
@@ -120,10 +120,21 @@ async function startServer() {
             campaignId: job.data.campaignId,
           });
 
-          console.log(`[CallWorker] Call initiated for lead ${job.data.leadId}: ${result.callSid}`);
+          // Write call record to DB
+          await dbMod.createCallRecording({
+            leadId: lead.id,
+            campaignId: job.data.campaignId,
+            status: "completed",
+            outcome: "no_answer",
+            calledAt: new Date(),
+          });
+          await dbMod.updateLead(lead.id, { status: "contacted" });
+
+          console.log(`[CallWorker] ✅ PROCESSING→COMPLETED | jobId: ${job.id} | callSid: ${result.callSid} | leadId: ${lead.id}`);
           return result;
         } catch (error) {
-          console.error(`[CallWorker] Job ${job.id} failed:`, error);
+          await dbMod.updateLead(job.data.leadId, { status: "contacted" }).catch(() => {});
+          console.error(`[CallWorker] ❌ PROCESSING→FAILED | jobId: ${job.id} | reason: ${(error as Error).message}`);
           throw error;
         }
       },
@@ -526,7 +537,7 @@ async function startServer() {
     `);
   });
 
-  app.post("/api/voice/queue-wait", (req, res) => {
+  app.post("/api/voice/queue-wait", validateTwilioSignature, (req, res) => {
     res.type("text/xml");
     res.send(`
       <Response>
