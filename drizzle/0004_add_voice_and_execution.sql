@@ -1,5 +1,5 @@
 -- Phase 1: Add voice sessions table for real-time conversation state
-CREATE TABLE `voice_sessions` (
+CREATE TABLE IF NOT EXISTS `voice_sessions` (
   `id` int NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `leadId` int NOT NULL,
   `callId` varchar(255) NOT NULL UNIQUE,
@@ -20,7 +20,7 @@ CREATE TABLE `voice_sessions` (
 );
 
 -- Phase 1: Add webhook events table for tracking Omni AI integrations
-CREATE TABLE `webhook_events` (
+CREATE TABLE IF NOT EXISTS `webhook_events` (
   `id` int NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `type` varchar(100) NOT NULL COMMENT 'omni_ai_lead, omni_ai_feedback, etc',
   `leadId` int,
@@ -41,7 +41,7 @@ CREATE TABLE `webhook_events` (
 );
 
 -- Phase 1: Add appointment bookings table
-CREATE TABLE `appointment_bookings` (
+CREATE TABLE IF NOT EXISTS `appointment_bookings` (
   `id` int NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `leadId` int NOT NULL,
   `voiceSessionId` int,
@@ -67,7 +67,7 @@ CREATE TABLE `appointment_bookings` (
 );
 
 -- Phase 1: Add job queue table for BullMQ job tracking
-CREATE TABLE `job_queue` (
+CREATE TABLE IF NOT EXISTS `job_queue` (
   `id` int NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `jobType` varchar(100) NOT NULL COMMENT 'call_lead, retry_call, send_sms, send_email, book_appointment, follow_up, etc',
   `leadId` int,
@@ -97,7 +97,7 @@ CREATE TABLE `job_queue` (
 );
 
 -- Phase 1: Add call attempts table for follow-up tracking
-CREATE TABLE `call_attempts` (
+CREATE TABLE IF NOT EXISTS `call_attempts` (
   `id` int NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `leadId` int NOT NULL,
   `campaignId` int,
@@ -120,7 +120,7 @@ CREATE TABLE `call_attempts` (
 );
 
 -- Phase 1: Add decision log table for tracking AI decisions
-CREATE TABLE `decision_logs` (
+CREATE TABLE IF NOT EXISTS `decision_logs` (
   `id` int NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `leadId` int NOT NULL,
   `campaignId` int,

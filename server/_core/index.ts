@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { ENV } from "./env";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
@@ -71,6 +72,18 @@ async function runMigrations() {
 async function startServer() {
   // Run migrations before starting the server
   await runMigrations();
+
+  // ── Feature flags — logged on every startup ───────────────
+  console.log("[ApexAI] Starting with feature flags:");
+  console.log(`  Database:   ✅ (DATABASE_URL set)`);
+  console.log(`  Redis/Queue: ${ENV.queueEnabled ? "✅ BullMQ + Redis" : "⚠️  In-memory fallback (set REDIS_URL)"}`);
+  console.log(`  Google Auth: ${ENV.googleClientId ? "✅ enabled" : "❌ disabled (set GOOGLE_CLIENT_ID)"}`);
+  console.log(`  Voice/SMS:   ${ENV.voiceEnabled ? "✅ Twilio ready" : "⚠️  disabled (set TWILIO_ACCOUNT_SID)"}`);
+  console.log(`  Email:       ${ENV.emailEnabled ? "✅ Resend ready" : "⚠️  disabled (set RESEND_API_KEY)"}`);
+  console.log(`  STT:         ${ENV.sttEnabled ? "✅ Whisper ready" : "⚠️  disabled (set OPENAI_API_KEY)"}`);
+  console.log(`  TTS:         ${ENV.ttsEnabled ? "✅ ElevenLabs ready" : "⚠️  disabled (set ELEVENLABS_API_KEY)"}`);
+  console.log(`  AI/LLM:      ${ENV.aiEnabled ? "✅ ready" : "⚠️  disabled (set BUILT_IN_FORGE_API_KEY)"}`);
+  console.log("");
 
   // INTEGRATION: Initialize job queue and workers
   console.log("[Server] Initializing job queue and workers...");
@@ -315,7 +328,17 @@ async function startServer() {
     res.status(200).json({
       status: "ok",
       timestamp: new Date().toISOString(),
-      env: process.env.NODE_ENV,
+      env: ENV.nodeEnv,
+      services: {
+        database: ENV.databaseUrl ? "configured" : "missing",
+        redis:    ENV.redisUrl    ? "configured" : "missing — using in-memory fallback",
+        voice:    ENV.voiceEnabled  ? "ready"  : "disabled — add TWILIO keys",
+        sms:      ENV.smsEnabled    ? "ready"  : "disabled — add TWILIO keys",
+        email:    ENV.emailEnabled  ? "ready"  : "disabled — add RESEND_API_KEY",
+        stt:      ENV.sttEnabled    ? "ready"  : "disabled — add OPENAI_API_KEY",
+        tts:      ENV.ttsEnabled    ? "ready"  : "disabled — add ELEVENLABS_API_KEY",
+        ai:       ENV.aiEnabled     ? "ready"  : "disabled — add BUILT_IN_FORGE_API_KEY",
+      },
     });
   });
 

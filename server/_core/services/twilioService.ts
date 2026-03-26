@@ -3,15 +3,15 @@
  * Requires: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER
  */
 
+import { ENV } from "../env";
+
 function getTwilioClient() {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  if (!accountSid || !authToken) {
-    throw new Error("TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are required");
+  if (!ENV.twilioAccountSid || !ENV.twilioAuthToken) {
+    throw new Error("TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are required. Add them to Railway Variables.");
   }
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const twilio = require("twilio");
-  return twilio(accountSid, authToken);
+  return twilio(ENV.twilioAccountSid, ENV.twilioAuthToken);
 }
 
 export async function initiateCall(data: {
@@ -21,23 +21,18 @@ export async function initiateCall(data: {
   sessionId?: string;
 }): Promise<{ callSid: string; status: string }> {
   const client = getTwilioClient();
-  const fromNumber = process.env.TWILIO_PHONE_NUMBER;
-  if (!fromNumber) throw new Error("TWILIO_PHONE_NUMBER is required");
-
-  const baseUrl = process.env.PUBLIC_URL || process.env.RAILWAY_PUBLIC_DOMAIN
-    ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-    : "https://apexai-production-d567.up.railway.app";
+  if (!ENV.twilioPhoneNumber) throw new Error("TWILIO_PHONE_NUMBER is required");
 
   const sessionId = data.sessionId || `session_${Date.now()}`;
 
   const call = await client.calls.create({
     to: data.phoneNumber,
-    from: fromNumber,
-    url: `${baseUrl}/api/voice/start?leadId=${data.leadId}&sessionId=${sessionId}&campaignId=${data.campaignId || ""}`,
-    statusCallback: `${baseUrl}/api/voice/status`,
+    from: ENV.twilioPhoneNumber,
+    url: `${ENV.publicUrl}/api/voice/start?leadId=${data.leadId}&sessionId=${sessionId}&campaignId=${data.campaignId || ""}`,
+    statusCallback: `${ENV.publicUrl}/api/voice/status`,
     statusCallbackMethod: "POST",
     record: true,
-    recordingStatusCallback: `${baseUrl}/api/voice/recording`,
+    recordingStatusCallback: `${ENV.publicUrl}/api/voice/recording`,
   });
 
   console.log(`[Twilio] Call initiated: ${call.sid} → ${data.phoneNumber}`);
@@ -49,12 +44,11 @@ export async function sendSMS(data: {
   body: string;
 }): Promise<{ messageSid: string; status: string }> {
   const client = getTwilioClient();
-  const fromNumber = process.env.TWILIO_PHONE_NUMBER;
-  if (!fromNumber) throw new Error("TWILIO_PHONE_NUMBER is required");
+  if (!ENV.twilioPhoneNumber) throw new Error("TWILIO_PHONE_NUMBER is required");
 
   const message = await client.messages.create({
     body: data.body,
-    from: fromNumber,
+    from: ENV.twilioPhoneNumber,
     to: data.to,
   });
 
@@ -73,11 +67,10 @@ export async function validateWebhookSignature(
   params: Record<string, string>
 ): Promise<boolean> {
   try {
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    if (!authToken) return false;
+    if (!ENV.twilioAuthToken) return false;
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const twilio = require("twilio");
-    return twilio.validateRequest(authToken, signature, url, params);
+    return twilio.validateRequest(ENV.twilioAuthToken, signature, url, params);
   } catch {
     return false;
   }
