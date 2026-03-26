@@ -352,6 +352,7 @@ const messagesRouter = router({
             phone: lead.phone,
             type: "follow_up",
             leadName: `${lead.firstName} ${lead.lastName}`,
+            msgId: msgResult.insertId,
           });
           console.log(`[BulkSend] SMS job created → jobId: ${smsJob.jobId} | status: ${smsJob.status} | leadId: ${lead.id} | msgId: ${msgResult.insertId}`);
         } else if (input.channel === "email" && lead.email) {
@@ -360,6 +361,7 @@ const messagesRouter = router({
             email: lead.email,
             type: "follow_up",
             leadName: `${lead.firstName} ${lead.lastName}`,
+            msgId: msgResult.insertId,
           });
           console.log(`[BulkSend] Email job created → jobId: ${emailJob.jobId} | status: ${emailJob.status} | leadId: ${lead.id} | msgId: ${msgResult.insertId}`);
         }

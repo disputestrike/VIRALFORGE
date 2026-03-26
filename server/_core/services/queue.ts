@@ -75,6 +75,7 @@ export async function addSmsJob(data: {
   leadName?: string;
   scheduledTime?: string;
   delay?: number;
+  msgId?: number;
 }): Promise<{ jobId: string; status: string }> {
   const queues = await getQueues();
   const jobId = `sms_${data.leadId}_${Date.now()}`;
@@ -104,6 +105,7 @@ export async function addEmailJob(data: {
   scheduledTime?: string;
   calendarLink?: string;
   delay?: number;
+  msgId?: number;
 }): Promise<{ jobId: string; status: string }> {
   const queues = await getQueues();
   const jobId = `email_${data.leadId}_${Date.now()}`;

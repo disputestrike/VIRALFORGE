@@ -145,7 +145,9 @@ async function startServer() {
       "sms",
       async (job) => {
         const jobStart = Date.now();
-        console.log(`[SMSWorker] ▶ QUEUED→PROCESSING | jobId: ${job.id} | type: ${job.data.type} | phone: ${job.data.phone} | leadId: ${job.data.leadId}`);
+        const { phone, type, leadName, scheduledTime, msgId } = job.data;
+        console.log(`[SMSWorker] ▶ QUEUED→PROCESSING | jobId: ${job.id} | type: ${type} | phone: ${phone} | leadId: ${job.data.leadId} | msgId: ${msgId || "none"}`);
+        const dbMod = await import("../db");
         try {
           const twilio = await import("twilio");
           const twilioClient = twilio.default(
@@ -153,10 +155,8 @@ async function startServer() {
             process.env.TWILIO_AUTH_TOKEN
           );
 
-          const { phone, type, leadName, scheduledTime } = job.data;
           const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER || "+1234567890";
 
-          // Generate message based on type
           let message = "";
           if (type === "appointment_confirmation") {
             message = `Hi ${leadName || "there"}! Your appointment is confirmed for ${scheduledTime || "your scheduled time"}. Reply STOP to cancel.`;
@@ -170,17 +170,26 @@ async function startServer() {
             message = `Hi ${leadName || "there"}, this is a message from ApexAI.`;
           }
 
-          // Send SMS
           const result = await twilioClient.messages.create({
             body: message,
             from: twilioPhoneNumber,
             to: phone,
           });
 
-          console.log(`[SMSWorker] ✅ PROCESSING→COMPLETED | jobId: ${job.id} | messageSid: ${result.sid} | to: ${phone} | status: ${result.status}`);
+          // ── Write final status back to messages table ──────────────────
+          if (msgId) {
+            await dbMod.updateMessageStatus(msgId, "sent", { sentAt: new Date(), deliveredAt: new Date() });
+          }
+          await dbMod.updateLead(job.data.leadId, { status: "contacted" });
+
+          console.log(`[SMSWorker] ✅ PROCESSING→COMPLETED | jobId: ${job.id} | messageSid: ${result.sid} | to: ${phone} | msgId: ${msgId} → status: sent`);
           return { success: true, messageSid: result.sid };
         } catch (error) {
-          console.error(`[SMSWorker] ❌ PROCESSING→FAILED | jobId: ${job.id} | reason: ${(error as Error).message}`);
+          // ── Write failure status back to messages table ─────────────────
+          if (msgId) {
+            await dbMod.updateMessageStatus(msgId, "failed").catch(() => {});
+          }
+          console.error(`[SMSWorker] ❌ PROCESSING→FAILED | jobId: ${job.id} | msgId: ${msgId} → status: failed | reason: ${(error as Error).message}`);
           throw error;
         }
       },
@@ -274,7 +283,11 @@ async function startServer() {
           });
 
           const emailId = (result as any)?.data?.id || (result as any)?.id || 'sent';
-          console.log(`[EmailWorker] ✅ PROCESSING→COMPLETED | jobId: ${job.id} | to: ${email}`);
+          if (job.data.msgId) {
+            const dbMod2 = await import("../db");
+            await dbMod2.updateMessageStatus(job.data.msgId, "sent", { sentAt: new Date() });
+          }
+          console.log(`[EmailWorker] ✅ PROCESSING→COMPLETED | jobId: ${job.id} | to: ${email} | msgId: ${job.data.msgId} → status: sent`);
           return { success: true, emailId };
         } catch (error) {
           console.error(`[EmailWorker] Job ${job.id} failed:`, error);
@@ -314,6 +327,7 @@ async function startServer() {
   app.use("/api/trpc/messages.aiCompose", aiRateLimiter);
   app.use("/api/trpc/templates.generateWithAI", aiRateLimiter);
   app.use("/webhooks", webhookRateLimiter);
+  app.use("/api/trpc/webhooks", webhookRateLimiter);
 
   // ── Security Headers ──────────────────────────────────────────────────────────
   app.use((_req, res, next) => {

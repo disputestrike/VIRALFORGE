@@ -1,7 +1,13 @@
 /**
  * WEBHOOKS ROUTER
  * Public endpoint for Omni AI lead ingestion.
- * All other operations require authentication.
+ *
+ * Abuse protection on omniAiLead:
+ *   1. Rate limited — 100 req/min per IP (webhookRateLimiter in index.ts)
+ *   2. Optional shared secret — set WEBHOOK_SECRET in Railway Variables.
+ *      If set, every request must include header: x-webhook-secret: <value>
+ *      If not set, endpoint is open (acceptable for trusted internal use).
+ *   3. Input validation — Zod schema rejects malformed payloads
  */
 
 import { router, publicProcedure } from '../_core/trpc';
@@ -10,17 +16,26 @@ import * as db from '../db';
 
 export const webhooksRouter = router({
 
-  // ── Omni AI lead ingestion (public — called by Omni AI platform) ──────────
   omniAiLead: publicProcedure
     .input(z.object({
-      firstName: z.string(),
-      lastName: z.string(),
+      firstName: z.string().min(1).max(100),
+      lastName: z.string().min(1).max(100),
       email: z.string().email().optional(),
-      phone: z.string().optional(),
-      company: z.string().optional(),
-      leadId: z.string(),
+      phone: z.string().max(20).optional(),
+      company: z.string().max(200).optional(),
+      leadId: z.string().max(100),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      // Optional shared secret check
+      const webhookSecret = process.env.WEBHOOK_SECRET;
+      if (webhookSecret) {
+        const provided = (ctx as any)?.req?.headers?.['x-webhook-secret'];
+        if (provided !== webhookSecret) {
+          console.warn(`[Webhooks] Rejected — invalid x-webhook-secret from ${(ctx as any)?.req?.ip}`);
+          return { success: false, error: 'Unauthorized' };
+        }
+      }
+
       try {
         const result = await db.createLead({
           firstName: input.firstName,
@@ -35,7 +50,7 @@ export const webhooksRouter = router({
         });
 
         const insertId = result.insertId;
-        console.log(`[Webhooks] Lead ingested → insertId: ${insertId}`);
+        console.log(`[Webhooks] Lead ingested → insertId: ${insertId} | source: omniAiLead`);
         return { success: true, leadId: insertId };
       } catch (error) {
         console.error('[Webhooks] Error ingesting lead:', error);
