@@ -413,12 +413,7 @@ const voiceAIRouter = router({
 
       try {
         // INTEGRATION: Evaluate if lead is ready to call using Decision Engine
-        const decision = await decisionEngine.decideLeadAction({
-          lead,
-          campaign: input.campaignId ? await db.getCampaignById(input.campaignId) : undefined,
-          previousAttempts: 0,
-          lastContactedAt: Date.now(),
-        });
+        const decision = await decisionEngine.decideLeadAction(lead);
 
         // If decision is not to call now, return decision
         const decisionAction = (decision as any)?.action || 'DEAD';
