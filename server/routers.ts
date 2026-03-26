@@ -345,21 +345,23 @@ const messagesRouter = router({
           status: "queued",
         });
 
-        // Queue real delivery
+        // Queue real delivery with explicit job ID logging for proof
         if (input.channel === "sms" && lead.phone) {
-          await queueService.addSmsJob({
+          const smsJob = await queueService.addSmsJob({
             leadId: lead.id,
             phone: lead.phone,
             type: "follow_up",
             leadName: `${lead.firstName} ${lead.lastName}`,
           });
+          console.log(`[BulkSend] SMS job created → jobId: ${smsJob.jobId} | status: ${smsJob.status} | leadId: ${lead.id} | msgId: ${msgResult.insertId}`);
         } else if (input.channel === "email" && lead.email) {
-          await queueService.addEmailJob({
+          const emailJob = await queueService.addEmailJob({
             leadId: lead.id,
             email: lead.email,
             type: "follow_up",
             leadName: `${lead.firstName} ${lead.lastName}`,
           });
+          console.log(`[BulkSend] Email job created → jobId: ${emailJob.jobId} | status: ${emailJob.status} | leadId: ${lead.id} | msgId: ${msgResult.insertId}`);
         }
         sent++;
       }

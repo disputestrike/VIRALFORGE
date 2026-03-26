@@ -144,7 +144,8 @@ async function startServer() {
     const smsWorker = new Worker(
       "sms",
       async (job) => {
-        console.log(`[SMSWorker] Processing job ${job.id}: ${job.data.type} to ${job.data.phone}`);
+        const jobStart = Date.now();
+        console.log(`[SMSWorker] ▶ QUEUED→PROCESSING | jobId: ${job.id} | type: ${job.data.type} | phone: ${job.data.phone} | leadId: ${job.data.leadId}`);
         try {
           const twilio = await import("twilio");
           const twilioClient = twilio.default(
@@ -176,10 +177,10 @@ async function startServer() {
             to: phone,
           });
 
-          console.log(`[SMSWorker] Sent SMS ${result.sid} to ${phone}`);
+          console.log(`[SMSWorker] ✅ PROCESSING→COMPLETED | jobId: ${job.id} | messageSid: ${result.sid} | to: ${phone} | status: ${result.status}`);
           return { success: true, messageSid: result.sid };
         } catch (error) {
-          console.error(`[SMSWorker] Job ${job.id} failed:`, error);
+          console.error(`[SMSWorker] ❌ PROCESSING→FAILED | jobId: ${job.id} | reason: ${(error as Error).message}`);
           throw error;
         }
       },
@@ -187,18 +188,18 @@ async function startServer() {
     );
 
     smsWorker.on("completed", (job) => {
-      console.log(`[SMSWorker] Job ${job.id} completed`);
+      console.log(`[SMSWorker] ✅ COMPLETED | jobId: ${job.id}`);
     });
 
     smsWorker.on("failed", (job, err) => {
-      console.error(`[SMSWorker] Job ${job?.id} failed:`, err);
+      console.error(`[SMSWorker] ❌ FAILED | jobId: ${job?.id} | error: ${err.message}`);
     });
 
     // Email worker
     const emailWorker = new Worker(
       "email",
       async (job) => {
-        console.log(`[EmailWorker] Processing job ${job.id}: ${job.data.type} to ${job.data.email}`);
+        console.log(`[EmailWorker] ▶ QUEUED→PROCESSING | jobId: ${job.id} | type: ${job.data.type} | email: ${job.data.email} | leadId: ${job.data.leadId}`);
         try {
           const { Resend } = await import("resend");
           const resend = new Resend(process.env.RESEND_API_KEY);
@@ -273,7 +274,7 @@ async function startServer() {
           });
 
           const emailId = (result as any)?.data?.id || (result as any)?.id || 'sent';
-          console.log(`[EmailWorker] Sent email to ${email}`);
+          console.log(`[EmailWorker] ✅ PROCESSING→COMPLETED | jobId: ${job.id} | to: ${email}`);
           return { success: true, emailId };
         } catch (error) {
           console.error(`[EmailWorker] Job ${job.id} failed:`, error);
@@ -284,7 +285,7 @@ async function startServer() {
     );
 
     emailWorker.on("completed", (job) => {
-      console.log(`[EmailWorker] Job ${job.id} completed`);
+      console.log(`[EmailWorker] ✅ COMPLETED | jobId: ${job.id}`);
     });
 
     emailWorker.on("failed", (job, err) => {
