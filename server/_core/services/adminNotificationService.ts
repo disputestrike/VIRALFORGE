@@ -15,7 +15,7 @@ async function sendAdminEmailDirect(subject: string, html: string): Promise<void
     try {
       const { Resend } = await import('resend');
       const resend = new Resend(RESEND_KEY);
-      await resend.emails.send({ from: 'ApexAI <noreply@apexai.com>', to: ADMIN_EMAIL, subject, html });
+      await resend.emails.send({ from: `${process.env.RESEND_FROM_NAME || process.env.FROM_NAME || 'ApexAI'} <${process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || 'noreply@apexai.com'}>`, to: ADMIN_EMAIL, subject, html });
       return;
     } catch (e) {
       console.error('[AdminNotify] Resend failed:', e);

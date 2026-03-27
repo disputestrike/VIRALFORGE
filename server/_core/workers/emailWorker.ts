@@ -14,7 +14,8 @@ const redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
 // Initialize Resend client
 const resend = new Resend(process.env.RESEND_API_KEY || "");
 
-const SENDER_EMAIL = "noreply@apexai.com";
+const SENDER_EMAIL = process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || "noreply@apexai.com";
+const SENDER_NAME_W = process.env.RESEND_FROM_NAME || process.env.FROM_NAME || "ApexAI";
 const SENDER_NAME = "ApexAI";
 
 /**

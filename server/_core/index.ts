@@ -234,8 +234,8 @@ async function startServer() {
           const resend = new Resend(process.env.RESEND_API_KEY);
 
           const { email, type, leadName, scheduledTime, calendarLink } = job.data;
-          const SENDER_EMAIL = "noreply@apexai.com";
-          const SENDER_NAME = "ApexAI";
+          const SENDER_EMAIL = process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || "noreply@apexai.com";
+          const SENDER_NAME = process.env.RESEND_FROM_NAME || process.env.FROM_NAME || "ApexAI";
 
           let subject = "";
           let html = "";
