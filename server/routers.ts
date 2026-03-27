@@ -482,6 +482,20 @@ const voiceAIRouter = router({
       }
     }),
 
+  agentChat: protectedProcedure
+    .input(z.object({
+      messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string() })),
+      systemPrompt: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const response = await invokeLLM({
+        messages: input.messages,
+        systemPrompt: input.systemPrompt,
+        maxTokens: 1024,
+      });
+      return { reply: response.choices[0].message.content as string };
+    }),
+
   getValuePropSuggestions: protectedProcedure
     .input(z.object({ industry: z.string(), prompt: z.string() }))
     .mutation(async ({ input }) => {
@@ -781,6 +795,67 @@ const adminRouter = router({
 import { webhooksRouter } from "./routers/webhooksRouter";
 
 // ─── App Router ───────────────────────────────────────────────────────────────
+const appointmentsRouter = router({
+  list: protectedProcedure
+    .input(z.object({
+      leadId: z.number().optional(),
+      status: z.string().optional(),
+      upcoming: z.boolean().optional(),
+    }).optional())
+    .query(async ({ input }) => db.getAppointments(input ?? {})),
+
+  create: protectedProcedure
+    .input(z.object({
+      leadId: z.number(),
+      scheduledTime: z.string(),
+      duration: z.number().optional(),
+      notes: z.string().optional(),
+      timezone: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const result = await db.createManualAppointment({
+        leadId: input.leadId,
+        scheduledTime: new Date(input.scheduledTime),
+        duration: input.duration,
+        notes: input.notes,
+        timezone: input.timezone,
+      });
+      await db.logActivity({
+        userId: ctx.user.id,
+        entityType: "appointment",
+        entityId: result.insertId,
+        action: "created",
+        description: `Manual appointment created for lead ${input.leadId}`,
+      });
+      return { success: true, insertId: result.insertId };
+    }),
+
+  update: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      confirmationStatus: z.enum(["proposed", "confirmed", "declined", "cancelled", "completed"]).optional(),
+      showStatus: z.enum(["pending", "showed", "no_show", "rescheduled"]).optional(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      await db.updateAppointment(input.id, {
+        confirmationStatus: input.confirmationStatus,
+        showStatus: input.showStatus,
+        notes: input.notes,
+      });
+      return { success: true };
+    }),
+
+  stats: protectedProcedure.query(async () => {
+    const all = await db.getAppointments({});
+    const upcoming = await db.getAppointments({ upcoming: true });
+    const showed = (all as any[]).filter((a) => a.showStatus === "showed").length;
+    const noShow = (all as any[]).filter((a) => a.showStatus === "no_show").length;
+    const showRate = showed + noShow > 0 ? Math.round((showed / (showed + noShow)) * 100) : 0;
+    return { total: all.length, upcoming: upcoming.length, showed, noShow, showRate };
+  }),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -794,6 +869,7 @@ export const appRouter = router({
   leads: leadsRouter,
   campaigns: campaignsRouter,
   messages: messagesRouter,
+  appointments: appointmentsRouter,
   voiceAI: voiceAIRouter,
   templates: templatesRouter,
   analytics: analyticsRouter,

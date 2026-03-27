@@ -1,6 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
+import Appointments from "@/pages/Appointments";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -49,6 +50,9 @@ function Router() {
       </Route>
       <Route path="/campaigns">
         <AppLayout><Campaigns /></AppLayout>
+      </Route>
+      <Route path="/appointments">
+        <AppLayout><Appointments /></AppLayout>
       </Route>
       <Route path="/campaigns/:id">
         <AppLayout><CampaignDetail /></AppLayout>

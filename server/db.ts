@@ -407,3 +407,69 @@ export async function setSystemConfig(key: string, value: string, category = "ge
   await db.insert(systemConfig).values({ key, value, category })
     .onDuplicateKeyUpdate({ set: { value, category } });
 }
+
+// ── Appointments ──────────────────────────────────────────────────────────────
+export async function getAppointments(opts?: { leadId?: number; status?: string; upcoming?: boolean }): Promise<any[]> {
+  const conn = await import("mysql2/promise");
+  const connection = await conn.createConnection({
+    uri: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+  try {
+    const conditions: string[] = ["1=1"];
+    const params: any[] = [];
+    if (opts?.leadId) { conditions.push("a.leadId = ?"); params.push(opts.leadId); }
+    if (opts?.status) { conditions.push("a.confirmationStatus = ?"); params.push(opts.status); }
+    if (opts?.upcoming) { conditions.push("a.scheduledTime >= NOW()"); }
+    const where = "WHERE " + conditions.join(" AND ");
+    const [rows] = await connection.execute(
+      `SELECT a.*, l.firstName, l.lastName, l.phone, l.email, l.company
+       FROM appointment_bookings a
+       LEFT JOIN leads l ON a.leadId = l.id
+       ${where}
+       ORDER BY a.scheduledTime ASC LIMIT 100`,
+      params
+    );
+    return rows as any[];
+  } finally {
+    await connection.end();
+  }
+}
+
+export async function updateAppointment(id: number, data: { confirmationStatus?: string; showStatus?: string; notes?: string }): Promise<void> {
+  const conn = await import("mysql2/promise");
+  const connection = await conn.createConnection({
+    uri: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+  try {
+    const sets: string[] = [];
+    const params: any[] = [];
+    if (data.confirmationStatus) { sets.push("confirmationStatus = ?"); params.push(data.confirmationStatus); }
+    if (data.showStatus) { sets.push("showStatus = ?"); params.push(data.showStatus); }
+    if (data.notes !== undefined) { sets.push("notes = ?"); params.push(data.notes); }
+    if (sets.length === 0) return;
+    params.push(id);
+    await connection.execute(`UPDATE appointment_bookings SET ${sets.join(", ")} WHERE id = ?`, params);
+  } finally {
+    await connection.end();
+  }
+}
+
+export async function createManualAppointment(data: { leadId: number; scheduledTime: Date; duration?: number; notes?: string; timezone?: string }): Promise<{ insertId: number }> {
+  const conn = await import("mysql2/promise");
+  const connection = await conn.createConnection({
+    uri: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+  try {
+    const [result] = await connection.execute(
+      `INSERT INTO appointment_bookings (leadId, scheduledTime, duration, notes, timezone, confirmationStatus, showStatus)
+       VALUES (?, ?, ?, ?, ?, 'confirmed', 'pending')`,
+      [data.leadId, data.scheduledTime, data.duration ?? 30, data.notes ?? null, data.timezone ?? "America/New_York"]
+    );
+    return { insertId: (result as any).insertId };
+  } finally {
+    await connection.end();
+  }
+}

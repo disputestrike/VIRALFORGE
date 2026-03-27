@@ -1,3 +1,4 @@
+import AIAgent from "@/components/AIAgent";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import {
@@ -8,7 +9,7 @@ import {
   LogOut,
   Mail,
   MessageSquare,
-  Megaphone,
+  Megaphone, Calendar,
   Settings,
   Shield,
   Star,
@@ -32,6 +33,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/campaigns", label: "Campaigns", icon: Megaphone },
+  { href: "/appointments", label: "Appointments", icon: Calendar },
   { href: "/voice-ai", label: "Voice AI", icon: Bot },
   { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/templates", label: "Templates", icon: FileText },
@@ -171,6 +173,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       <main className="flex-1 ml-60 min-h-screen overflow-auto">
         {children}
       </main>
+      <AIAgent />
     </div>
   );
 }
