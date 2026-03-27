@@ -311,6 +311,20 @@ const messagesRouter = router({
   getCallRecordings: protectedProcedure
     .input(z.object({ campaignId: z.number().optional(), leadId: z.number().optional(), limit: z.number().optional() }).optional())
     .query(async ({ input }) => db.getCallRecordings(input ?? {})),
+
+  clearTestRecordings: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Delete call recordings with no real callSid (test/junk data)
+      // These have outcome=no_answer and were created by the persistence interval bug
+      await (database as any).execute(
+        "DELETE FROM call_recordings WHERE outcome = 'no_answer' AND recordingUrl IS NULL AND transcript IS NULL AND (aiSummary IS NULL OR aiSummary = '') AND duration > 30000"
+      );
+      console.log(`[Admin] Cleared test call recordings`);
+      return { success: true };
+    }),
   bulkSend: protectedProcedure
     .input(z.object({
       campaignId: z.number(),

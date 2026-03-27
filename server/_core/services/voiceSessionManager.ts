@@ -91,16 +91,31 @@ export function endSession(sessionId: string): void {
   }
 }
 
+// Track which sessions have already created a DB record (to avoid duplicates)
+const sessionRecordingIds = new Map<string, number>();
+
 export async function persistSessionToDatabase(sessionId: string): Promise<void> {
   const session = sessions.get(sessionId);
   if (!session || !session.leadId) return;
+
+  // Only persist on completion — not on every interval tick during active calls
+  // The interval is just a safety net for crashes; normal flow completes via completeSession
+  if (session.status === "active" && !session.endTime) {
+    // Session still active — skip intermediate writes to avoid duplicate rows
+    return;
+  }
+
+  // Avoid creating duplicate rows for the same session
+  if (sessionRecordingIds.has(sessionId)) {
+    return; // Already persisted
+  }
 
   try {
     const durationSeconds = session.endTime
       ? Math.floor((session.endTime - session.startTime) / 1000)
       : Math.floor((Date.now() - session.startTime) / 1000);
 
-    await db.createCallRecording({
+    const result = await db.createCallRecording({
       leadId: session.leadId,
       campaignId: session.campaignId ? parseInt(session.campaignId) || undefined : undefined,
       duration: durationSeconds,
@@ -115,6 +130,8 @@ export async function persistSessionToDatabase(sessionId: string): Promise<void>
       calledAt: new Date(session.startTime),
     });
 
+    sessionRecordingIds.set(sessionId, result.insertId);
+
     // Update lead status if outcome is known
     if (session.outcome === "scheduled" || session.appointmentBooked) {
       await db.updateLead(session.leadId, { status: "qualified" });
@@ -124,7 +141,7 @@ export async function persistSessionToDatabase(sessionId: string): Promise<void>
       await db.updateLead(session.leadId, { status: "contacted" });
     }
 
-    console.log(`[VoiceSession] Persisted session ${sessionId} to DB`);
+    console.log(`[VoiceSession] Persisted session ${sessionId} → recordingId: ${result.insertId}`);
   } catch (error) {
     console.error(`[VoiceSession] Failed to persist session ${sessionId}:`, error);
   }

@@ -85,7 +85,13 @@ export default function VoiceAI() {
       setShowScriptGen(false);
       toast.success("Script generated — fully personalized with your company details");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => {
+      if (e.message.includes("BUILT_IN_FORGE_API_KEY")) {
+        toast.error("AI not configured — add BUILT_IN_FORGE_API_KEY to Railway Variables");
+      } else {
+        toast.error(e.message);
+      }
+    },
   });
 
   const leads = leadsData?.leads ?? [];
