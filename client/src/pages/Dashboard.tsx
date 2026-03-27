@@ -18,6 +18,7 @@ import {
   Users,
   Zap,
   Activity,
+  Calendar,
 } from "lucide-react";
 
 const mockTrendData = [
@@ -41,6 +42,8 @@ export default function Dashboard() {
   const { data: metrics, isLoading } = trpc.analytics.globalMetrics.useQuery();
   const { data: campaignsData } = trpc.campaigns.list.useQuery({ limit: 5 });
   const { data: activityLogs } = trpc.admin.activityLogs.useQuery({ limit: 8 });
+  const { data: apptStats } = trpc.appointments.stats.useQuery();
+  const { data: upcomingAppts } = trpc.appointments.list.useQuery({ upcoming: true });
 
   const metricCards = [
     {
@@ -104,6 +107,26 @@ export default function Dashboard() {
           </Link>
         </div>
       </div>
+
+      {/* Appointments Quick Stats */}
+      {apptStats && (apptStats.total > 0 || (upcomingAppts?.length ?? 0) > 0) && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Total Appointments", value: apptStats.total, color: "text-blue-400", href: "/appointments" },
+            { label: "Upcoming", value: apptStats.upcoming, color: "text-green-400", href: "/appointments" },
+            { label: "Showed Up", value: apptStats.showed, color: "text-purple-400", href: "/appointments" },
+            { label: "Show Rate", value: `${apptStats.showRate}%`, color: "text-orange-400", href: "/appointments" },
+          ].map(({ label, value, color, href }) => (
+            <Link key={label} href={href}>
+              <div className="p-4 rounded-xl bg-card border border-border hover:border-primary/30 transition-colors cursor-pointer text-center">
+                <Calendar className={`w-4 h-4 mx-auto mb-2 ${color}`} />
+                <p className={`text-xl font-black ${color}`}>{value}</p>
+                <p className="text-xs text-muted-foreground mt-1">{label}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* 4 Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
