@@ -485,12 +485,71 @@ const voiceAIRouter = router({
   agentChat: protectedProcedure
     .input(z.object({
       messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string() })),
-      systemPrompt: z.string().optional(),
+      pageContext: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      // Pull real live data to ground the agent in actual account state
+      const [leadsResult, campaignsResult, apptStats, recentActivity] = await Promise.allSettled([
+        db.getLeads({ limit: 1 }),
+        db.getCampaigns({ limit: 100 }),
+        db.getAppointments({ upcoming: true }),
+        db.getActivityLogs(5),
+      ]);
+
+      const leads = leadsResult.status === "fulfilled" ? leadsResult.value : { total: 0, leads: [] };
+      const campaigns = campaignsResult.status === "fulfilled" ? campaignsResult.value : { total: 0, campaigns: [] };
+      const upcoming = apptStats.status === "fulfilled" ? apptStats.value : [];
+      const activity = recentActivity.status === "fulfilled" ? recentActivity.value : [];
+
+      // Feature flags from env
+      const features = {
+        voice: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
+        sms: !!(process.env.TWILIO_ACCOUNT_SID),
+        email: !!(process.env.RESEND_API_KEY),
+        stt: !!(process.env.OPENAI_API_KEY),
+        tts: !!(process.env.ELEVENLABS_API_KEY),
+        ai: !!(process.env.ANTHROPIC_API_KEY),
+        gcal: !!(process.env.VITE_GCAL_BOOKING_URL),
+      };
+
+      const systemPrompt = `You are the ApexAI built-in assistant. You have REAL access to this user's account data right now.
+
+USER: ${ctx.user.name ?? ctx.user.email ?? "User"} (${ctx.user.email})
+PAGE: ${input.pageContext ?? "app"}
+
+LIVE ACCOUNT DATA:
+- Total leads: ${(leads as any).total ?? 0}
+- Active campaigns: ${(campaigns as any).campaigns?.filter((c: any) => c.status === "active").length ?? 0} of ${(campaigns as any).total ?? 0} total
+- Upcoming appointments: ${upcoming.length}
+- Recent activity: ${(activity as any[]).slice(0, 3).map((a: any) => a.description).join(" | ") || "none"}
+
+FEATURE STATUS (what's enabled right now):
+${features.ai ? "✅ AI/Script generation — working" : "❌ AI — add ANTHROPIC_API_KEY"}
+${features.stt ? "✅ Voice transcription (Whisper) — working" : "❌ STT — add OPENAI_API_KEY"}
+${features.voice ? "✅ Outbound calls — working" : "❌ Calls — add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER"}
+${features.sms ? "✅ SMS — working" : "❌ SMS — add TWILIO_ACCOUNT_SID"}
+${features.email ? "✅ Email — working" : "❌ Email — add RESEND_API_KEY"}
+${features.tts ? "✅ AI Voice (ElevenLabs) — working" : "❌ AI Voice — add ELEVENLABS_API_KEY"}
+${features.gcal ? "✅ Google Calendar booking — working" : "❌ Google Calendar — add VITE_GCAL_BOOKING_URL"}
+
+HOW APEXAI WORKS:
+- Leads flow: new → contacted → qualified → converted
+- AI calls need: Twilio (dial) + ElevenLabs (speak) + OpenAI Whisper (transcribe) + Anthropic (respond)
+- Appointments are auto-booked when AI detects prospect agreeing to a time during a call
+- Bulk send queues SMS/email jobs via BullMQ/Redis — processes even without Twilio (fails gracefully with reason)
+- Script generator uses Anthropic to write personalized scripts per industry
+- All provider keys go in Railway → ApexAI → Variables tab
+
+YOUR JOB:
+- Answer questions about this specific account using the real data above
+- Tell them exactly which Railway variable to add when something isn't working
+- Be direct and specific — no vague answers
+- If asked about a number (leads, appointments, campaigns), use the real numbers above
+- Keep responses under 150 words unless they need more detail`;
+
       const response = await invokeLLM({
         messages: input.messages,
-        systemPrompt: input.systemPrompt,
+        systemPrompt,
         maxTokens: 1024,
       });
       return { reply: response.choices[0].message.content as string };

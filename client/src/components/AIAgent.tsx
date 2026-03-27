@@ -27,12 +27,12 @@ const PAGE_CONTEXT: Record<string, string> = {
 };
 
 const SUGGESTED_QUESTIONS = [
-  "How do I book an appointment?",
-  "How do I generate a call script?",
+  "What's not working in my account?",
+  "How many leads do I have?",
   "Why can't I make calls yet?",
-  "How do I add leads?",
-  "How does the AI call work?",
-  "What keys do I need to set up?",
+  "How do I generate a script?",
+  "What keys do I still need?",
+  "How does the AI call pipeline work?",
 ];
 
 export default function AIAgent() {
@@ -102,7 +102,7 @@ Never make up information. If you don't know something, say so.`;
         body: JSON.stringify({
           json: {
             messages: newMessages,
-            systemPrompt: buildSystemPrompt(),
+            pageContext: PAGE_CONTEXT[location] || `User is on ${location}`,
           },
         }),
       });
