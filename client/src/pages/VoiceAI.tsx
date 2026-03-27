@@ -16,6 +16,7 @@ import {
   Target, MessageSquare, Lightbulb, Hash
 } from "lucide-react";
 import { Streamdown } from "streamdown";
+import { INDUSTRY_DATA } from "@/data/industryValueProps";
 
 const outcomeColors: Record<string, string> = {
   scheduled: "text-green-400 bg-green-500/10 border-green-500/30",
@@ -64,6 +65,11 @@ export default function VoiceAI() {
   const [script, setScript] = useState("");
   const [showScriptGen, setShowScriptGen] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [checkedProps, setCheckedProps] = useState<string[]>([]);
+  const [customProp, setCustomProp] = useState("");
+  const [promoOffer, setPromoOffer] = useState("");
+  const [aiSuggestionsLoading, setAiSuggestionsLoading] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [scriptForm, setScriptForm] = useState<ScriptForm>(defaultScriptForm);
   const [showTranscript, setShowTranscript] = useState<string | null>(null);
 
@@ -402,7 +408,16 @@ export default function VoiceAI() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Industry <span className="text-red-400">*</span></Label>
-                  <Select value={sf.industry} onValueChange={(v) => setSF("industry", v)}>
+                  <Select value={sf.industry} onValueChange={(v) => {
+                    setSF("industry", v);
+                    // Auto-populate value props when industry selected
+                    const data = INDUSTRY_DATA[v];
+                    if (data) {
+                      setCheckedProps(data.valueProps.slice(0, 5)); // check top 5 by default
+                      setSF("productDescription", data.productDescription);
+                      setAiSuggestions([]);
+                    }
+                  }}>
                     <SelectTrigger className="bg-secondary border-border">
                       <SelectValue placeholder="Select industry..." />
                     </SelectTrigger>
@@ -467,7 +482,8 @@ export default function VoiceAI() {
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
                 <Lightbulb className="w-3.5 h-3.5" /> Product / Service Details
               </p>
-              <div className="space-y-3">
+              <div className="space-y-4">
+                {/* Product description */}
                 <div className="space-y-1.5">
                   <Label className="text-xs">What do you sell? (brief description)</Label>
                   <Textarea
@@ -478,14 +494,131 @@ export default function VoiceAI() {
                     onChange={(e) => setSF("productDescription", e.target.value)}
                   />
                 </div>
+
+                {/* Value propositions — checkboxes + custom */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Key Value Propositions</Label>
+                    {sf.industry && sf.industry !== "Other" && (
+                      <button
+                        type="button"
+                        disabled={aiSuggestionsLoading}
+                        onClick={async () => {
+                          setAiSuggestionsLoading(true);
+                          try {
+                            const data = INDUSTRY_DATA[sf.industry];
+                            const res = await (window as any).fetch("/api/trpc/voiceAI.getValuePropSuggestions", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ json: { industry: sf.industry, prompt: data?.aiSuggestionPrompt } }),
+                              credentials: "include",
+                            });
+                            const json = await res.json();
+                            const suggestions = json?.result?.data?.json?.suggestions ?? [];
+                            setAiSuggestions(suggestions);
+                          } catch {
+                            toast.error("Could not get AI suggestions");
+                          } finally {
+                            setAiSuggestionsLoading(false);
+                          }
+                        }}
+                        className="flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors"
+                        style={{ backgroundColor: "rgba(29,111,244,0.12)", color: "#60a5fa", border: "1px solid rgba(29,111,244,0.25)" }}
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        {aiSuggestionsLoading ? "Getting ideas..." : "Get AI suggestions"}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* AI suggestions (appear above checkboxes) */}
+                  {aiSuggestions.length > 0 && (
+                    <div className="p-3 rounded-lg space-y-2" style={{ backgroundColor: "rgba(29,111,244,0.06)", border: "1px solid rgba(29,111,244,0.2)" }}>
+                      <p className="text-xs font-medium" style={{ color: "#60a5fa" }}>AI Suggestions — click to add:</p>
+                      {aiSuggestions.map((s, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            if (!checkedProps.includes(s)) setCheckedProps(prev => [...prev, s]);
+                          }}
+                          className="block w-full text-left text-xs p-2 rounded hover:bg-white/5 transition-colors"
+                          style={{ color: "rgba(255,255,255,0.7)" }}
+                        >
+                          + {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Industry preset checkboxes */}
+                  {sf.industry && INDUSTRY_DATA[sf.industry]?.valueProps.length > 0 && (
+                    <div className="space-y-1.5 p-3 rounded-lg" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                      {INDUSTRY_DATA[sf.industry].valueProps.concat(aiSuggestions.filter(s => checkedProps.includes(s) && !INDUSTRY_DATA[sf.industry].valueProps.includes(s))).map((prop) => (
+                        <label key={prop} className="flex items-start gap-2 cursor-pointer group">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 rounded accent-blue-500"
+                            checked={checkedProps.includes(prop)}
+                            onChange={(e) => {
+                              setCheckedProps(prev =>
+                                e.target.checked ? [...prev, prop] : prev.filter(p => p !== prop)
+                              );
+                            }}
+                          />
+                          <span className="text-xs leading-relaxed group-hover:text-white transition-colors" style={{ color: "rgba(255,255,255,0.65)" }}>{prop}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Custom value prop */}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      className="flex-1 text-xs px-3 py-2 rounded-md bg-secondary border border-border focus:outline-none focus:border-primary"
+                      placeholder="Add your own value prop or current promo..."
+                      value={customProp}
+                      onChange={(e) => setCustomProp(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && customProp.trim()) {
+                          setCheckedProps(prev => [...prev, customProp.trim()]);
+                          setCustomProp("");
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (customProp.trim()) {
+                          setCheckedProps(prev => [...prev, customProp.trim()]);
+                          setCustomProp("");
+                        }
+                      }}
+                      className="text-xs px-3 py-2 rounded-md font-medium"
+                      style={{ backgroundColor: "rgba(29,111,244,0.2)", color: "#60a5fa" }}
+                    >
+                      Add
+                    </button>
+                  </div>
+
+                  {/* Selected props summary */}
+                  {checkedProps.length > 0 && (
+                    <div className="text-xs p-2 rounded" style={{ backgroundColor: "rgba(34,197,94,0.06)", color: "rgba(255,255,255,0.5)" }}>
+                      ✓ {checkedProps.length} value props selected for this script
+                    </div>
+                  )}
+                </div>
+
+                {/* Current promo / offer */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Key Value Propositions</Label>
-                  <Textarea
-                    className="bg-secondary border-border resize-none text-xs"
-                    rows={2}
-                    placeholder="e.g. No upfront cost, save $150/month on electricity, 25-year warranty, local installer..."
-                    value={sf.valuePropositions}
-                    onChange={(e) => setSF("valuePropositions", e.target.value)}
+                  <Label className="text-xs">Current Promotion or Offer <span className="text-muted-foreground">(optional)</span></Label>
+                  <input
+                    type="text"
+                    className="w-full text-xs px-3 py-2 rounded-md bg-secondary border border-border focus:outline-none focus:border-primary"
+                    placeholder="e.g. Free home assessment this month only, $500 referral bonus, 0% financing..."
+                    value={promoOffer}
+                    onChange={(e) => setPromoOffer(e.target.value)}
                   />
                 </div>
               </div>
@@ -524,19 +657,24 @@ export default function VoiceAI() {
             <Button
               className="w-full"
               disabled={!canGenerate || scriptMutation.isPending}
-              onClick={() => scriptMutation.mutate({
-                industry: sf.industry,
-                goal: sf.goal || `Book an appointment for ${sf.companyName}`,
-                tone: sf.tone,
-                companyName: sf.companyName,
-                callerName: sf.callerName,
-                stateOrCity: sf.stateOrCity || undefined,
-                phoneNumber: sf.phoneNumber || undefined,
-                productDescription: sf.productDescription || undefined,
-                valuePropositions: sf.valuePropositions || undefined,
-                callObjective: sf.callObjective,
-                objectionStyle: sf.objectionStyle,
-              })}
+              onClick={() => {
+                const allProps = checkedProps.join(", ");
+                const promoLine = promoOffer.trim() ? `Current offer: ${promoOffer.trim()}` : "";
+                const combinedProps = [allProps, promoLine].filter(Boolean).join(". ");
+                scriptMutation.mutate({
+                  industry: sf.industry,
+                  goal: sf.goal || `Book an appointment for ${sf.companyName}`,
+                  tone: sf.tone,
+                  companyName: sf.companyName,
+                  callerName: sf.callerName,
+                  stateOrCity: sf.stateOrCity || undefined,
+                  phoneNumber: sf.phoneNumber || undefined,
+                  productDescription: sf.productDescription || undefined,
+                  valuePropositions: combinedProps || undefined,
+                  callObjective: sf.callObjective,
+                  objectionStyle: sf.objectionStyle,
+                });
+              }}
             >
               {scriptMutation.isPending ? (
                 <><Sparkles className="w-4 h-4 mr-2 animate-pulse" /> Generating Personalized Script...</>

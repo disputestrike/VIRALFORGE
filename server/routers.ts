@@ -482,6 +482,31 @@ const voiceAIRouter = router({
       }
     }),
 
+  getValuePropSuggestions: protectedProcedure
+    .input(z.object({ industry: z.string(), prompt: z.string() }))
+    .mutation(async ({ input }) => {
+      const response = await invokeLLM({
+        messages: [
+          {
+            role: "system",
+            content: "You are a sales expert. Return ONLY a JSON array of 6 short, punchy value proposition strings. No explanation, no markdown, just the JSON array. Each string should be under 15 words and highly specific to the industry.",
+          },
+          {
+            role: "user",
+            content: `Industry: ${input.industry}. ${input.prompt} Return 6 value propositions as a JSON array of strings.`,
+          },
+        ],
+      });
+      try {
+        const text = response.choices[0].message.content as string;
+        const clean = text.replace(/```json|```/g, "").trim();
+        const suggestions = JSON.parse(clean);
+        return { suggestions: Array.isArray(suggestions) ? suggestions : [] };
+      } catch {
+        return { suggestions: [] };
+      }
+    }),
+
   generateScript: protectedProcedure
     .input(z.object({
       industry: z.string(),
