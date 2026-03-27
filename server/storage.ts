@@ -6,8 +6,8 @@ import { ENV } from './_core/env';
 type StorageConfig = { baseUrl: string; apiKey: string };
 
 function getStorageConfig(): StorageConfig {
-  const baseUrl = ENV.forgeApiUrl;
-  const apiKey = ENV.forgeApiKey;
+  const baseUrl = process.env.BUILT_IN_FORGE_API_URL ?? "";
+  const apiKey = process.env.ANTHROPIC_API_KEY ?? "";
 
   if (!baseUrl || !apiKey) {
     throw new Error(

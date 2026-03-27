@@ -36,16 +36,12 @@ Rules:
 - Be conversational, warm, and professional
 - Keep responses SHORT (2-3 sentences max — this is a phone call)
 - If the lead is interested, guide them to book an appointment
-- If they want to speak with a human, say you'll transfer them
-- If they're not interested, be gracious and end politely
+- If they want to speak with a human, say you will transfer them
+- If they are not interested, be gracious and end politely
 - Detect intent: is the lead interested, uninterested, wants callback, or ready to book?
 
-Respond in JSON format:
-{
-  "response": "your spoken response here",
-  "action": "follow_up|book_appointment|propose_times|transfer|end_call",
-  "confidence": 0.0-1.0
-}`;
+You MUST respond with ONLY a valid JSON object, no other text:
+{"response":"your spoken response here","action":"follow_up|book_appointment|propose_times|transfer|end_call","confidence":0.9}`;
 
 export async function conductConversation(context: ConversationContext): Promise<ConversationResult> {
   try {
@@ -63,7 +59,7 @@ export async function conductConversation(context: ConversationContext): Promise
 
     const result = await invokeLLM({
       messages,
-      responseFormat: { type: "json_object" } as const,
+      // json_object response format handled via prompt instruction
     });
 
     const content = result.choices[0]?.message?.content;

@@ -106,10 +106,10 @@ const leadsRouter = router({
   aiSearch: protectedProcedure.input(z.object({ query: z.string() })).mutation(async ({ input }) => {
     const response = await invokeLLM({
       messages: [
-        { role: "system", content: "You are a lead search assistant. Convert natural language queries into structured search filters. Return JSON with fields: search (string), segment (hot|warm|cold|unqualified|null), status (new|contacted|qualified|converted|lost|null), verificationStatus (verified|unverified|bounced|pending|null). Only include fields that are clearly specified." },
+        { role: "system", content: "You are a lead search assistant. Convert natural language queries into structured search filters. Respond with ONLY a JSON object, no other text: {\"search\":\"string or null\",\"segment\":\"hot|warm|cold|unqualified or null\",\"status\":\"new|contacted|qualified|converted|lost or null\",\"verificationStatus\":\"verified|unverified|bounced|pending or null\"}. Only include values clearly specified in the query." },
         { role: "user", content: input.query },
       ],
-      response_format: { type: "json_schema", json_schema: { name: "search_filters", strict: true, schema: { type: "object", properties: { search: { type: "string" }, segment: { type: "string" }, status: { type: "string" }, verificationStatus: { type: "string" } }, required: ["search", "segment", "status", "verificationStatus"], additionalProperties: false } } },
+      // json_object format handled via system prompt instruction
     });
     try {
       const filters = JSON.parse(response.choices[0].message.content as string);

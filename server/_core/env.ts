@@ -21,9 +21,8 @@ export const ENV = {
   // ── Redis (BullMQ queue + workers) ────────────────────────
   redisUrl: process.env.REDIS_URL ?? "",
 
-  // ── LLM / AI (script generation, conversation engine) ─────
-  forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
-  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  // ── Anthropic (script generation, conversation engine, AI features) ──
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
 
   // ── Twilio (voice calls + SMS) ────────────────────────────
   twilioAccountSid:  process.env.TWILIO_ACCOUNT_SID ?? "",
@@ -59,5 +58,5 @@ export const ENV = {
   get ttsEnabled()    { return this.elevenLabsApiKey !== ""; },
   get sttEnabled()    { return this.openAiApiKey !== ""; },
   get queueEnabled()  { return this.redisUrl !== ""; },
-  get aiEnabled()     { return this.forgeApiKey !== ""; },
+  get aiEnabled()     { return this.anthropicApiKey !== ""; },
 };
