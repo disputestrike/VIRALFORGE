@@ -86,6 +86,15 @@ async function startServer() {
   console.log("");
 
   // INTEGRATION: Initialize job queue and workers
+  // Clean up junk call recordings on startup
+  try {
+    const dbMod = await import("../db"); const deleteJunkCallRecordings = (dbMod as any).deleteJunkCallRecordings;
+    const deleted = deleteJunkCallRecordings ? await deleteJunkCallRecordings() : 0;
+    if (deleted > 0) console.log(`[Startup] Cleaned ${deleted} junk call recordings from DB`);
+  } catch (e) {
+    console.warn("[Startup] Could not clean junk recordings:", (e as Error).message);
+  }
+
   console.log("[Server] Initializing job queue and workers...");
   try {
     const { getQueues } = await import("./services/queue");
