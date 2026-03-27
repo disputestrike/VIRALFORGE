@@ -280,7 +280,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   } = params;
 
   const payload: Record<string, unknown> = {
-    model: "claude-3-5-sonnet-20241022",
+    model: process.env.LLM_MODEL || "claude-3-5-sonnet-20241022",
     messages: messages.map(normalizeMessage),
   };
 
@@ -296,10 +296,8 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.tool_choice = normalizedToolChoice;
   }
 
-  payload.max_tokens = 32768
-  payload.thinking = {
-    "budget_tokens": 128
-  }
+  payload.max_tokens = parseInt(process.env.LLM_MAX_TOKENS || "4096");
+  // Note: 'thinking' param removed — only works on direct Anthropic API, breaks proxies
 
   const normalizedResponseFormat = normalizeResponseFormat({
     responseFormat,
