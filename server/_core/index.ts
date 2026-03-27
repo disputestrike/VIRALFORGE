@@ -340,6 +340,15 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
   // ── Rate Limiting ────────────────────────────────────────────────────────────
+  // ── Request correlation ID (Fortune 100 / enterprise tracing) ───────────
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const reqId = req.headers["x-request-id"] as string
+      || `req_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    (req as any).reqId = reqId;
+    res.setHeader("x-request-id", reqId);
+    next();
+  });
+
   app.use("/api/trpc", apiRateLimiter);
   app.use("/api/auth", authRateLimiter);
   app.use("/api/trpc/voiceAI", aiRateLimiter);
