@@ -45,7 +45,10 @@ function getClient(): Anthropic {
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   const client = getClient();
 
-  const model = params.model || process.env.LLM_MODEL || "claude-3-5-sonnet-20241022";
+  // Use LLM_MODEL env var to override — set in Railway Variables
+  // Available models: claude-opus-4-5, claude-sonnet-4-5, claude-haiku-4-5-20251001
+  // claude-3-5-sonnet-20241022, claude-3-haiku-20240307
+  const model = params.model || process.env.LLM_MODEL || "claude-haiku-4-5-20251001";
   const maxTokens = params.maxTokens || parseInt(process.env.LLM_MAX_TOKENS || "4096");
 
   // Separate system messages from conversation messages
