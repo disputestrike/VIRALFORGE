@@ -30,20 +30,24 @@ export async function synthesizeSpeech(
     throw new Error("ELEVENLABS_API_KEY not configured");
   }
 
+  // Request mulaw 8000Hz — required by Twilio Media Streams
+  // ElevenLabs supports this via output_format parameter
   const response = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=ulaw_8000`,
     {
       method: "POST",
       headers: {
         "xi-api-key": process.env.ELEVENLABS_API_KEY,
         "Content-Type": "application/json",
+        "Accept": "audio/basic",
       },
       body: JSON.stringify({
         text: text,
-        model_id: "eleven_monolingual_v1",
+        model_id: "eleven_turbo_v2",
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.75,
+          speed: 1.0,
         },
       }),
     }

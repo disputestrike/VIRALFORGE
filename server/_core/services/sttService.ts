@@ -1,77 +1,70 @@
 /**
- * Speech-to-Text Service (Whisper)
- * 
- * Converts audio to text using OpenAI Whisper API
- * Cost: $0.02 per minute of audio
+ * Speech-to-Text Service (OpenAI Whisper)
+ * Receives mulaw 8000Hz audio from Twilio Media Streams
+ * Converts to text via Whisper API
  */
-
-import { Readable } from "stream";
 
 export async function transcribeAudio(
   audioBuffer: Buffer,
   language?: string
 ): Promise<string> {
-  console.log(`[STT] Transcribing audio (${audioBuffer.length} bytes)`);
+  console.log(`[STT] Transcribing ${audioBuffer.length} bytes`);
 
-  // Create FormData for multipart upload
-  const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substr(2, 9);
-  
-  let body = "";
-  body += `--${boundary}\r\n`;
-  body += `Content-Disposition: form-data; name="file"; filename="audio.wav"\r\n`;
-  body += `Content-Type: audio/wav\r\n\r\n`;
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY not configured");
+  }
 
-  const footerBytes = Buffer.from(`\r\n--${boundary}\r\n`);
-  const footerData = Buffer.from(
-    `Content-Disposition: form-data; name="model"\r\n\r\nwhisper-1\r\n` +
-    (language ? `--${boundary}\r\nContent-Disposition: form-data; name="language"\r\n\r\n${language}\r\n` : "") +
-    `--${boundary}--\r\n`
-  );
+  // Build multipart form — Whisper accepts mulaw/wav directly
+  const boundary = "----ApexAIBoundary" + Date.now().toString(36);
+  const CRLF = "\r\n";
 
-  const headerBuffer = Buffer.from(body, "utf-8");
-  const fullBuffer = Buffer.concat([headerBuffer, audioBuffer, footerData]);
+  const headerParts = [
+    `--${boundary}${CRLF}`,
+    `Content-Disposition: form-data; name="file"; filename="audio.wav"${CRLF}`,
+    `Content-Type: audio/wav${CRLF}${CRLF}`,
+  ].join("");
+
+  const modelPart = [
+    `${CRLF}--${boundary}${CRLF}`,
+    `Content-Disposition: form-data; name="model"${CRLF}${CRLF}`,
+    `whisper-1`,
+    language ? `${CRLF}--${boundary}${CRLF}Content-Disposition: form-data; name="language"${CRLF}${CRLF}${language}` : "",
+    `${CRLF}--${boundary}--${CRLF}`,
+  ].join("");
+
+  const body = Buffer.concat([
+    Buffer.from(headerParts, "utf-8"),
+    audioBuffer,
+    Buffer.from(modelPart, "utf-8"),
+  ]);
 
   const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       "Content-Type": `multipart/form-data; boundary=${boundary}`,
     },
-    body: fullBuffer,
+    body,
   });
 
   if (!response.ok) {
     const error = await response.text();
-    console.error(`[STT] API error: ${response.status} - ${error}`);
-    throw new Error(`Whisper API failed: ${response.status} - ${error}`);
+    console.error(`[STT] Error ${response.status}: ${error}`);
+    throw new Error(`Whisper failed: ${response.status}`);
   }
 
   const result = (await response.json()) as { text: string };
-  console.log(`[STT] Transcribed: "${result.text}"`);
-  
+  console.log(`[STT] Transcribed: "${result.text.substring(0, 80)}"`);
   return result.text;
 }
 
-/**
- * Get language code for Whisper
- */
 export function getLanguageCode(language: string): string {
-  const languageMap: Record<string, string> = {
-    english: "en",
-    spanish: "es",
-    french: "fr",
-    german: "de",
-    chinese: "zh",
-    japanese: "ja",
-    portuguese: "pt",
-    russian: "ru",
-    korean: "ko",
+  const map: Record<string, string> = {
+    english: "en", spanish: "es", french: "fr",
+    german: "de", chinese: "zh", japanese: "ja",
+    portuguese: "pt", russian: "ru", korean: "ko",
   };
-
-  return languageMap[language.toLowerCase()] || "en";
+  return map[language.toLowerCase()] || "en";
 }
 
-export default {
-  transcribeAudio,
-  getLanguageCode,
-};
+export default { transcribeAudio, getLanguageCode };
