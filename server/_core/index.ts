@@ -681,78 +681,72 @@ async function startServer() {
 
         let streamSid: string | null = null;
         const audioChunks: Buffer[] = [];
+        let silenceTimer: NodeJS.Timeout | null = null;
+        let isProcessing = false;
+
+        const processAudio = async () => {
+          if (isProcessing || audioChunks.length === 0) return;
+          const totalLength = audioChunks.reduce((sum, c) => sum + c.length, 0);
+          if (totalLength < 1600) return; // need at least 200ms
+
+          isProcessing = true;
+          const completeAudio = Buffer.concat(audioChunks);
+          audioChunks.length = 0;
+
+          console.log(`[Voice] Processing ${completeAudio.length} bytes`);
+
+          // Ensure session exists
+          if (sessionId && !voiceSessionManager.getSession(sessionId)) {
+            voiceSessionManager.createSession(leadId ? parseInt(leadId) : 0, "default", sessionId);
+          }
+
+          try {
+            const audioResult = await voiceProcessingService.processAudioMessage(
+              sessionId || "", completeAudio
+            );
+            const responsePayload = (audioResult as any)?.audioPayload || "";
+            console.log(`[Voice] STT: "${(audioResult as any)?.text || "empty"}" → AI: "${(audioResult as any)?.response || "empty"}"`);
+
+            if (responsePayload && streamSid) {
+              ws.send(JSON.stringify({
+                event: "media",
+                streamSid: streamSid,
+                media: { payload: responsePayload },
+              }));
+              console.log(`[Voice] ✅ Sent AI response`);
+            }
+          } catch (err) {
+            console.error("[Voice] Processing error:", err);
+          }
+          isProcessing = false;
+        };
 
         ws.on("message", async (data: Buffer) => {
           try {
             const message = JSON.parse(data.toString());
 
-            // Handle connection start
             if (message.event === "start") {
               streamSid = message.start.streamSid;
               console.log(`[Voice] Stream started: ${streamSid}`);
-
-              // Create session if needed
               if (sessionId && !voiceSessionManager.getSession(sessionId)) {
-                voiceSessionManager.createSession(
-                  leadId ? parseInt(leadId) : 0,
-                  "default"
-                );
+                voiceSessionManager.createSession(leadId ? parseInt(leadId) : 0, "default", sessionId);
               }
-
               return;
             }
 
-            // Handle media (audio) packets
             if (message.event === "media") {
-              const audioPayload = message.media.payload; // Base64 mulaw
-              const audioBuffer = Buffer.from(audioPayload, "base64");
+              const audioBuffer = Buffer.from(message.media.payload, "base64");
               audioChunks.push(audioBuffer);
 
-              // Accumulate ~2 seconds of audio before processing
-              // SignalWire sends mulaw 8000Hz = ~160 bytes per 20ms packet
-              const totalLength = audioChunks.reduce((sum, chunk) => sum + chunk.length, 0);
-              console.log(`[Voice] Audio chunks: ${audioChunks.length}, total: ${totalLength} bytes`);
+              // Reset silence timer — process after 800ms of no new audio
+              if (silenceTimer) clearTimeout(silenceTimer);
+              silenceTimer = setTimeout(processAudio, 800);
 
-              if (totalLength > 3200) { // ~400ms of audio
-                const completeAudio = Buffer.concat(audioChunks);
-                audioChunks.length = 0;
-                console.log(`[Voice] Processing ${completeAudio.length} bytes of audio`);
-
-                // Ensure session exists
-                if (sessionId && !voiceSessionManager.getSession(sessionId)) {
-                  voiceSessionManager.createSession(
-                    leadId ? parseInt(leadId) : 0,
-                    "default",
-                    sessionId
-                  );
-                }
-
-                // Process: STT → Claude → TTS
-                try {
-                  const audioResult = await voiceProcessingService.processAudioMessage(
-                    sessionId || "",
-                    completeAudio
-                  );
-
-                  const responsePayload = (audioResult as any)?.audioPayload || "";
-                  const responseText = (audioResult as any)?.response || "";
-
-                  console.log(`[Voice] STT result: "${(audioResult as any)?.text || "empty"}"`);
-                  console.log(`[Voice] AI response: "${responseText}"`);
-
-                  if (responsePayload && streamSid) {
-                    ws.send(JSON.stringify({
-                      event: "media",
-                      streamSid: streamSid,
-                      media: { payload: responsePayload },
-                    }));
-                    console.log(`[Voice] ✅ Sent AI audio response (${responsePayload.length} chars)`);
-                  } else {
-                    console.log(`[Voice] ⚠️ No audio payload — text was empty or TTS failed`);
-                  }
-                } catch (error) {
-                  console.error("[Voice] Error processing audio:", error);
-                }
+              // Also process if we have 3+ seconds of audio
+              const totalLength = audioChunks.reduce((sum, c) => sum + c.length, 0);
+              if (totalLength > 24000) {
+                if (silenceTimer) clearTimeout(silenceTimer);
+                await processAudio();
               }
             }
 
