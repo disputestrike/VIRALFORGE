@@ -5,41 +5,60 @@
  */
 
 /**
- * Build a proper WAV file header for mulaw 8000Hz audio
- * Whisper requires valid WAV format — raw mulaw bytes alone won't work
+ * Convert mulaw (G.711) to PCM16 then wrap in WAV
+ * Whisper expects PCM WAV (format 1), not mulaw WAV (format 7)
  */
+function mulawToPcm16(mulawData: Buffer): Buffer {
+  // mulaw to linear PCM16 decode table
+  const MULAW_DECODE_TABLE = new Int16Array(256);
+  for (let i = 0; i < 256; i++) {
+    let ulaw = ~i & 0xFF;
+    const sign = (ulaw & 0x80) ? -1 : 1;
+    const exponent = (ulaw >> 4) & 0x07;
+    const mantissa = ulaw & 0x0F;
+    let sample = ((mantissa << 3) + 0x84) << exponent;
+    sample -= 0x84;
+    MULAW_DECODE_TABLE[i] = sign * sample;
+  }
+
+  const pcm = Buffer.alloc(mulawData.length * 2);
+  for (let i = 0; i < mulawData.length; i++) {
+    const sample = MULAW_DECODE_TABLE[mulawData[i]];
+    pcm.writeInt16LE(sample, i * 2);
+  }
+  return pcm;
+}
+
 function buildWavBuffer(mulawData: Buffer): Buffer {
+  // Convert mulaw → PCM16 (Whisper needs PCM, not mulaw)
+  const pcmData = mulawToPcm16(mulawData);
+
   const sampleRate = 8000;
   const numChannels = 1;
-  const bitsPerSample = 8; // mulaw is 8-bit
-  const audioFormat = 7; // PCM mulaw = 7
-  const dataSize = mulawData.length;
+  const bitsPerSample = 16; // PCM16
+  const audioFormat = 1;   // PCM = 1
+  const dataSize = pcmData.length;
   const headerSize = 44;
   const totalSize = headerSize + dataSize;
 
   const header = Buffer.alloc(headerSize);
   let offset = 0;
 
-  // RIFF chunk
   header.write("RIFF", offset); offset += 4;
   header.writeUInt32LE(totalSize - 8, offset); offset += 4;
   header.write("WAVE", offset); offset += 4;
-
-  // fmt chunk
   header.write("fmt ", offset); offset += 4;
-  header.writeUInt32LE(16, offset); offset += 4; // chunk size
-  header.writeUInt16LE(audioFormat, offset); offset += 2; // mulaw
+  header.writeUInt32LE(16, offset); offset += 4;
+  header.writeUInt16LE(audioFormat, offset); offset += 2;
   header.writeUInt16LE(numChannels, offset); offset += 2;
   header.writeUInt32LE(sampleRate, offset); offset += 4;
-  header.writeUInt32LE(sampleRate * numChannels * bitsPerSample / 8, offset); offset += 4; // byte rate
-  header.writeUInt16LE(numChannels * bitsPerSample / 8, offset); offset += 2; // block align
+  header.writeUInt32LE(sampleRate * numChannels * bitsPerSample / 8, offset); offset += 4;
+  header.writeUInt16LE(numChannels * bitsPerSample / 8, offset); offset += 2;
   header.writeUInt16LE(bitsPerSample, offset); offset += 2;
-
-  // data chunk
   header.write("data", offset); offset += 4;
   header.writeUInt32LE(dataSize, offset);
 
-  return Buffer.concat([header, mulawData]);
+  return Buffer.concat([header, pcmData]);
 }
 
 export async function transcribeAudio(

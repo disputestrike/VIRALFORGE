@@ -63,11 +63,12 @@ async function synthesizeElevenLabs(text: string, voiceId: string): Promise<Buff
       },
       body: JSON.stringify({
         text,
-        model_id: "eleven_turbo_v2",
+        model_id: "eleven_flash_v2_5", // Fastest ElevenLabs model — lowest latency
         voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-          speed: 1.0,
+          stability: 0.7,         // Higher = more consistent on phone
+          similarity_boost: 0.6,  // Lower = less over-processed
+          speed: 1.05,            // Slightly faster = snappier responses
+          style: 0.0,             // Neutral style = clearer on narrowband
         },
       }),
     }

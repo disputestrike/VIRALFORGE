@@ -740,7 +740,7 @@ async function startServer() {
 
               // Reset silence timer — process after 800ms of no new audio
               if (silenceTimer) clearTimeout(silenceTimer);
-              silenceTimer = setTimeout(processAudio, 800);
+              silenceTimer = setTimeout(processAudio, 500); // 500ms silence = end of speech
 
               // Also process if we have 3+ seconds of audio
               const totalLength = audioChunks.reduce((sum, c) => sum + c.length, 0);
