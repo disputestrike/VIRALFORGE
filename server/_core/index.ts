@@ -423,12 +423,23 @@ async function startServer() {
     }
 
     res.type("text/xml");
+    // SignalWire does NOT support Twilio <Connect><Stream> media streaming
+    // Use Record verb to capture speech, then process with AI via webhook loop
+    const sid = sessionId || req.body.CallSid || `session_${Date.now()}`;
+    const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+      ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+      : "https://apexai-production-d567.up.railway.app";
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say>Please wait while we connect you to our AI agent.</Say>
-  <Connect>
-    <Stream url="wss://${req.get("host")}/api/voice-stream?sessionId=${sessionId}&leadId=${leadId}" />
-  </Connect>
+  <Say voice="woman">Hello! Thank you for calling ApexAI. How can I help you today?</Say>
+  <Record
+    action="${baseUrl}/api/voice/process-recording?sessionId=${sid}&leadId=${leadId}"
+    method="POST"
+    maxLength="30"
+    timeout="5"
+    playBeep="false"
+    transcribe="true"
+    transcribeCallback="${baseUrl}/api/voice/transcription?sessionId=${sid}" />
 </Response>`);
   });
 
@@ -437,7 +448,83 @@ async function startServer() {
       CallSid: req.body.CallSid,
       CallStatus: req.body.CallStatus,
     });
-    // Handle call status updates
+    res.send("OK");
+  });
+
+  // ── Process recording: STT → Claude → TTS → respond ──────────────────────
+  app.post("/api/voice/process-recording", validateTwilioSignature, async (req, res) => {
+    const { CallSid, RecordingUrl, TranscriptionText } = req.body;
+    const sessionId = (req.query.sessionId as string) || CallSid;
+    const leadId = req.query.leadId as string;
+    const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+      ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+      : "https://apexai-production-d567.up.railway.app";
+
+    console.log(`[Voice] Processing recording: ${RecordingUrl} | session: ${sessionId}`);
+
+    try {
+      // Use transcription if available, otherwise fetch and transcribe recording
+      let userText = TranscriptionText || "";
+
+      if (!userText && RecordingUrl) {
+        // Download recording and transcribe with Whisper
+        const audioResp = await fetch(`${RecordingUrl}.wav`);
+        const audioBuffer = Buffer.from(await audioResp.arrayBuffer());
+        const { transcribeAudio } = await import("./services/sttService");
+        userText = await transcribeAudio(audioBuffer);
+      }
+
+      console.log(`[Voice] Transcribed: "${userText}"`);
+
+      // Generate AI response via conversation engine
+      let aiResponse = "I understand. How can I help you further?";
+      if (userText.trim()) {
+        const convEngine = await import("./services/conversationEngine");
+        const db = await import("../db");
+        const lead = leadId ? await db.getLeadById(parseInt(leadId)) : null;
+        const result = await convEngine.generateConversationResponse({
+          history: [],
+          text: userText,
+          leadName: lead ? `${lead.firstName} ${lead.lastName}` : undefined,
+        });
+        aiResponse = result.response;
+      }
+
+      console.log(`[Voice] AI response: "${aiResponse}"`);
+
+      // Respond with AI speech + record next input
+      res.type("text/xml");
+      res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="woman">${aiResponse.replace(/[<>&"]/g, (c) => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c] || c))}</Say>
+  <Record
+    action="${baseUrl}/api/voice/process-recording?sessionId=${sessionId}&leadId=${leadId}"
+    method="POST"
+    maxLength="30"
+    timeout="5"
+    playBeep="false"
+    transcribe="true"
+    transcribeCallback="${baseUrl}/api/voice/transcription?sessionId=${sessionId}" />
+</Response>`);
+    } catch (error) {
+      console.error("[Voice] Processing error:", error);
+      res.type("text/xml");
+      res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="woman">I apologize, I had trouble processing that. Could you please repeat?</Say>
+  <Record
+    action="${baseUrl}/api/voice/process-recording?sessionId=${sessionId}&leadId=${leadId}"
+    method="POST"
+    maxLength="30"
+    timeout="5"
+    playBeep="false" />
+</Response>`);
+    }
+  });
+
+  // ── Transcription callback (async — SignalWire sends after transcription) ─
+  app.post("/api/voice/transcription", validateTwilioSignature, (req, res) => {
+    console.log(`[Voice] Transcription received: "${req.body.TranscriptionText}"`);
     res.send("OK");
   });
 
