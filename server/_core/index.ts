@@ -426,15 +426,15 @@ async function startServer() {
     // SignalWire uses <Start><Stream> (NOT <Connect><Stream> which is Twilio-only)
     // <Start> is async — continues to <Say> while streaming
     const sid = sessionId || req.body.CallSid || `session_${Date.now()}`;
-    // Encode & as &amp; — required for valid XML
-    const streamUrl = `wss://${req.get("host")}/api/voice-stream?sessionId=${sid}&amp;leadId=${leadId}`;
+    // Stream audio bidirectionally via WebSocket
+    // Greeting is sent through the stream after connection
+    const streamUrl = `wss://${req.get("host")}/api/voice-stream?sessionId=${sid}&amp;leadId=${leadId}&amp;greet=true`;
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Start>
     <Stream url="${streamUrl}" />
   </Start>
-  <Say>Hello, thank you for calling ApexAI. How can I help you today?</Say>
-  <Pause length="60" />
+  <Pause length="120" />
 </Response>`);
   });
 
@@ -695,8 +695,29 @@ async function startServer() {
               if (sessionId && !voiceSessionManager.getSession(sessionId)) {
                 voiceSessionManager.createSession(
                   leadId ? parseInt(leadId) : 0,
-                  "default"
+                  "default",
+                  sessionId
                 );
+              }
+
+              // Send AI greeting through the stream
+              const shouldGreet = url.searchParams.get("greet") === "true";
+              if (shouldGreet && streamSid) {
+                try {
+                  const { synthesizeSpeech } = await import("./services/ttsService");
+                  const greetingAudio = await synthesizeSpeech(
+                    "Hello, thank you for calling ApexAI. How can I help you today?"
+                  );
+                  const greetingPayload = greetingAudio.toString("base64");
+                  ws.send(JSON.stringify({
+                    event: "media",
+                    streamSid: streamSid,
+                    media: { payload: greetingPayload },
+                  }));
+                  console.log(`[Voice] ✅ Sent greeting audio`);
+                } catch (greetErr) {
+                  console.error("[Voice] Greeting error:", greetErr);
+                }
               }
 
               return;
