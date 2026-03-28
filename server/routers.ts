@@ -10,7 +10,7 @@ import { sql } from "drizzle-orm";
 // INTEGRATION: Import new services
 import * as queueService from "./_core/services/queue";
 import * as decisionEngine from "./_core/services/decisionEngine";
-import * as twilioService from "./_core/services/twilioService";
+import * as twilioService from "./_core/services/signalwireService";
 import * as voiceSessionManager from "./_core/services/voiceSessionManager";
 import * as followUpEngine from "./_core/services/followUpEngine";
 import { saasRouter } from "./routers/saasRouter";
@@ -261,7 +261,7 @@ const messagesRouter = router({
       // Actually dispatch via Twilio/Resend
       if (input.channel === "sms" && lead.phone) {
         try {
-          const { sendSMS } = await import("./_core/services/twilioService");
+          const { sendSMS } = await import("./_core/services/signalwireService");
           await sendSMS({ to: lead.phone, body: input.body });
           await db.updateMessageStatus(msgId, "sent", { sentAt: new Date(), deliveredAt: new Date() });
           deliveryStatus = "sent";

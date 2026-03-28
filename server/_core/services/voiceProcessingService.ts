@@ -10,7 +10,7 @@ import { synthesizeSpeech } from "./ttsService";
 import * as db from "../../db";
 
 /**
- * Process raw audio from a Twilio media stream.
+ * Process raw audio from a SignalWire media stream.
  * Returns audio buffer to send back over WebSocket.
  */
 export async function processAudioMessage(

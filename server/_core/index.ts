@@ -78,7 +78,7 @@ async function startServer() {
   console.log(`  Database:   ✅ (DATABASE_URL set)`);
   console.log(`  Redis/Queue: ${ENV.queueEnabled ? "✅ BullMQ + Redis" : "⚠️  In-memory fallback (set REDIS_URL)"}`);
   console.log(`  Google Auth: ${ENV.googleClientId ? "✅ enabled" : "❌ disabled (set GOOGLE_CLIENT_ID)"}`);
-  console.log(`  Voice/SMS:   ${ENV.voiceEnabled ? "✅ Twilio ready" : "⚠️  disabled (set TWILIO_ACCOUNT_SID)"}`);
+  console.log(`  Voice/SMS:   ${ENV.voiceEnabled ? "✅ SignalWire ready" : "⚠️  disabled (set SIGNALWIRE_PROJECT_ID)"}`);
   console.log(`  Email:       ${ENV.emailEnabled ? "✅ Resend ready" : "⚠️  disabled (set RESEND_API_KEY)"}`);
   console.log(`  STT:         ${ENV.sttEnabled ? "✅ Whisper ready" : "⚠️  disabled (set OPENAI_API_KEY)"}`);
   console.log(`  TTS:         ${ENV.ttsEnabled ? "✅ ElevenLabs ready" : "⚠️  disabled (set ELEVENLABS_API_KEY)"}`);
@@ -99,7 +99,7 @@ async function startServer() {
   try {
     const { getQueues } = await import("./services/queue");
     const { Worker } = await import("bullmq");
-    const { initiateCall } = await import("./services/twilioService");
+    const { initiateCall } = await import("./services/signalwireService");
 
     // Initialize queues
     const queues = await getQueues();
@@ -169,13 +169,7 @@ async function startServer() {
         console.log(`[SMSWorker] ▶ QUEUED→PROCESSING | jobId: ${job.id} | type: ${type} | phone: ${phone} | leadId: ${job.data.leadId} | msgId: ${msgId || "none"}`);
         const dbMod = await import("../db");
         try {
-          const twilio = await import("twilio");
-          const twilioClient = twilio.default(
-            process.env.TWILIO_ACCOUNT_SID,
-            process.env.TWILIO_AUTH_TOKEN
-          );
-
-          const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER || "+1234567890";
+          const { default: swService } = await import("./services/signalwireService");
 
           let message = "";
           if (type === "appointment_confirmation") {
@@ -190,11 +184,7 @@ async function startServer() {
             message = `Hi ${leadName || "there"}, this is a message from ApexAI.`;
           }
 
-          const result = await twilioClient.messages.create({
-            body: message,
-            from: twilioPhoneNumber,
-            to: phone,
-          });
+          const result = await swService.sendSMS({ to: phone, body: message });
 
           // ── Write final status back to messages table ──────────────────
           if (msgId) {
@@ -202,8 +192,8 @@ async function startServer() {
           }
           await dbMod.updateLead(job.data.leadId, { status: "contacted" });
 
-          console.log(`[SMSWorker] ✅ PROCESSING→COMPLETED | jobId: ${job.id} | messageSid: ${result.sid} | to: ${phone} | msgId: ${msgId} → status: sent`);
-          return { success: true, messageSid: result.sid };
+          console.log(`[SMSWorker] ✅ PROCESSING→COMPLETED | jobId: ${job.id} | messageSid: ${result.messageSid} | to: ${phone} | msgId: ${msgId} → status: sent`);
+          return { success: true, messageSid: result.messageSid };
         } catch (error) {
           // ── Write failure status back to messages table ─────────────────
           if (msgId) {
@@ -376,8 +366,8 @@ async function startServer() {
       services: {
         database: ENV.databaseUrl ? "configured" : "missing",
         redis:    ENV.redisUrl    ? "configured" : "missing — using in-memory fallback",
-        voice:    ENV.voiceEnabled  ? "ready"  : "disabled — add TWILIO keys",
-        sms:      ENV.smsEnabled    ? "ready"  : "disabled — add TWILIO keys",
+        voice:    ENV.voiceEnabled  ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
+        sms:      ENV.smsEnabled    ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         email:    ENV.emailEnabled  ? "ready"  : "disabled — add RESEND_API_KEY",
         stt:      ENV.sttEnabled    ? "ready"  : "disabled — add OPENAI_API_KEY",
         tts:      ENV.ttsEnabled    ? "ready"  : "disabled — add ELEVENLABS_API_KEY",
@@ -386,24 +376,25 @@ async function startServer() {
     });
   });
 
-  // INTEGRATION: Voice webhook routes for Twilio callbacks
-  // ── Twilio Webhook Signature Validation ──────────────────────────────────────
+  // INTEGRATION: Voice webhook routes for SignalWire callbacks
+  // ── SignalWire Webhook Signature Validation ───────────────────────────────────
   const validateTwilioSignature = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    // Skip validation in dev or when Twilio creds not set
-    if (!process.env.TWILIO_AUTH_TOKEN || process.env.NODE_ENV !== "production") {
+    // Skip validation in dev or when SignalWire creds not set
+    if (!process.env.SIGNALWIRE_TOKEN || process.env.NODE_ENV !== "production") {
       return next();
     }
-    const signature = req.headers["x-twilio-signature"] as string;
+    const signature = req.headers["x-signalwire-signature"] as string
+      || req.headers["x-twilio-signature"] as string; // SignalWire sends same header
     if (!signature) {
-      return res.status(403).json({ error: "Missing Twilio signature" });
+      return res.status(403).json({ error: "Missing SignalWire signature" });
     }
     try {
-      const { validateWebhookSignature } = await import("./services/twilioService");
+      const { validateWebhookSignature } = await import("./services/signalwireService");
       const url = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
       const isValid = await validateWebhookSignature(signature, url, req.body);
       if (!isValid) {
-        console.warn("[Security] Invalid Twilio signature from", req.ip);
-        return res.status(403).json({ error: "Invalid Twilio signature" });
+        console.warn("[Security] Invalid SignalWire signature from", req.ip);
+        return res.status(403).json({ error: "Invalid SignalWire signature" });
       }
     } catch {
       return next(); // Don't block if validation fails unexpectedly
@@ -577,7 +568,7 @@ async function startServer() {
   );
 
   // ─── WebSocket Handler for Voice Streaming ────────────────────────────────
-  // This handles real-time audio from Twilio and processes it
+  // This handles real-time audio from SignalWire and processes it
   const wss = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", async (request, socket, head) => {

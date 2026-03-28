@@ -1,6 +1,6 @@
 /**
  * Speech-to-Text Service (OpenAI Whisper)
- * Receives mulaw 8000Hz audio from Twilio Media Streams
+ * Receives mulaw 8000Hz audio from SignalWire Media Streams
  * Converts to text via Whisper API
  */
 

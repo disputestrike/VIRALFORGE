@@ -24,10 +24,17 @@ export const ENV = {
   // ── Anthropic (script generation, conversation engine, AI features) ──
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
 
-  // ── Twilio (voice calls + SMS) ────────────────────────────
-  twilioAccountSid:  process.env.TWILIO_ACCOUNT_SID ?? "",
-  twilioAuthToken:   process.env.TWILIO_AUTH_TOKEN ?? "",
-  twilioPhoneNumber: process.env.TWILIO_PHONE_NUMBER ?? "",
+  // ── SignalWire (voice calls + SMS) ───────────────────────────────────────
+  signalwireProjectId:   process.env.SIGNALWIRE_PROJECT_ID ?? "",
+  signalwireToken:       process.env.SIGNALWIRE_TOKEN ?? "",
+  signalwireSpaceUrl:    process.env.SIGNALWIRE_SPACE_URL ?? "",
+  signalwirePhoneNumber: process.env.SIGNALWIRE_PHONE_NUMBER ?? "",
+  signalwireSigningKey:  process.env.SIGNALWIRE_SIGNING_KEY ?? "",
+
+  // ── thinQ LCR (optional — add later for even cheaper routing) ────────────
+  thinqAccountId:  process.env.THINQ_ACCOUNT_ID ?? "",
+  thinqAuthToken:  process.env.THINQ_AUTH_TOKEN ?? "",
+  thinqSipDomain:  process.env.THINQ_SIP_DOMAIN ?? "sip.thinq.com",
 
   // ── Resend (transactional email) ──────────────────────────
   resendApiKey: process.env.RESEND_API_KEY ?? "",
@@ -38,7 +45,7 @@ export const ENV = {
   // ── OpenAI (Whisper STT) ──────────────────────────────────
   openAiApiKey: process.env.OPENAI_API_KEY ?? "",
 
-  // ── Public URL (Twilio webhook callbacks) ─────────────────
+  // ── Public URL (SignalWire webhook callbacks) ─────────────
   publicDomain: process.env.RAILWAY_PUBLIC_DOMAIN ?? "",
   publicUrl: process.env.RAILWAY_PUBLIC_DOMAIN
     ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
@@ -52,8 +59,8 @@ export const ENV = {
   appId: process.env.VITE_APP_ID ?? "",
 
   // ── Feature flags (derived — no extra env vars needed) ────
-  get voiceEnabled()  { return this.twilioAccountSid !== "" && this.twilioAuthToken !== ""; },
-  get smsEnabled()    { return this.twilioAccountSid !== "" && this.twilioAuthToken !== ""; },
+  get voiceEnabled()  { return this.signalwireProjectId !== "" && this.signalwireToken !== ""; },
+  get smsEnabled()    { return this.signalwireProjectId !== "" && this.signalwireToken !== ""; },
   get emailEnabled()  { return this.resendApiKey !== ""; },
   get ttsEnabled()    { return this.elevenLabsApiKey !== ""; },
   get sttEnabled()    { return this.openAiApiKey !== ""; },

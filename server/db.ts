@@ -473,3 +473,44 @@ export async function createManualAppointment(data: { leadId: number; scheduledT
     await connection.end();
   }
 }
+
+// ── Local Number Pool (SignalWire local presence) ─────────────────────────
+export async function getLocalNumberByAreaCode(areaCode: string): Promise<{ phoneNumber: string } | null> {
+  const conn = await import("mysql2/promise");
+  const connection = await conn.createConnection({
+    uri: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+  try {
+    const [rows] = await connection.execute(
+      `SELECT phone_number as phoneNumber FROM local_number_pool 
+       WHERE area_code = ? AND is_active = 1 
+       ORDER BY last_used_at ASC LIMIT 1`,
+      [areaCode]
+    );
+    const r = rows as any[];
+    return r.length > 0 ? { phoneNumber: r[0].phoneNumber } : null;
+  } catch {
+    return null; // Table may not exist yet — graceful fallback
+  } finally {
+    await connection.end();
+  }
+}
+
+export async function updateLocalNumberLastUsed(phoneNumber: string): Promise<void> {
+  const conn = await import("mysql2/promise");
+  const connection = await conn.createConnection({
+    uri: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+  try {
+    await connection.execute(
+      `UPDATE local_number_pool SET last_used_at = NOW() WHERE phone_number = ?`,
+      [phoneNumber]
+    );
+  } catch {
+    // Silently fail — non-critical
+  } finally {
+    await connection.end();
+  }
+}
