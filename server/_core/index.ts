@@ -426,10 +426,12 @@ async function startServer() {
     // SignalWire uses <Start><Stream> (NOT <Connect><Stream> which is Twilio-only)
     // <Start> is async — continues to <Say> while streaming
     const sid = sessionId || req.body.CallSid || `session_${Date.now()}`;
+    // Encode & as &amp; — required for valid XML
+    const streamUrl = `wss://${req.get("host")}/api/voice-stream?sessionId=${sid}&amp;leadId=${leadId}`;
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Start>
-    <Stream url="wss://${req.get("host")}/api/voice-stream?sessionId=${sid}&leadId=${leadId}" />
+    <Stream url="${streamUrl}" />
   </Start>
   <Say>Hello, thank you for calling ApexAI. How can I help you today?</Say>
   <Pause length="60" />
@@ -592,10 +594,11 @@ async function startServer() {
 
     if (selection === 1) {
       // Transfer to AI sales
+      const dtmfStreamUrl = `wss://${req.get("host")}/api/voice-stream?sessionId=${CallSid}&amp;fromNumber=${From}&amp;inbound=true`;
       res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Start>
-    <Stream url="wss://${req.get("host")}/api/voice-stream?sessionId=${CallSid}&fromNumber=${From}&inbound=true" />
+    <Stream url="${dtmfStreamUrl}" />
   </Start>
   <Say>Connecting you to our AI sales agent now.</Say>
   <Pause length="60" />
