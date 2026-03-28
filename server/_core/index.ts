@@ -389,21 +389,47 @@ async function startServer() {
     return next();
   };
 
-  app.post("/api/voice/start", validateTwilioSignature, (req, res) => {
-    console.log("[Voice] Call started");
-    const leadId = req.query.leadId as string;
-    const sessionId = req.query.sessionId as string;
+  app.post("/api/voice/start", validateTwilioSignature, async (req, res) => {
+    const { CallSid, From, To } = req.body;
+    const leadId = (req.query.leadId as string) || "";
+    const sessionId = (req.query.sessionId as string) || CallSid || `session_${Date.now()}`;
 
-    // Respond with TwiML to start voice stream
+    console.log(`[Voice] Call started: ${CallSid} from ${From}`);
+
+    // Create session and lead if inbound
+    try {
+      if (From) {
+        const db = await import("../db");
+        let lead = await db.getLeadByPhone(From);
+        if (!lead) {
+          lead = await db.createLead({
+            firstName: "Inbound",
+            lastName: From.slice(-4),
+            phone: From,
+            source: "inbound_call",
+            status: "new",
+            score: 60,
+            segment: "warm",
+          }) as any;
+        }
+        const vm = await import("./services/voiceSessionManager");
+        if (!vm.getSession(sessionId)) {
+          vm.createSession((lead as any).id ?? 0, "default", sessionId);
+          vm.startSessionPersistenceInterval(sessionId);
+        }
+      }
+    } catch (e) {
+      console.error("[Voice] Session setup error:", e);
+    }
+
     res.type("text/xml");
-    res.send(`
-      <Response>
-        <Say>Connecting to agent...</Say>
-        <Connect>
-          <Stream url="wss://${req.get("host")}/api/voice-stream?sessionId=${sessionId}" />
-        </Connect>
-      </Response>
-    `);
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Please wait while we connect you to our AI agent.</Say>
+  <Connect>
+    <Stream url="wss://${req.get("host")}/api/voice-stream?sessionId=${sessionId}&leadId=${leadId}" />
+  </Connect>
+</Response>`);
   });
 
   app.post("/api/voice/status", validateTwilioSignature, (req, res) => {
@@ -486,14 +512,13 @@ async function startServer() {
 
     if (selection === 1) {
       // Transfer to AI sales
-      res.send(`
-        <Response>
-          <Say>Connecting you to our AI agent...</Say>
-          <Connect>
-            <Stream url="wss://${req.get("host")}/api/voice-stream?sessionId=${CallSid}&fromNumber=${From}&inbound=true" />
-          </Connect>
-        </Response>
-      `);
+      res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Connecting you to our AI agent.</Say>
+  <Connect>
+    <Stream url="wss://${req.get("host")}/api/voice-stream?sessionId=${CallSid}&fromNumber=${From}&inbound=true" />
+  </Connect>
+</Response>`);
     } else if (selection === 2) {
       // Transfer to support queue
       res.send(`
