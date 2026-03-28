@@ -423,14 +423,16 @@ async function startServer() {
     }
 
     res.type("text/xml");
-    // SignalWire supports <Connect><Stream> — confirmed working in production
+    // SignalWire uses <Start><Stream> (NOT <Connect><Stream> which is Twilio-only)
+    // <Start> is async — continues to <Say> while streaming
     const sid = sessionId || req.body.CallSid || `session_${Date.now()}`;
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say>Please wait while we connect you to our AI agent.</Say>
-  <Connect>
+  <Start>
     <Stream url="wss://${req.get("host")}/api/voice-stream?sessionId=${sid}&leadId=${leadId}" />
-  </Connect>
+  </Start>
+  <Say>Hello, thank you for calling ApexAI. How can I help you today?</Say>
+  <Pause length="60" />
 </Response>`);
   });
 
@@ -592,10 +594,11 @@ async function startServer() {
       // Transfer to AI sales
       res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say>Connecting you to our AI agent.</Say>
-  <Connect>
+  <Start>
     <Stream url="wss://${req.get("host")}/api/voice-stream?sessionId=${CallSid}&fromNumber=${From}&inbound=true" />
-  </Connect>
+  </Start>
+  <Say>Connecting you to our AI sales agent now.</Say>
+  <Pause length="60" />
 </Response>`);
     } else if (selection === 2) {
       // Transfer to support queue
