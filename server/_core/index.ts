@@ -427,14 +427,17 @@ async function startServer() {
     // <Start> is async — continues to <Say> while streaming
     const sid = sessionId || req.body.CallSid || `session_${Date.now()}`;
     // Encode & as &amp; — required for valid XML
-    const streamUrl = `wss://${req.get("host")}/api/voice-stream?sessionId=${sid}&amp;leadId=${leadId}`;
+    const streamUrl = `wss://${req.get("host")}/api/voice-stream`;
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Start>
-    <Stream url="${streamUrl}" />
+    <Stream url="${streamUrl}" track="both">
+      <Parameter name="sessionId" value="${sid}" />
+      <Parameter name="leadId" value="${leadId}" />
+    </Stream>
   </Start>
   <Say>Hello, thank you for calling ApexAI. How can I help you today?</Say>
-  <Pause length="60" />
+  <Pause length="120" />
 </Response>`);
   });
 
@@ -693,19 +696,29 @@ async function startServer() {
           const completeAudio = Buffer.concat(audioChunks);
           audioChunks.length = 0;
 
-          console.log(`[Voice] Processing ${completeAudio.length} bytes`);
+          // Use resolved session ID from Parameter tags or fallback to URL param
+          const activeSessionId = (ws as any)._sessionId || sessionId || "";
+          const activeLeadId = (ws as any)._leadId || leadId;
+
+          console.log(`[Voice] Processing ${completeAudio.length} bytes | session: ${activeSessionId}`);
 
           // Ensure session exists
-          if (sessionId && !voiceSessionManager.getSession(sessionId)) {
-            voiceSessionManager.createSession(leadId ? parseInt(leadId) : 0, "default", sessionId);
+          if (activeSessionId && !voiceSessionManager.getSession(activeSessionId)) {
+            voiceSessionManager.createSession(
+              activeLeadId ? parseInt(activeLeadId) : 0,
+              "default",
+              activeSessionId
+            );
           }
 
           try {
             const audioResult = await voiceProcessingService.processAudioMessage(
-              sessionId || "", completeAudio
+              activeSessionId, completeAudio
             );
             const responsePayload = (audioResult as any)?.audioPayload || "";
-            console.log(`[Voice] STT: "${(audioResult as any)?.text || "empty"}" → AI: "${(audioResult as any)?.response || "empty"}"`);
+            const sttText = (audioResult as any)?.text || "";
+            const aiText = (audioResult as any)?.response || "";
+            console.log(`[Voice] STT: "${sttText}" → AI: "${aiText}"`);
 
             if (responsePayload && streamSid) {
               ws.send(JSON.stringify({
@@ -713,7 +726,9 @@ async function startServer() {
                 streamSid: streamSid,
                 media: { payload: responsePayload },
               }));
-              console.log(`[Voice] ✅ Sent AI response`);
+              console.log(`[Voice] ✅ Sent AI audio response`);
+            } else if (!responsePayload) {
+              console.log(`[Voice] ⚠️ No audio — STT empty or TTS failed`);
             }
           } catch (err) {
             console.error("[Voice] Processing error:", err);
@@ -727,10 +742,21 @@ async function startServer() {
 
             if (message.event === "start") {
               streamSid = message.start.streamSid;
-              console.log(`[Voice] Stream started: ${streamSid}`);
-              if (sessionId && !voiceSessionManager.getSession(sessionId)) {
-                voiceSessionManager.createSession(leadId ? parseInt(leadId) : 0, "default", sessionId);
+              // Read sessionId/leadId from SignalWire Parameter tags OR URL query
+              const customParams = message.start.customParameters || {};
+              const resolvedSessionId = customParams.sessionId || sessionId || streamSid;
+              const resolvedLeadId = customParams.leadId || leadId;
+              console.log(`[Voice] Stream started: ${streamSid} | session: ${resolvedSessionId}`);
+              if (resolvedSessionId && !voiceSessionManager.getSession(resolvedSessionId)) {
+                voiceSessionManager.createSession(
+                  resolvedLeadId ? parseInt(resolvedLeadId) : 0,
+                  "default",
+                  resolvedSessionId
+                );
               }
+              // Store resolved IDs for use in media handler
+              (ws as any)._sessionId = resolvedSessionId;
+              (ws as any)._leadId = resolvedLeadId;
               return;
             }
 
