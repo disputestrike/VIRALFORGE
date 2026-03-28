@@ -735,6 +735,10 @@ async function startServer() {
             }
 
             if (message.event === "media") {
+              // Only process inbound audio (caller's voice)
+              // Ignore outbound track (our AI audio playing back)
+              if (message.media.track === "outbound") return;
+
               const audioBuffer = Buffer.from(message.media.payload, "base64");
               audioChunks.push(audioBuffer);
 
