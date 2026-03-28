@@ -708,22 +708,23 @@ async function startServer() {
               const audioBuffer = Buffer.from(audioPayload, "base64");
               audioChunks.push(audioBuffer);
 
-              // Accumulate ~1 second of audio
-              // SignalWire sends mulaw 8000Hz = 8000 bytes/sec
+              // Accumulate ~2 seconds of audio before processing
+              // SignalWire sends mulaw 8000Hz = ~160 bytes per 20ms packet
               const totalLength = audioChunks.reduce((sum, chunk) => sum + chunk.length, 0);
-              if (totalLength > 8000) {
+              console.log(`[Voice] Audio chunks: ${audioChunks.length}, total: ${totalLength} bytes`);
+
+              if (totalLength > 3200) { // ~400ms of audio
                 const completeAudio = Buffer.concat(audioChunks);
                 audioChunks.length = 0;
+                console.log(`[Voice] Processing ${completeAudio.length} bytes of audio`);
 
-                // Ensure session exists — create if missing
-                let sess = voiceSessionManager.getSession(sessionId || "");
-                if (!sess && sessionId) {
+                // Ensure session exists
+                if (sessionId && !voiceSessionManager.getSession(sessionId)) {
                   voiceSessionManager.createSession(
                     leadId ? parseInt(leadId) : 0,
                     "default",
                     sessionId
                   );
-                  sess = voiceSessionManager.getSession(sessionId);
                 }
 
                 // Process: STT → Claude → TTS
@@ -734,6 +735,10 @@ async function startServer() {
                   );
 
                   const responsePayload = (audioResult as any)?.audioPayload || "";
+                  const responseText = (audioResult as any)?.response || "";
+
+                  console.log(`[Voice] STT result: "${(audioResult as any)?.text || "empty"}"`);
+                  console.log(`[Voice] AI response: "${responseText}"`);
 
                   if (responsePayload && streamSid) {
                     ws.send(JSON.stringify({
@@ -741,7 +746,9 @@ async function startServer() {
                       streamSid: streamSid,
                       media: { payload: responsePayload },
                     }));
-                    console.log(`[Voice] ✅ Sent AI audio response`);
+                    console.log(`[Voice] ✅ Sent AI audio response (${responsePayload.length} chars)`);
+                  } else {
+                    console.log(`[Voice] ⚠️ No audio payload — text was empty or TTS failed`);
                   }
                 } catch (error) {
                   console.error("[Voice] Error processing audio:", error);
