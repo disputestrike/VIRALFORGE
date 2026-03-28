@@ -423,23 +423,14 @@ async function startServer() {
     }
 
     res.type("text/xml");
-    // SignalWire does NOT support Twilio <Connect><Stream> media streaming
-    // Use Record verb to capture speech, then process with AI via webhook loop
+    // SignalWire supports <Connect><Stream> — confirmed working in production
     const sid = sessionId || req.body.CallSid || `session_${Date.now()}`;
-    const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
-      ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-      : "https://apexai-production-d567.up.railway.app";
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="woman">Hello! Thank you for calling ApexAI. How can I help you today?</Say>
-  <Record
-    action="${baseUrl}/api/voice/process-recording?sessionId=${sid}&leadId=${leadId}"
-    method="POST"
-    maxLength="30"
-    timeout="5"
-    playBeep="false"
-    transcribe="true"
-    transcribeCallback="${baseUrl}/api/voice/transcription?sessionId=${sid}" />
+  <Say>Please wait while we connect you to our AI agent.</Say>
+  <Connect>
+    <Stream url="wss://${req.get("host")}/api/voice-stream?sessionId=${sid}&leadId=${leadId}" />
+  </Connect>
 </Response>`);
   });
 
@@ -707,44 +698,45 @@ async function startServer() {
 
             // Handle media (audio) packets
             if (message.event === "media") {
-              const audioPayload = message.media.payload; // Base64
+              const audioPayload = message.media.payload; // Base64 mulaw
               const audioBuffer = Buffer.from(audioPayload, "base64");
               audioChunks.push(audioBuffer);
 
-              // Process when we have enough audio (accumulate 1-2 seconds)
+              // Accumulate ~1 second of audio
+              // SignalWire sends mulaw 8000Hz = 8000 bytes/sec
               const totalLength = audioChunks.reduce((sum, chunk) => sum + chunk.length, 0);
-              if (totalLength > 16000) {
-                // ~1 second at 16kHz
+              if (totalLength > 8000) {
                 const completeAudio = Buffer.concat(audioChunks);
-                audioChunks.length = 0; // Clear for next batch
+                audioChunks.length = 0;
 
-                // Get session
-                const session = voiceSessionManager.getSession(sessionId || "");
-                if (!session) {
-                  console.error(`[Voice] Session not found: ${sessionId}`);
-                  return;
+                // Ensure session exists — create if missing
+                let sess = voiceSessionManager.getSession(sessionId || "");
+                if (!sess && sessionId) {
+                  voiceSessionManager.createSession(
+                    leadId ? parseInt(leadId) : 0,
+                    "default",
+                    sessionId
+                  );
+                  sess = voiceSessionManager.getSession(sessionId);
                 }
 
-                // Process audio: STT → Claude → TTS
+                // Process: STT → Claude → TTS
                 try {
                   const audioResult = await voiceProcessingService.processAudioMessage(
                     sessionId || "",
                     completeAudio
                   );
-                  
+
                   const responsePayload = (audioResult as any)?.audioPayload || "";
 
-                  ws.send(
-                    JSON.stringify({
+                  if (responsePayload && streamSid) {
+                    ws.send(JSON.stringify({
                       event: "media",
-                      streamSid: message.streamSid,
-                      media: {
-                        payload: responsePayload,
-                      },
-                    })
-                  );
-
-                  console.log(`[Voice] Sent response audio`);
+                      streamSid: streamSid,
+                      media: { payload: responsePayload },
+                    }));
+                    console.log(`[Voice] ✅ Sent AI audio response`);
+                  }
                 } catch (error) {
                   console.error("[Voice] Error processing audio:", error);
                 }
