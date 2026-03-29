@@ -712,12 +712,11 @@ async function startServer() {
         const processAudio = async () => {
           if (isProcessing || audioChunks.length === 0) return;
           if (isSpeaking) {
-            // AI is still speaking — clear buffer, don't process yet
-            // This prevents AI from responding to its own audio echo
-            audioChunks.length = 0;
+            // AI still speaking — skip processing but KEEP the buffer
+            // Caller may be speaking — we'll process it when AI finishes
             return;
           }
-          // Debounce — don't respond faster than 2 seconds
+          // Debounce — don't respond faster than 1 second after AI finishes
           if (Date.now() - lastResponseTime < 1000) return;
 
           const totalLength = audioChunks.reduce((sum, c) => sum + c.length, 0);
@@ -895,7 +894,17 @@ async function startServer() {
             if (message.event === "mark") {
               console.log(`[Voice] Playback complete: ${message.mark?.name}`);
               isSpeaking = false; // Now safe to listen and respond
-              audioChunks.length = 0; // Clear any audio captured during playback
+              // Don't clear buffer — caller may have spoken during AI playback
+              // If they did, process it now
+              if (audioChunks.length > 0) {
+                const total = audioChunks.reduce((s, c) => s + c.length, 0);
+                if (total > 4800) {
+                  console.log(`[Voice] Processing buffered caller speech (${total} bytes)`);
+                  processAudio();
+                } else {
+                  audioChunks.length = 0; // too short, just noise
+                }
+              }
             }
 
             // Handle call stop
