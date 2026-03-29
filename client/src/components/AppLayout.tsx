@@ -60,7 +60,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [collapsed, setCollapsed] = useState(() => {
     return localStorage.getItem("sidebar-collapsed") === "true";
   });
-  const [tooltip, setTooltip] = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem("sidebar-collapsed", String(collapsed));
@@ -142,11 +141,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
           {navItems.map(({ href, label, icon: Icon }) => {
             const isActive = location === href || (href !== "/dashboard" && location.startsWith(href));
             return (
-              <div key={href} className="relative">
+              <div key={href} className="relative group">
                 <Link href={href}>
                   <div
-                    onMouseEnter={() => collapsed && setTooltip(label)}
-                    onMouseLeave={() => setTooltip(null)}
                     className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors text-sm font-medium
                       ${isActive
                         ? "bg-primary/10 text-primary"
@@ -160,10 +157,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
                     {!collapsed && isActive && <ChevronRight className="w-3 h-3 ml-auto opacity-40 flex-shrink-0" />}
                   </div>
                 </Link>
-                {/* Tooltip on hover when collapsed */}
-                {collapsed && tooltip === label && (
-                  <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded shadow-md border border-border whitespace-nowrap z-50 pointer-events-none">
+                {/* CSS tooltip — shows on group hover when collapsed */}
+                {collapsed && (
+                  <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-popover text-popover-foreground text-xs rounded-md shadow-lg border border-border whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                     {label}
+                    <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-border" />
                   </div>
                 )}
               </div>
@@ -180,11 +178,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
               {adminItems.map(({ href, label, icon: Icon }) => {
                 const isActive = location === href;
                 return (
-                  <div key={href} className="relative">
+                  <div key={href} className="relative group">
                     <Link href={href}>
                       <div
-                        onMouseEnter={() => collapsed && setTooltip(label)}
-                        onMouseLeave={() => setTooltip(null)}
                         className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors text-sm font-medium
                           ${isActive
                             ? "bg-primary/10 text-primary"
@@ -197,8 +193,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
                         {!collapsed && <span className="truncate">{label}</span>}
                       </div>
                     </Link>
-                    {collapsed && tooltip === label && (
-                      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded shadow-md border border-border whitespace-nowrap z-50 pointer-events-none">
+                    {collapsed && (
+                      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-popover text-popover-foreground text-xs rounded-md shadow-lg border border-border whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                         {label}
                       </div>
                     )}

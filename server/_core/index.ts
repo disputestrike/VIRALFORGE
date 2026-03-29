@@ -659,6 +659,45 @@ async function startServer() {
     `);
   });
 
+  // ─── SMS INBOUND WEBHOOK ──────────────────────────────────────────────────
+  app.post("/api/sms/inbound", validateTwilioSignature, async (req, res) => {
+    const { From, To, Body, MessageSid } = req.body;
+    console.log(`[SMS] Inbound from ${From}: "${Body}"`);
+
+    try {
+      // Store message in DB
+      const db = await import("../db");
+      let lead = await db.getLeadByPhone(From);
+      if (!lead) {
+        lead = await db.createLead({
+          firstName: "SMS",
+          lastName: From.slice(-4),
+          phone: From,
+          source: "inbound_sms",
+          status: "new",
+          score: 50,
+          segment: "warm",
+        }) as any;
+      }
+
+      // Save message
+      await db.createMessage({
+        leadId: (lead as any).id,
+        channel: "sms",
+        direction: "inbound",
+        body: Body,
+        status: "delivered",
+      });
+
+      console.log(`[SMS] Saved inbound message from lead ${(lead as any).id}`);
+    } catch (e) {
+      console.error("[SMS] Failed to save inbound message:", e);
+    }
+
+    // Acknowledge — no reply TwiML needed
+    res.status(200).send("OK");
+  });
+
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
 
