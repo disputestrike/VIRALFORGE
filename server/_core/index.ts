@@ -427,17 +427,21 @@ async function startServer() {
     // <Start> is async — continues to <Say> while streaming
     const sid = sessionId || req.body.CallSid || `session_${Date.now()}`;
     // Encode & as &amp; — required for valid XML
-    const streamUrl = `wss://${req.get("host")}/api/voice-stream`;
+    // Use explicit Railway public domain for WebSocket URL
+    // Use <Connect><Stream> for BIDIRECTIONAL audio (confirmed working in SignalWire docs)
+    // <Start><Stream> is unidirectional only - cannot send audio back to caller
+    // <Connect><Stream> blocks and enables full duplex bidirectional streaming
+    const wsHost = process.env.RAILWAY_PUBLIC_DOMAIN || req.get("host");
+    const streamUrl = `wss://${wsHost}/api/voice-stream`;
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Start>
-    <Stream url="${streamUrl}" track="both">
+  <Say>Hello, thank you for calling ApexAI. How can I help you today?</Say>
+  <Connect>
+    <Stream url="${streamUrl}">
       <Parameter name="sessionId" value="${sid}" />
       <Parameter name="leadId" value="${leadId}" />
     </Stream>
-  </Start>
-  <Say>Hello, thank you for calling ApexAI. How can I help you today?</Say>
-  <Pause length="120" />
+  </Connect>
 </Response>`);
   });
 
