@@ -7,24 +7,27 @@ import fs from "fs";
 import path from "path";
 
 export function serveStatic(app: Express) {
-  // In production Docker, dist/public is at the same level as dist/index.js
-  // __dirname for ESM is import.meta.dirname
   const distPath = path.resolve(import.meta.dirname, "public");
 
   if (!fs.existsSync(distPath)) {
-    console.error(
-      `Could not find the build directory: ${distPath}, make sure to build the client first`
-    );
+    console.error(`Could not find build directory: ${distPath}`);
   }
 
   app.use(express.static(distPath));
 
-  // Fall through to index.html for client-side routing
-  // IMPORTANT: Exclude /api/* routes so WebSocket upgrades work correctly
-  app.use("*", (req, res) => {
-    if (req.originalUrl.startsWith("/api/") || req.originalUrl.startsWith("/webhooks/")) {
-      res.status(404).json({ error: "Not found" });
-      return;
+  // Return 426 for WebSocket endpoint hit via plain HTTP
+  // This prevents Railway CDN / any proxy from serving HTML there
+  app.get("/api/voice-stream", (req, res) => {
+    console.log("[VOICE-STREAM-HTTP] Plain HTTP hit on voice-stream — returning 426", {
+      headers: req.headers,
+    });
+    res.status(426).set("Upgrade", "websocket").send("Upgrade Required");
+  });
+
+  // SPA fallback — NEVER catch /api/ or /webhooks/ routes
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api/") || req.path.startsWith("/webhooks/")) {
+      return next();
     }
     res.sendFile(path.resolve(distPath, "index.html"));
   });

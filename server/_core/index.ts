@@ -676,15 +676,30 @@ async function startServer() {
   const wss = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", async (request, socket, head) => {
+    // Log EVERY upgrade attempt — critical for diagnosing WebSocket issues
+    console.log("[WS-UPGRADE] incoming", {
+      url: request.url,
+      host: request.headers.host,
+      upgrade: request.headers.upgrade,
+      connection: request.headers.connection,
+      userAgent: request.headers["user-agent"],
+    });
+
+    if (!request.url?.startsWith("/api/voice-stream")) {
+      console.log("[WS-UPGRADE] no match for", request.url, "— destroying socket");
+      socket.destroy();
+      return;
+    }
+
     if (request.url?.startsWith("/api/voice-stream")) {
+      console.log("[WS-UPGRADE] voice-stream matched — handling upgrade");
       const url = new URL(request.url, `http://${request.headers.host}`);
       const sessionId = url.searchParams.get("sessionId");
       const leadId = url.searchParams.get("leadId");
       const isInbound = url.searchParams.get("inbound") === "true";
 
-      console.log(`[Voice] WebSocket upgrade: ${sessionId} (inbound: ${isInbound})`);
-
       wss.handleUpgrade(request, socket, head, (ws) => {
+        console.log("[WS-UPGRADE] handleUpgrade success — WebSocket connected", { sessionId });
         console.log(`[Voice] WebSocket connected: ${sessionId}`);
 
         let streamSid: string | null = null;
@@ -747,27 +762,52 @@ async function startServer() {
 
             if (message.event === "start") {
               streamSid = message.start.streamSid;
-              // Read sessionId/leadId from SignalWire Parameter tags OR URL query
               const customParams = message.start.customParameters || {};
               const resolvedSessionId = customParams.sessionId || sessionId || streamSid;
               const resolvedLeadId = customParams.leadId || leadId;
-              console.log(`[Voice] Stream started: ${streamSid} | session: ${resolvedSessionId}`);
-              if (resolvedSessionId && !voiceSessionManager.getSession(resolvedSessionId)) {
+
+              // Detailed start event logging per reviewer recommendations
+              console.log("[VOICE-WS] start event received", {
+                streamSid,
+                callSid: message.start?.callSid,
+                customParameters: customParams,
+                resolvedSessionId,
+                resolvedLeadId,
+              });
+
+              if (!resolvedSessionId) {
+                console.error("[VOICE-WS] CRITICAL: missing sessionId in start event — closing");
+                ws.close();
+                return;
+              }
+
+              if (!voiceSessionManager.getSession(resolvedSessionId)) {
                 voiceSessionManager.createSession(
                   resolvedLeadId ? parseInt(resolvedLeadId) : 0,
                   "default",
                   resolvedSessionId
                 );
               }
-              // Store resolved IDs for use in media handler
               (ws as any)._sessionId = resolvedSessionId;
               (ws as any)._leadId = resolvedLeadId;
+              console.log(`[Voice] Stream started: ${streamSid} | session: ${resolvedSessionId}`);
               return;
             }
 
             if (message.event === "media") {
+              // Log first media packet for diagnostics
+              if (audioChunks.length === 0) {
+                const payloadBytes = message.media?.payload
+                  ? Buffer.from(message.media.payload, "base64").length : 0;
+                console.log("[VOICE-WS] first media packet", {
+                  track: message.media?.track,
+                  chunk: message.media?.chunk,
+                  timestamp: message.media?.timestamp,
+                  payloadBytes,
+                });
+              }
+
               // Only process inbound audio (caller's voice)
-              // Ignore outbound track (our AI audio playing back)
               if (message.media.track === "outbound") return;
 
               const audioBuffer = Buffer.from(message.media.payload, "base64");
@@ -796,12 +836,16 @@ async function startServer() {
         });
 
         ws.on("error", (error) => {
-          console.error("[Voice] WebSocket error:", error);
+          console.error("[VOICE-WS] error", error);
         });
 
-        ws.on("close", () => {
-          console.log(`[Voice] WebSocket closed: ${sessionId}`);
-          voiceSessionManager.endSession(sessionId || "");
+        ws.on("close", (code, reason) => {
+          console.log("[VOICE-WS] closed", {
+            code,
+            reason: reason?.toString(),
+            sessionId: (ws as any)._sessionId || sessionId,
+          });
+          voiceSessionManager.endSession((ws as any)._sessionId || sessionId || "");
         });
       });
     } else {
