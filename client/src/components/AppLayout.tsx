@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { useState, useEffect } from "react";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -55,6 +56,7 @@ interface AppLayoutProps {
 export default function AppLayout({ children }: AppLayoutProps) {
   const { user, loading, isAuthenticated, logout } = useAuth();
   const [location] = useLocation();
+  const { theme, toggleTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(() => {
     return localStorage.getItem("sidebar-collapsed") === "true";
   });
@@ -258,6 +260,27 @@ export default function AppLayout({ children }: AppLayoutProps) {
         style={{ marginLeft: sidebarWidth }}
         className="flex-1 min-h-screen overflow-auto transition-all duration-200"
       >
+        {/* Top bar with theme toggle */}
+        <div className="h-12 border-b border-border flex items-center justify-end px-4 bg-background sticky top-0 z-30">
+          <div className="flex items-center gap-2">
+            {/* Sun icon */}
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
+              <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+            </svg>
+            {/* Toggle */}
+            <button
+              onClick={toggleTheme}
+              className={`relative w-10 h-5 rounded-full transition-colors duration-200 focus:outline-none ${theme === "dark" ? "bg-primary" : "bg-muted-foreground/30"}`}
+              aria-label="Toggle theme"
+            >
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${theme === "dark" ? "translate-x-5" : "translate-x-0"}`} />
+            </button>
+            {/* Moon icon */}
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
+              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+            </svg>
+          </div>
+        </div>
         {children}
       </main>
       <AIAgent />
