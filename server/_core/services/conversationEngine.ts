@@ -1,9 +1,23 @@
 /**
- * CONVERSATION ENGINE — Real AI conversation using LLM
- * Uses the existing invokeLLM infrastructure
+ * UNIVERSAL CONVERSATION ENGINE
+ * State-driven, industry-agnostic voice agent
+ * Uses CallState + IndustryPack + ClientConfig for all decisions
  */
 
 import { invokeLLM } from "../llm";
+import {
+  CallState,
+  IndustryPack,
+  ClientConfig,
+  ResponseMode,
+  UtteranceIntent,
+  INDUSTRY_PACKS,
+  determineResponseMode,
+  setActiveQuestion,
+  resolveActiveQuestion,
+  canOfferBooking,
+  addTurn,
+} from "./callStateManager";
 
 export type ConversationAction =
   | "transfer"
@@ -13,148 +27,260 @@ export type ConversationAction =
   | "propose_times"
   | undefined;
 
-export interface ConversationContext {
-  leadId: number;
-  leadName?: string;
-  company?: string;
-  industry?: string;
-  campaignGoal?: string;
-  conversationHistory: Array<{ role: "user" | "assistant"; content: string }>;
-  userText: string;
-}
-
 export interface ConversationResult {
   response: string;
   action: ConversationAction;
   confidence: number;
+  updatedState: CallState;
 }
 
-const SYSTEM_PROMPT = `You are a solar energy advisor for ApexAI. Your job is to help callers learn about solar and schedule a free consultation.
+// ── Intent classifier ─────────────────────────────────────────────────────────
 
-CRITICAL RULES:
-- Maximum 1-2 SHORT sentences per response. Phone calls only.
-- DIRECTLY answer what the caller just said. Never ignore their words.
-- Never repeat yourself. Never say the same thing twice.
-- Stay on topic: solar energy, savings, installation, consultations.
-- If asked about pricing: "Solar systems typically save homeowners $100-200/month. We'd love to give you a free personalized quote."
-- If interested: guide them to book a free 15-minute consultation
-- If not interested: thank them warmly and end the call
+async function classifyIntent(utterance: string, industry: string): Promise<{
+  intent: UtteranceIntent;
+  isQuestion: boolean;
+  sentiment: "positive" | "neutral" | "frustrated" | "confused";
+}> {
+  // Fast local classification — no API call needed for common patterns
+  const u = utterance.toLowerCase();
 
-You MUST respond with ONLY valid JSON, no markdown, no backticks:
-{"response":"your spoken response","action":"follow_up|book_appointment|propose_times|transfer|end_call","confidence":0.9}`;
+  if (u.match(/transfer|human|person|agent|representative|speak.*(someone|one)/)) {
+    return { intent: "human_handoff_request", isQuestion: false, sentiment: "neutral" };
+  }
+  if (u.match(/not interested|no thanks|stop|remove|don't call|busy/)) {
+    return { intent: "booking_resistance", isQuestion: false, sentiment: "neutral" };
+  }
+  if (u.match(/zip|area|city|state|serve|cover|available|location/)) {
+    return { intent: "availability_check", isQuestion: true, sentiment: "neutral" };
+  }
+  if (u.match(/cost|price|how much|afford|expensive|cheap/)) {
+    return { intent: "pricing_question", isQuestion: true, sentiment: "neutral" };
+  }
+  if (u.match(/discount|deal|promo|incentive|rebate|credit|save|offer/)) {
+    return { intent: "discount_question", isQuestion: true, sentiment: "neutral" };
+  }
+  if (u.match(/how does|what is|tell me|explain|work|learn|info|more about/)) {
+    return { intent: "product_question", isQuestion: true, sentiment: "neutral" };
+  }
+  if (u.match(/yes|sure|ok|interested|sounds good|book|schedule|appointment|meet/)) {
+    return { intent: "booking_interest", isQuestion: false, sentiment: "positive" };
+  }
+  if (u.match(/frustrated|terrible|awful|horrible|useless|stop/)) {
+    return { intent: "unclear", isQuestion: false, sentiment: "frustrated" };
+  }
 
-export async function conductConversation(context: ConversationContext): Promise<ConversationResult> {
+  return { intent: "unclear", isQuestion: false, sentiment: "neutral" };
+}
+
+// ── Main response generator ───────────────────────────────────────────────────
+
+export async function generateResponse(
+  userText: string,
+  state: CallState,
+  clientConfig?: Partial<ClientConfig>
+): Promise<ConversationResult> {
+
+  const pack = INDUSTRY_PACKS[state.industry] || INDUSTRY_PACKS.general;
+  const businessName = clientConfig?.businessName || "ApexAI";
+  const agentName = clientConfig?.agentName || "Aria";
+
+  // 1. Classify intent
+  const classification = await classifyIntent(userText, state.industry);
+
+  // 2. Update state with user turn
+  let updatedState = addTurn(state, "user", userText);
+  updatedState = {
+    ...updatedState,
+    callerSentiment: classification.sentiment,
+  };
+
+  // 3. Set active question if new question detected
+  if (classification.isQuestion && updatedState.activeQuestionResolved) {
+    updatedState = setActiveQuestion(updatedState, userText, classification.intent);
+  }
+
+  // 4. Determine response mode — UNIVERSAL POLICY
+  const responseMode = determineResponseMode(updatedState, classification.intent, userText);
+  updatedState = { ...updatedState, responseMode };
+
+  // 5. Build structured prompt
+  const forbiddenActions: string[] = [];
+  if (!canOfferBooking(updatedState)) {
+    forbiddenActions.push("offer_booking_times", "propose_appointment_slots");
+  }
+  if (updatedState.stage === "greeting") {
+    forbiddenActions.push("ask_for_qualification_info");
+  }
+
+  const systemPrompt = buildSystemPrompt(pack, clientConfig, responseMode, updatedState, forbiddenActions, agentName, businessName);
+
+  // 6. Build minimal context (last 4 turns only — keep LLM fast)
+  const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+    { role: "system", content: systemPrompt },
+    ...updatedState.recentTurns.slice(-4).map(t => ({
+      role: t.role as "user" | "assistant",
+      content: t.content,
+    })),
+  ];
+
+  // 7. Generate response
+  let response = "Let me connect you with a team member who can help.";
+  let action: ConversationAction = "follow_up";
+
   try {
-    const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-      { role: "system", content: SYSTEM_PROMPT + `\n\nLead info: ${context.leadName || "Unknown"}, Company: ${context.company || "Unknown"}, Industry: ${context.industry || "Unknown"}. Campaign goal: ${context.campaignGoal || "book appointment"}.` },
-    ];
+    const result = await invokeLLM({ messages });
+    const content = result.choices[0]?.message?.content || "";
+    const clean = content.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+    const parsed = JSON.parse(clean);
+    response = parsed.response || response;
+    action = parsed.action || action;
 
-    // Add conversation history
-    for (const turn of context.conversationHistory) {
-      messages.push({ role: turn.role === "user" ? "user" : "assistant", content: turn.content });
+    // 8. Resolve active question if we gave an answer
+    if (responseMode === "answer" && !updatedState.activeQuestionResolved) {
+      updatedState = resolveActiveQuestion(updatedState);
     }
 
-    // Add current user message
-    messages.push({ role: "user", content: context.userText });
+    // 9. Allow booking after first successful answer + interest
+    if (action === "book_appointment" || action === "propose_times") {
+      updatedState = { ...updatedState, bookingAllowed: true };
+    }
 
-    const result = await invokeLLM({
-      messages,
-      // json_object response format handled via prompt instruction
-    });
+    // 10. Advance stage
+    if (updatedState.stage === "greeting") {
+      updatedState = { ...updatedState, stage: "intent_discovery" };
+    } else if (updatedState.stage === "question_answering" && updatedState.activeQuestionResolved) {
+      updatedState = { ...updatedState, stage: "qualification" };
+    }
 
-    const content = result.choices[0]?.message?.content;
-    if (!content) throw new Error("Empty LLM response");
-
-    // Parse JSON response — strip markdown fences Claude sometimes adds
-    const cleanContent = typeof content === "string"
-      ? content.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim()
-      : content;
-    const parsed = typeof cleanContent === "string" ? JSON.parse(cleanContent) : cleanContent;
-
-    return {
-      response: parsed.response || "How can I help you today?",
-      action: (parsed.action as ConversationAction) || "follow_up",
-      confidence: parsed.confidence ?? 0.7,
-    };
-  } catch (error) {
-    console.error("[ConversationEngine] LLM error:", error);
-    // Graceful fallback
-    return {
-      response: "I apologize, let me connect you with one of our team members.",
-      action: "transfer",
-      confidence: 0.5,
-    };
+  } catch (err) {
+    console.error("[ConversationEngine] LLM error:", err);
+    updatedState = { ...updatedState, fallbackCount: updatedState.fallbackCount + 1 };
+    response = "I apologize, could you repeat that?";
+    action = "follow_up";
   }
+
+  // 11. Add assistant turn to history
+  updatedState = addTurn(updatedState, "assistant", response);
+
+  return { response, action, confidence: 0.85, updatedState };
 }
 
-export async function generateConversationResponse(context: {
+// ── Backward compat wrapper ───────────────────────────────────────────────────
+
+export interface LegacyConversationContext {
   history: Array<{ role: "user" | "assistant"; content: string }>;
   text: string;
   leadName?: string;
   industry?: string;
-}): Promise<ConversationResult> {
-  return conductConversation({
-    leadId: 0,
-    leadName: context.leadName,
-    industry: context.industry,
-    conversationHistory: context.history,
-    userText: context.text,
-  });
+  campaignGoal?: string;
+}
+
+export async function generateConversationResponse(
+  context: LegacyConversationContext
+): Promise<{ response: string; action: ConversationAction; confidence: number }> {
+  // Create a temporary state for backward compat callers
+  const tempState: CallState = {
+    callId: `temp_${Date.now()}`,
+    leadId: null,
+    industry: context.industry || "solar",
+    stage: context.history.length === 0 ? "greeting" : "question_answering",
+    responseMode: "answer",
+    assistantSpeaking: false,
+    processing: false,
+    activeQuestion: null,
+    activeIntent: null,
+    activeQuestionResolved: true,
+    bookingAllowed: context.history.length > 2,
+    handoffAllowed: true,
+    userFacts: {},
+    answeredQuestions: [],
+    unresolvedQuestions: [],
+    fallbackCount: 0,
+    interruptCount: 0,
+    callerSentiment: "neutral",
+    recentTurns: context.history.slice(-6),
+    lastUserUtterance: context.text,
+    lastAssistantUtterance: null,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  const result = await generateResponse(context.text, tempState);
+  return { response: result.response, action: result.action, confidence: result.confidence };
 }
 
 export async function proposeAppointmentTimes(leadId: number): Promise<{
-  times: Array<{ time: Date; label: string; available: boolean }>;
+  times: Array<{ time: Date; label: string }>;
 }> {
   const now = new Date();
-  const slots = [];
-
-  // Generate next 5 available business slots
-  for (let day = 1; day <= 5; day++) {
-    const date = new Date(now);
-    date.setDate(date.getDate() + day);
-    // Skip weekends
-    if (date.getDay() === 0 || date.getDay() === 6) continue;
-
-    for (const hour of [9, 11, 14]) {
-      date.setHours(hour, 0, 0, 0);
-      slots.push({
-        time: new Date(date),
-        label: date.toLocaleString("en-US", {
-          weekday: "long",
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-          hour12: true,
-        }),
-        available: true,
-      });
-      if (slots.length >= 3) break;
-    }
-    if (slots.length >= 3) break;
-  }
-
-  return { times: slots };
-}
-
-export async function confirmAndBookAppointment(
-  leadId: number,
-  time: Date
-): Promise<{ appointmentId: number; time: Date; status: string }> {
-  const { bookAppointment } = await import("./appointmentService");
-  const result = await bookAppointment({
-    leadId,
-    scheduledTime: time,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York",
-    confirmationMethod: "voice",
+  const times = [0, 2, 5].map(daysAhead => {
+    const d = new Date(now);
+    d.setDate(d.getDate() + daysAhead + 1);
+    d.setHours(9, 0, 0, 0);
+    return {
+      time: d,
+      label: d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }),
+    };
   });
-  console.log(`[ConversationEngine] Appointment booked | leadId: ${leadId} | id: ${result.id} | time: ${time}`);
-  return { appointmentId: result.id, time, status: result.status };
+  return { times };
 }
 
-export default {
-  conductConversation,
-  generateConversationResponse,
-  proposeAppointmentTimes,
-  confirmAndBookAppointment,
-};
+// ── Prompt builder ────────────────────────────────────────────────────────────
+
+function buildSystemPrompt(
+  pack: IndustryPack,
+  clientConfig: Partial<ClientConfig> | undefined,
+  responseMode: ResponseMode,
+  state: CallState,
+  forbiddenActions: string[],
+  agentName: string,
+  businessName: string
+): string {
+  const modeInstructions: Record<string, string> = {
+    answer: "Answer the caller's current question directly and concisely. Stay on their question.",
+    clarify: "Ask ONE short clarifying question to understand what the caller needs.",
+    qualify: "Ask ONE natural qualifying question to gather needed information.",
+    recommend: "Briefly explain the value and suggest a next step without pushing too hard.",
+    book: "Offer to schedule a free consultation. Be warm and low-pressure.",
+    handoff: "Acknowledge the caller, let them know you'll connect them with a specialist.",
+    fallback: "Acknowledge you didn't fully catch that and ask them to repeat.",
+  };
+
+  const faqContext = Object.entries({
+    ...pack.faqAnswers,
+    ...(clientConfig?.customFAQ || {}),
+  }).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n");
+
+  return `You are ${agentName}, a voice AI assistant for ${businessName}.
+${pack.systemContext}
+
+CURRENT CALL STATE:
+- Stage: ${state.stage}
+- Response mode: ${responseMode}
+- Active question: ${state.activeQuestion || "none"}
+- Question resolved: ${state.activeQuestionResolved}
+- Caller sentiment: ${state.callerSentiment}
+- Booking allowed: ${state.bookingAllowed}
+
+YOUR TASK FOR THIS TURN: ${modeInstructions[responseMode] || "Help the caller naturally."}
+
+UNIVERSAL RULES:
+- Max 1-2 SHORT sentences. This is a live phone call.
+- Answer the caller's actual question. Do not ignore what they said.
+- Never repeat yourself or the greeting mid-call.
+- Do not offer booking times unless explicitly allowed.
+- If caller interrupts or seems frustrated, acknowledge and listen.
+- Use natural spoken language — no bullet points, no lists.
+
+${forbiddenActions.length > 0 ? `FORBIDDEN THIS TURN: ${forbiddenActions.join(", ")}` : ""}
+
+${faqContext ? `KNOWLEDGE BASE:\n${faqContext}` : ""}
+
+${clientConfig?.serviceAreas?.length ? `SERVICE AREAS: ${clientConfig.serviceAreas.join(", ")}` : ""}
+${clientConfig?.discounts?.length ? `CURRENT OFFERS: ${clientConfig.discounts.join(", ")}` : ""}
+
+Respond ONLY with valid JSON (no markdown, no backticks):
+{"response":"spoken response here","action":"follow_up|book_appointment|propose_times|transfer|end_call","confidence":0.9}`;
+}
+
+export default { generateConversationResponse, generateResponse, proposeAppointmentTimes };

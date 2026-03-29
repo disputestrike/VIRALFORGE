@@ -45,23 +45,27 @@ export async function processAudioMessage(
     voiceSessionManager.addMessage(sessionId, "user", userText);
   }
 
-  // ── Step 3: LLM (Generate Response) ──────────────────────────────────────
+  // ── Step 3: LLM (Generate Response via Universal Engine) ────────────────
   let aiResponse = "How can I help you today?";
   let action: string = "follow_up";
 
   try {
-    const lead = session?.leadId ? await db.getLeadById(session.leadId) : null;
-    const result = await conversationEngine.generateConversationResponse({
-      history: session?.conversationHistory.slice(-6) ?? [], // Last 6 turns for context
-      text: userText,
-      leadName: lead ? `${lead.firstName} ${lead.lastName}` : undefined,
-      industry: lead?.industry ?? undefined,
-    });
+    const { getCallState, createCallState, updateCallState, generateResponse } = await Promise.all([
+      import("./callStateManager"),
+      import("./conversationEngine"),
+    ]).then(([csm, ce]) => ({ ...csm, generateResponse: ce.generateResponse }));
 
+    // Get or create universal call state
+    let callState = getCallState(sessionId) || createCallState(sessionId, session?.leadId ?? null, "solar");
+
+    const result = await generateResponse(userText, callState);
     aiResponse = result.response;
     action = result.action ?? "follow_up";
 
-    console.log(`[VoiceProcessing] LLM: "${aiResponse}" (action: ${action})`);
+    // Persist updated state
+    updateCallState(sessionId, result.updatedState);
+
+    console.log(`[VoiceProcessing] LLM: "${aiResponse}" (action: ${action}, stage: ${result.updatedState.stage}, mode: ${result.updatedState.responseMode})`);
   } catch (llmError) {
     console.error("[VoiceProcessing] LLM failed:", llmError);
     aiResponse = "Let me transfer you to one of our team members. Please hold.";
