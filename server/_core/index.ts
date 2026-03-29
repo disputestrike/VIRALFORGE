@@ -761,12 +761,21 @@ async function startServer() {
                 streamSid: streamSid,
                 media: { payload: responsePayload },
               }));
-              // Estimate speaking duration from audio size, then mark done
-              // Cartesia mulaw audio: base64 length → bytes → duration at 8000 bytes/sec
+              // Send mark — SignalWire sends back "mark" event when audio finishes playing
+              // This is the CORRECT way to know when AI finished speaking
+              const markName = `done_${Date.now()}`;
+              ws.send(JSON.stringify({ event: "mark", streamSid, mark: { name: markName } }));
+              // Safety fallback timer in case mark event doesn't arrive
               const audioBytes = Math.ceil(responsePayload.length * 3 / 4);
-              const speakDurationMs = Math.ceil(audioBytes / 8000) * 1000 + 800;
-              setTimeout(() => { isSpeaking = false; }, speakDurationMs);
-              console.log(`[Voice] ✅ Sent AI audio (speaking for ~${speakDurationMs}ms)`);
+              const speakDurationMs = Math.ceil(audioBytes / 8) + 2000; // generous buffer
+              setTimeout(() => {
+                if (isSpeaking) {
+                  isSpeaking = false;
+                  audioChunks.length = 0;
+                  console.log(`[Voice] Speaking fallback timeout fired`);
+                }
+              }, speakDurationMs);
+              console.log(`[Voice] ✅ Sent AI audio (~${Math.ceil(audioBytes/8000)}s speech)`);
             } else if (!responsePayload) {
               console.log(`[Voice] ⚠️ No audio — STT empty or TTS failed`);
             }
@@ -827,8 +836,9 @@ async function startServer() {
                   media: { payload: greetPayload },
                 }));
                 const greetAudioBytes = Math.ceil(greetPayload.length * 3 / 4);
-                const greetDuration = Math.ceil(greetAudioBytes / 8000) * 1000 + 800;
-                setTimeout(() => { isSpeaking = false; }, greetDuration);
+                const greetDuration = Math.ceil(greetAudioBytes / 8) + 1500;
+                ws.send(JSON.stringify({ event: "mark", streamSid, mark: { name: `greet_${Date.now()}` } }));
+                setTimeout(() => { if (isSpeaking) { isSpeaking = false; } }, greetDuration);
                 console.log("[Voice] ✅ Sent greeting audio");
               } catch (e) {
                 console.error("[Voice] Greeting error:", e);
@@ -879,6 +889,13 @@ async function startServer() {
                 if (silenceTimer) clearTimeout(silenceTimer);
                 await processAudio();
               }
+            }
+
+            // Handle mark event — SignalWire confirms audio playback finished
+            if (message.event === "mark") {
+              console.log(`[Voice] Playback complete: ${message.mark?.name}`);
+              isSpeaking = false; // Now safe to listen and respond
+              audioChunks.length = 0; // Clear any audio captured during playback
             }
 
             // Handle call stop
