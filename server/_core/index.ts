@@ -791,6 +791,22 @@ async function startServer() {
               (ws as any)._sessionId = resolvedSessionId;
               (ws as any)._leadId = resolvedLeadId;
               console.log(`[Voice] Stream started: ${streamSid} | session: ${resolvedSessionId}`);
+
+              // Send AI greeting through the stream
+              try {
+                const { synthesizeSpeech } = await import("./services/ttsService");
+                const greetingAudio = await synthesizeSpeech(
+                  "Hello, thank you for calling ApexAI. How can I help you today?"
+                );
+                ws.send(JSON.stringify({
+                  event: "media",
+                  streamSid,
+                  media: { payload: greetingAudio.toString("base64") },
+                }));
+                console.log("[Voice] ✅ Sent greeting audio");
+              } catch (e) {
+                console.error("[Voice] Greeting error:", e);
+              }
               return;
             }
 
