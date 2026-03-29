@@ -435,13 +435,14 @@ async function startServer() {
     const streamUrl = `wss://${wsHost}/api/voice-stream`;
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say>Hello, thank you for calling ApexAI. How can I help you today?</Say>
-  <Connect>
-    <Stream url="${streamUrl}">
+  <Start>
+    <Stream url="${streamUrl}" track="both">
       <Parameter name="sessionId" value="${sid}" />
       <Parameter name="leadId" value="${leadId}" />
     </Stream>
-  </Connect>
+  </Start>
+  <Say>Hello, thank you for calling ApexAI. How can I help you today?</Say>
+  <Pause length="120" />
 </Response>`);
   });
 
