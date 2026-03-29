@@ -710,7 +710,7 @@ async function startServer() {
         const processAudio = async () => {
           if (isProcessing || audioChunks.length === 0) return;
           const totalLength = audioChunks.reduce((sum, c) => sum + c.length, 0);
-          if (totalLength < 1600) return; // need at least 200ms
+          if (totalLength < 4800) return; // need at least 600ms of audio
 
           isProcessing = true;
           const completeAudio = Buffer.concat(audioChunks);
@@ -741,6 +741,8 @@ async function startServer() {
             console.log(`[Voice] STT: "${sttText}" → AI: "${aiText}"`);
 
             if (responsePayload && streamSid) {
+              // Clear any queued audio before sending response
+              ws.send(JSON.stringify({ event: "clear", streamSid }));
               ws.send(JSON.stringify({
                 event: "media",
                 streamSid: streamSid,
@@ -831,7 +833,7 @@ async function startServer() {
 
               // Reset silence timer — process after 800ms of no new audio
               if (silenceTimer) clearTimeout(silenceTimer);
-              silenceTimer = setTimeout(processAudio, 500); // 500ms silence = end of speech
+              silenceTimer = setTimeout(processAudio, 1200); // 1200ms silence = end of speech
 
               // Also process if we have 3+ seconds of audio
               const totalLength = audioChunks.reduce((sum, c) => sum + c.length, 0);
