@@ -40,7 +40,7 @@ const DEFAULT_VOICES = {
 
 // ── Provider detection ─────────────────────────────────────────────────────
 function getProvider(): "elevenlabs" | "cartesia" {
-  const env = (process.env.TTS_PROVIDER || "elevenlabs").toLowerCase();
+  const env = (process.env.TTS_PROVIDER || "cartesia").toLowerCase(); // ElevenLabs free tier blocked
   if (env === "cartesia" && process.env.CARTESIA_API_KEY) return "cartesia";
   if (process.env.ELEVENLABS_API_KEY) return "elevenlabs";
   if (process.env.CARTESIA_API_KEY) return "cartesia";
@@ -140,12 +140,13 @@ export async function synthesizeSpeech(
     return synthesizeCartesia(text, voice);
   }
 
-  // Try ElevenLabs, auto-fallback to Cartesia on 402 (paid plan required)
+  // Try ElevenLabs, auto-fallback to Cartesia on any auth/payment error
   try {
     return await synthesizeElevenLabs(text, voice);
   } catch (err: any) {
-    if (err?.message?.includes("402") || err?.message?.includes("payment_required")) {
-      console.warn("[TTS] ElevenLabs 402 — falling back to Cartesia");
+    const msg = err?.message || "";
+    if (msg.includes("401") || msg.includes("402") || msg.includes("payment_required") || msg.includes("unusual_activity") || msg.includes("Free Tier")) {
+      console.warn("[TTS] ElevenLabs blocked — falling back to Cartesia");
       const cartesiaVoice = DEFAULT_VOICES["cartesia"];
       return synthesizeCartesia(text, cartesiaVoice);
     }
