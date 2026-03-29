@@ -20,7 +20,12 @@ export function serveStatic(app: Express) {
   app.use(express.static(distPath));
 
   // Fall through to index.html for client-side routing
-  app.use("*", (_req, res) => {
+  // IMPORTANT: Exclude /api/* routes so WebSocket upgrades work correctly
+  app.use("*", (req, res) => {
+    if (req.originalUrl.startsWith("/api/") || req.originalUrl.startsWith("/webhooks/")) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }
