@@ -433,16 +433,16 @@ async function startServer() {
     const streamUrl = `wss://${wsHost}/api/voice-stream`;
     console.log("[Voice] Stream URL:", streamUrl);
     console.log("[Voice] Session ID:", sid);
+    // <Connect><Stream> is required for bidirectional audio (per SignalWire official example)
+    // <Start><Stream> is unidirectional only — cannot send AI audio back to caller
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Start>
-    <Stream url="${streamUrl}" track="both">
+  <Connect>
+    <Stream url="${streamUrl}">
       <Parameter name="sessionId" value="${sid}" />
       <Parameter name="leadId" value="${leadId}" />
     </Stream>
-  </Start>
-  <Say>Hello, thank you for calling ApexAI. How can I help you today?</Say>
-  <Pause length="120" />
+  </Connect>
 </Response>`);
   });
 
