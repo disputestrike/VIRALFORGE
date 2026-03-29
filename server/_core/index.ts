@@ -718,7 +718,7 @@ async function startServer() {
             return;
           }
           // Debounce — don't respond faster than 2 seconds
-          if (Date.now() - lastResponseTime < 2000) return;
+          if (Date.now() - lastResponseTime < 1000) return;
 
           const totalLength = audioChunks.reduce((sum, c) => sum + c.length, 0);
           if (totalLength < 4800) return; // need at least 600ms of audio
@@ -762,7 +762,9 @@ async function startServer() {
                 media: { payload: responsePayload },
               }));
               // Estimate speaking duration from audio size, then mark done
-              const speakDurationMs = Math.ceil((responsePayload.length * 3) / 4 / 8) * 1000 + 500;
+              // Cartesia mulaw audio: base64 length → bytes → duration at 8000 bytes/sec
+              const audioBytes = Math.ceil(responsePayload.length * 3 / 4);
+              const speakDurationMs = Math.ceil(audioBytes / 8000) * 1000 + 800;
               setTimeout(() => { isSpeaking = false; }, speakDurationMs);
               console.log(`[Voice] ✅ Sent AI audio (speaking for ~${speakDurationMs}ms)`);
             } else if (!responsePayload) {
@@ -824,7 +826,8 @@ async function startServer() {
                   streamSid,
                   media: { payload: greetPayload },
                 }));
-                const greetDuration = Math.ceil((greetPayload.length * 3) / 4 / 8) * 1000 + 500;
+                const greetAudioBytes = Math.ceil(greetPayload.length * 3 / 4);
+                const greetDuration = Math.ceil(greetAudioBytes / 8000) * 1000 + 800;
                 setTimeout(() => { isSpeaking = false; }, greetDuration);
                 console.log("[Voice] ✅ Sent greeting audio");
               } catch (e) {
@@ -866,7 +869,7 @@ async function startServer() {
 
               // Reset silence timer — process after 800ms of no new audio
               if (silenceTimer) clearTimeout(silenceTimer);
-              silenceTimer = setTimeout(processAudio, 1200); // 1200ms silence = end of speech
+              silenceTimer = setTimeout(processAudio, 600); // 600ms silence = end of speech
 
               // Also process if we have 3+ seconds of audio
               const totalLength = audioChunks.reduce((sum, c) => sum + c.length, 0);
