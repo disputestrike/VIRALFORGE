@@ -706,9 +706,20 @@ async function startServer() {
         const audioChunks: Buffer[] = [];
         let silenceTimer: NodeJS.Timeout | null = null;
         let isProcessing = false;
+        let isSpeaking = false; // true while AI is playing audio
+        let lastResponseTime = 0; // debounce LLM calls
 
         const processAudio = async () => {
           if (isProcessing || audioChunks.length === 0) return;
+          if (isSpeaking) {
+            // AI is still speaking — clear buffer, don't process yet
+            // This prevents AI from responding to its own audio echo
+            audioChunks.length = 0;
+            return;
+          }
+          // Debounce — don't respond faster than 2 seconds
+          if (Date.now() - lastResponseTime < 2000) return;
+
           const totalLength = audioChunks.reduce((sum, c) => sum + c.length, 0);
           if (totalLength < 4800) return; // need at least 600ms of audio
 
@@ -741,14 +752,19 @@ async function startServer() {
             console.log(`[Voice] STT: "${sttText}" → AI: "${aiText}"`);
 
             if (responsePayload && streamSid) {
-              // Clear any queued audio before sending response
+              // Clear queued audio, mark AI as speaking, send response
               ws.send(JSON.stringify({ event: "clear", streamSid }));
+              isSpeaking = true;
+              lastResponseTime = Date.now();
               ws.send(JSON.stringify({
                 event: "media",
                 streamSid: streamSid,
                 media: { payload: responsePayload },
               }));
-              console.log(`[Voice] ✅ Sent AI audio response`);
+              // Estimate speaking duration from audio size, then mark done
+              const speakDurationMs = Math.ceil((responsePayload.length * 3) / 4 / 8) * 1000 + 500;
+              setTimeout(() => { isSpeaking = false; }, speakDurationMs);
+              console.log(`[Voice] ✅ Sent AI audio (speaking for ~${speakDurationMs}ms)`);
             } else if (!responsePayload) {
               console.log(`[Voice] ⚠️ No audio — STT empty or TTS failed`);
             }
@@ -800,11 +816,16 @@ async function startServer() {
                 const greetingAudio = await synthesizeSpeech(
                   "Hello, thank you for calling ApexAI. How can I help you today?"
                 );
+                const greetPayload = greetingAudio.toString("base64");
+                isSpeaking = true;
+                lastResponseTime = Date.now();
                 ws.send(JSON.stringify({
                   event: "media",
                   streamSid,
-                  media: { payload: greetingAudio.toString("base64") },
+                  media: { payload: greetPayload },
                 }));
+                const greetDuration = Math.ceil((greetPayload.length * 3) / 4 / 8) * 1000 + 500;
+                setTimeout(() => { isSpeaking = false; }, greetDuration);
                 console.log("[Voice] ✅ Sent greeting audio");
               } catch (e) {
                 console.error("[Voice] Greeting error:", e);
@@ -827,6 +848,18 @@ async function startServer() {
 
               // Only process inbound audio (caller's voice)
               if (message.media.track === "outbound") return;
+
+              // BARGE-IN: if AI is speaking and caller speaks, stop AI
+              if (isSpeaking) {
+                const audioBuffer = Buffer.from(message.media.payload, "base64");
+                // Check if this is real speech (not silence — mulaw silence = 0xFF)
+                const nonSilenceBytes = Array.from(audioBuffer).filter(b => b !== 0xFF && b !== 0x7F).length;
+                if (nonSilenceBytes > audioBuffer.length * 0.3) {
+                  console.log("[Voice] BARGE-IN detected — stopping AI audio");
+                  ws.send(JSON.stringify({ event: "clear", streamSid }));
+                  isSpeaking = false;
+                }
+              }
 
               const audioBuffer = Buffer.from(message.media.payload, "base64");
               audioChunks.push(audioBuffer);
