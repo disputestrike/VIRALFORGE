@@ -853,14 +853,16 @@ async function startServer() {
               if (message.media.track === "outbound") return;
 
               // BARGE-IN: if AI is speaking and caller speaks, stop AI
-              if (isSpeaking) {
+              // But only after AI has been speaking for at least 1.5 seconds
+              // This prevents background noise from cutting off the AI mid-sentence
+              if (isSpeaking && (Date.now() - lastResponseTime > 1500)) {
                 const audioBuffer = Buffer.from(message.media.payload, "base64");
-                // Check if this is real speech (not silence — mulaw silence = 0xFF)
                 const nonSilenceBytes = Array.from(audioBuffer).filter(b => b !== 0xFF && b !== 0x7F).length;
-                if (nonSilenceBytes > audioBuffer.length * 0.3) {
+                if (nonSilenceBytes > audioBuffer.length * 0.6) {
                   console.log("[Voice] BARGE-IN detected — stopping AI audio");
                   ws.send(JSON.stringify({ event: "clear", streamSid }));
                   isSpeaking = false;
+                  audioChunks.length = 0; // clear any buffered audio
                 }
               }
 

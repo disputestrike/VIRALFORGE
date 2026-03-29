@@ -236,51 +236,20 @@ function buildSystemPrompt(
   agentName: string,
   businessName: string
 ): string {
-  const modeInstructions: Record<string, string> = {
-    answer: "Answer the caller's current question directly and concisely. Stay on their question.",
-    clarify: "Ask ONE short clarifying question to understand what the caller needs.",
-    qualify: "Ask ONE natural qualifying question to gather needed information.",
-    recommend: "Briefly explain the value and suggest a next step without pushing too hard.",
-    book: "Offer to schedule a free consultation. Be warm and low-pressure.",
-    handoff: "Acknowledge the caller, let them know you'll connect them with a specialist.",
-    fallback: "Acknowledge you didn't fully catch that and ask them to repeat.",
-  };
+  // SHORT prompt = low latency. Only inject what matters this turn.
+  const noBook = !state.bookingAllowed ? " Do NOT offer appointments yet." : "";
+  const activeQ = state.activeQuestion && !state.activeQuestionResolved
+    ? ` Answer this question directly: "${state.activeQuestion}"` : "";
+  const areas = clientConfig?.serviceAreas?.length
+    ? `Service areas: ${clientConfig.serviceAreas.slice(0, 5).join(", ")}.` : "";
+  const offers = clientConfig?.discounts?.length
+    ? `Offers: ${clientConfig.discounts.join(", ")}.` : "";
 
-  const faqContext = Object.entries({
-    ...pack.faqAnswers,
-    ...(clientConfig?.customFAQ || {}),
-  }).map(([q, a]) => `Q: ${q}\nA: ${a}`).join("\n");
-
-  return `You are ${agentName}, a voice AI assistant for ${businessName}.
-${pack.systemContext}
-
-CURRENT CALL STATE:
-- Stage: ${state.stage}
-- Response mode: ${responseMode}
-- Active question: ${state.activeQuestion || "none"}
-- Question resolved: ${state.activeQuestionResolved}
-- Caller sentiment: ${state.callerSentiment}
-- Booking allowed: ${state.bookingAllowed}
-
-YOUR TASK FOR THIS TURN: ${modeInstructions[responseMode] || "Help the caller naturally."}
-
-UNIVERSAL RULES:
-- Max 1-2 SHORT sentences. This is a live phone call.
-- Answer the caller's actual question. Do not ignore what they said.
-- Never repeat yourself or the greeting mid-call.
-- Do not offer booking times unless explicitly allowed.
-- If caller interrupts or seems frustrated, acknowledge and listen.
-- Use natural spoken language — no bullet points, no lists.
-
-${forbiddenActions.length > 0 ? `FORBIDDEN THIS TURN: ${forbiddenActions.join(", ")}` : ""}
-
-${faqContext ? `KNOWLEDGE BASE:\n${faqContext}` : ""}
-
-${clientConfig?.serviceAreas?.length ? `SERVICE AREAS: ${clientConfig.serviceAreas.join(", ")}` : ""}
-${clientConfig?.discounts?.length ? `CURRENT OFFERS: ${clientConfig.discounts.join(", ")}` : ""}
-
-Respond ONLY with valid JSON (no markdown, no backticks):
-{"response":"spoken response here","action":"follow_up|book_appointment|propose_times|transfer|end_call","confidence":0.9}`;
+  return `You are ${agentName} for ${businessName}. ${pack.systemContext}
+Mode: ${responseMode}. Stage: ${state.stage}.${activeQ}${noBook}
+${areas} ${offers}
+Rules: Max 2 short sentences. Answer what caller just said. Natural speech. No lists.
+Reply ONLY with JSON: {"response":"...","action":"follow_up|book_appointment|propose_times|transfer|end_call","confidence":0.9}`;
 }
 
 export default { generateConversationResponse, generateResponse, proposeAppointmentTimes };

@@ -58,6 +58,7 @@ export async function processAudioMessage(
     // Get or create universal call state
     let callState = getCallState(sessionId) || createCallState(sessionId, session?.leadId ?? null, "solar");
 
+    const tLLM = Date.now();
     const result = await generateResponse(userText, callState);
     aiResponse = result.response;
     action = result.action ?? "follow_up";
@@ -65,7 +66,7 @@ export async function processAudioMessage(
     // Persist updated state
     updateCallState(sessionId, result.updatedState);
 
-    console.log(`[VoiceProcessing] LLM: "${aiResponse}" (action: ${action}, stage: ${result.updatedState.stage}, mode: ${result.updatedState.responseMode})`);
+    console.log(`[VoiceProcessing] LLM: "${aiResponse}" (${Date.now()-tLLM}ms, stage: ${result.updatedState.stage}, mode: ${result.updatedState.responseMode})`);
   } catch (llmError) {
     console.error("[VoiceProcessing] LLM failed:", llmError);
     aiResponse = "Let me transfer you to one of our team members. Please hold.";
@@ -99,9 +100,10 @@ export async function processAudioMessage(
   // ── Step 5: TTS (Text to Speech) ─────────────────────────────────────────
   let audioPayload = "";
   try {
+    const tTTS = Date.now();
     const audioBuffer = await synthesizeSpeech(aiResponse);
     audioPayload = audioBuffer.toString("base64");
-    console.log(`[VoiceProcessing] TTS: ${audioBuffer.length} bytes`);
+    console.log(`[VoiceProcessing] TTS: ${audioBuffer.length} bytes (${Date.now()-tTTS}ms)`);
   } catch (ttsError) {
     console.error("[VoiceProcessing] TTS failed:", ttsError);
     // No audio to send back — call will be silent on this turn
