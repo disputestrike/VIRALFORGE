@@ -423,8 +423,6 @@ async function startServer() {
     }
 
     res.type("text/xml");
-    // SignalWire uses <Start><Stream> (NOT <Connect><Stream> which is Twilio-only)
-    // <Start> is async — continues to <Say> while streaming
     const sid = sessionId || req.body.CallSid || `session_${Date.now()}`;
     // Encode & as &amp; — required for valid XML
     // Use explicit Railway public domain for WebSocket URL
@@ -433,6 +431,8 @@ async function startServer() {
     // <Connect><Stream> blocks and enables full duplex bidirectional streaming
     const wsHost = process.env.RAILWAY_PUBLIC_DOMAIN || req.get("host");
     const streamUrl = `wss://${wsHost}/api/voice-stream`;
+    console.log("[Voice] Stream URL:", streamUrl);
+    console.log("[Voice] Session ID:", sid);
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Start>

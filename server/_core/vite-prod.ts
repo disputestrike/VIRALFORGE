@@ -15,13 +15,16 @@ export function serveStatic(app: Express) {
 
   app.use(express.static(distPath));
 
-  // Return 426 for WebSocket endpoint hit via plain HTTP
-  // This prevents Railway CDN / any proxy from serving HTML there
+  // Handle plain HTTP GET on voice-stream
+  // SignalWire may do a plain HTTP validation before WebSocket upgrade
+  // Return 200 OK so SignalWire proceeds to upgrade
   app.get("/api/voice-stream", (req, res) => {
-    console.log("[VOICE-STREAM-HTTP] Plain HTTP hit on voice-stream — returning 426", {
-      headers: req.headers,
+    console.log("[VOICE-STREAM-HTTP] Plain HTTP hit on voice-stream — returning 200 to allow upgrade", {
+      upgrade: req.headers.upgrade,
+      connection: req.headers.connection,
+      userAgent: req.headers["user-agent"],
     });
-    res.status(426).set("Upgrade", "websocket").send("Upgrade Required");
+    res.status(200).send("OK");
   });
 
   // SPA fallback — NEVER catch /api/ or /webhooks/ routes
