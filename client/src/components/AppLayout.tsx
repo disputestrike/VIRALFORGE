@@ -4,12 +4,14 @@ import { getLoginUrl } from "@/const";
 import {
   BarChart3,
   Bot,
+  ChevronLeft,
   ChevronRight,
   LayoutDashboard,
   LogOut,
   Mail,
   MessageSquare,
-  Megaphone, Calendar,
+  Megaphone,
+  Calendar,
   Settings,
   Shield,
   Star,
@@ -27,7 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { trpc } from "@/lib/trpc";
+import { useState, useEffect } from "react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -53,6 +55,14 @@ interface AppLayoutProps {
 export default function AppLayout({ children }: AppLayoutProps) {
   const { user, loading, isAuthenticated, logout } = useAuth();
   const [location] = useLocation();
+  const [collapsed, setCollapsed] = useState(() => {
+    return localStorage.getItem("sidebar-collapsed") === "true";
+  });
+  const [tooltip, setTooltip] = useState<string | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem("sidebar-collapsed", String(collapsed));
+  }, [collapsed]);
 
   if (loading) {
     return (
@@ -89,69 +99,143 @@ export default function AppLayout({ children }: AppLayoutProps) {
     ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : "U";
 
+  const sidebarWidth = collapsed ? "64px" : "224px";
+
   return (
     <div className="min-h-screen bg-background flex">
       {/* Sidebar */}
-      <aside className="w-60 bg-[var(--sidebar)] border-r border-border flex flex-col fixed h-full z-20">
-        {/* Logo */}
-        <div className="px-4 py-5 border-b border-border">
-          <Link href="/dashboard" className="flex items-center gap-2.5 no-underline">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-              <Zap className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <span className="text-base font-bold text-foreground">ApexAI</span>
-              <p className="text-[10px] text-muted-foreground leading-none mt-0.5">Outbound Engine</p>
-            </div>
-          </Link>
+      <aside
+        style={{ width: sidebarWidth, minWidth: sidebarWidth }}
+        className="bg-[var(--sidebar)] border-r border-border flex flex-col fixed h-full z-20 transition-all duration-200"
+      >
+        {/* Logo + collapse button */}
+        <div className="h-14 flex items-center border-b border-border px-3 gap-2 overflow-hidden">
+          {!collapsed && (
+            <Link href="/dashboard" className="flex items-center gap-2 no-underline flex-1 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
+                <Zap className="w-3.5 h-3.5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-sm font-bold text-foreground">ApexAI</span>
+                <p className="text-[9px] text-muted-foreground leading-none mt-0.5">Outbound Engine</p>
+              </div>
+            </Link>
+          )}
+          {collapsed && (
+            <Link href="/dashboard" className="flex items-center justify-center w-full no-underline">
+              <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
+                <Zap className="w-3.5 h-3.5 text-white" />
+              </div>
+            </Link>
+          )}
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">Platform</p>
+        {/* Nav items */}
+        <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto overflow-x-hidden">
+          {!collapsed && (
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2">
+              Platform
+            </p>
+          )}
           {navItems.map(({ href, label, icon: Icon }) => {
             const isActive = location === href || (href !== "/dashboard" && location.startsWith(href));
             return (
-              <Link key={href} href={href}>
-                <div className={`sidebar-item ${isActive ? "sidebar-item-active" : ""}`}>
-                  <Icon className="w-4 h-4 flex-shrink-0" />
-                  <span>{label}</span>
-                  {isActive && <ChevronRight className="w-3 h-3 ml-auto opacity-50" />}
-                </div>
-              </Link>
+              <div key={href} className="relative">
+                <Link href={href}>
+                  <div
+                    onMouseEnter={() => collapsed && setTooltip(label)}
+                    onMouseLeave={() => setTooltip(null)}
+                    className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors text-sm font-medium
+                      ${isActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      }
+                      ${collapsed ? "justify-center" : ""}
+                    `}
+                  >
+                    <Icon className="w-4 h-4 flex-shrink-0" />
+                    {!collapsed && <span className="truncate">{label}</span>}
+                    {!collapsed && isActive && <ChevronRight className="w-3 h-3 ml-auto opacity-40 flex-shrink-0" />}
+                  </div>
+                </Link>
+                {/* Tooltip on hover when collapsed */}
+                {collapsed && tooltip === label && (
+                  <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded shadow-md border border-border whitespace-nowrap z-50 pointer-events-none">
+                    {label}
+                  </div>
+                )}
+              </div>
             );
           })}
 
           {user?.role === "admin" && (
             <>
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2 mt-4">Admin</p>
+              {!collapsed && (
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2 mt-4">
+                  Admin
+                </p>
+              )}
               {adminItems.map(({ href, label, icon: Icon }) => {
                 const isActive = location === href;
                 return (
-                  <Link key={href} href={href}>
-                    <div className={`sidebar-item ${isActive ? "sidebar-item-active" : ""}`}>
-                      <Icon className="w-4 h-4 flex-shrink-0" />
-                      <span>{label}</span>
-                    </div>
-                  </Link>
+                  <div key={href} className="relative">
+                    <Link href={href}>
+                      <div
+                        onMouseEnter={() => collapsed && setTooltip(label)}
+                        onMouseLeave={() => setTooltip(null)}
+                        className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors text-sm font-medium
+                          ${isActive
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          }
+                          ${collapsed ? "justify-center" : ""}
+                        `}
+                      >
+                        <Icon className="w-4 h-4 flex-shrink-0" />
+                        {!collapsed && <span className="truncate">{label}</span>}
+                      </div>
+                    </Link>
+                    {collapsed && tooltip === label && (
+                      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded shadow-md border border-border whitespace-nowrap z-50 pointer-events-none">
+                        {label}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </>
           )}
         </nav>
 
-        {/* User profile */}
-        <div className="px-3 py-4 border-t border-border">
+        {/* User profile + collapse button */}
+        <div className="px-2 py-3 border-t border-border space-y-1">
+          {/* Collapse toggle */}
+          <button
+            onClick={() => setCollapsed(c => !c)}
+            className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground ${collapsed ? "justify-center" : ""}`}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed
+              ? <ChevronRight className="w-4 h-4 flex-shrink-0" />
+              : <>
+                  <ChevronLeft className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-sm font-medium">Collapse</span>
+                </>
+            }
+          </button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary transition-colors">
-                <Avatar className="w-7 h-7">
+              <button className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-secondary transition-colors ${collapsed ? "justify-center" : ""}`}>
+                <Avatar className="w-7 h-7 flex-shrink-0">
                   <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold">{initials}</AvatarFallback>
                 </Avatar>
-                <div className="flex-1 text-left min-w-0">
-                  <p className="text-sm font-medium truncate">{user?.name ?? "User"}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">{user?.email ?? user?.role}</p>
-                </div>
+                {!collapsed && (
+                  <div className="flex-1 text-left min-w-0">
+                    <p className="text-sm font-medium truncate">{user?.name ?? "User"}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">{user?.email ?? user?.role}</p>
+                  </div>
+                )}
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
@@ -170,7 +254,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 ml-60 min-h-screen overflow-auto">
+      <main
+        style={{ marginLeft: sidebarWidth }}
+        className="flex-1 min-h-screen overflow-auto transition-all duration-200"
+      >
         {children}
       </main>
       <AIAgent />
