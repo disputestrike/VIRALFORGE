@@ -65,8 +65,11 @@ export async function conductConversation(context: ConversationContext): Promise
     const content = result.choices[0]?.message?.content;
     if (!content) throw new Error("Empty LLM response");
 
-    // Parse JSON response
-    const parsed = typeof content === "string" ? JSON.parse(content) : content;
+    // Parse JSON response — strip markdown fences Claude sometimes adds
+    const cleanContent = typeof content === "string"
+      ? content.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim()
+      : content;
+    const parsed = typeof cleanContent === "string" ? JSON.parse(cleanContent) : cleanContent;
 
     return {
       response: parsed.response || "How can I help you today?",

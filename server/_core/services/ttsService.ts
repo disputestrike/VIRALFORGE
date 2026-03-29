@@ -17,7 +17,7 @@ export type VoiceId = string;
 
 // ── ElevenLabs voices ──────────────────────────────────────────────────────
 export const ELEVENLABS_VOICES = {
-  bella:       "21m00Tcm4TlvDq8ikWAM",  // Female, warm
+  bella:       "21m00Tcm4TlvDq8ikWAM",  // Female, warm — REQUIRES PAID PLAN
   adam:        "pNInz6obpgDQGcFmaJgB",  // Male, deep
   arnold:      "VR6AewLHsfirz34V3XKA",  // Male, strong
   bella_fast:  "EXAVITQu4emSDH7WNrR3",  // Female, quick
@@ -34,7 +34,7 @@ export const CARTESIA_VOICES = {
 
 // Default voices per provider
 const DEFAULT_VOICES = {
-  elevenlabs: ELEVENLABS_VOICES.bella,
+  elevenlabs: process.env.ELEVENLABS_VOICE_ID || ELEVENLABS_VOICES.bella,
   cartesia:   CARTESIA_VOICES.sarah,
 };
 
@@ -49,6 +49,10 @@ function getProvider(): "elevenlabs" | "cartesia" {
 
 // ── ElevenLabs implementation ──────────────────────────────────────────────
 async function synthesizeElevenLabs(text: string, voiceId: string): Promise<Buffer> {
+  // If no custom voice ID set, this will fail on free tier — use Cartesia instead
+  if (!process.env.ELEVENLABS_VOICE_ID && !process.env.ELEVENLABS_API_KEY) {
+    throw new Error("ElevenLabs not configured");
+  }
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) throw new Error("ELEVENLABS_API_KEY not configured");
 
@@ -135,7 +139,18 @@ export async function synthesizeSpeech(
   if (provider === "cartesia") {
     return synthesizeCartesia(text, voice);
   }
-  return synthesizeElevenLabs(text, voice);
+
+  // Try ElevenLabs, auto-fallback to Cartesia on 402 (paid plan required)
+  try {
+    return await synthesizeElevenLabs(text, voice);
+  } catch (err: any) {
+    if (err?.message?.includes("402") || err?.message?.includes("payment_required")) {
+      console.warn("[TTS] ElevenLabs 402 — falling back to Cartesia");
+      const cartesiaVoice = DEFAULT_VOICES["cartesia"];
+      return synthesizeCartesia(text, cartesiaVoice);
+    }
+    throw err;
+  }
 }
 
 // ── Get available voices ───────────────────────────────────────────────────
