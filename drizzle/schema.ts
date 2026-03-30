@@ -46,6 +46,7 @@ export const leads = mysqlTable("leads", {
   verificationStatus: mysqlEnum("verificationStatus", ["verified", "unverified", "bounced", "pending"]).default("pending").notNull(),
   status: mysqlEnum("status", ["new", "contacted", "qualified", "converted", "lost"]).default("new").notNull(),
   source: varchar("source", { length: 100 }),
+  createdBy: int("createdBy"),
   notes: text("notes"),
   tags: text("tags"),
   customFields: text("customFields"),
@@ -134,6 +135,7 @@ export const messages = mysqlTable("messages", {
   readAt: timestamp("readAt"),
   repliedAt: timestamp("repliedAt"),
   metadata: text("metadata"),
+  createdBy: int("createdBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -153,6 +155,7 @@ export const callRecordings = mysqlTable("call_recordings", {
   aiSummary: text("aiSummary"),
   sentiment: mysqlEnum("sentiment", ["positive", "neutral", "negative"]),
   scheduledAppointment: boolean("scheduledAppointment").default(false),
+  createdBy: int("createdBy"),
   calledAt: timestamp("calledAt").defaultNow().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -178,6 +181,7 @@ export const analyticsSnapshots = mysqlTable("analytics_snapshots", {
   costPerLead: float("costPerLead").default(0),
   roi: float("roi").default(0),
   channel: mysqlEnum("channel", ["sms", "email", "voice", "social", "all"]).default("all"),
+  createdBy: int("createdBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -247,3 +251,34 @@ export const systemConfig = mysqlTable("system_config", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 export type SystemConfig = typeof systemConfig.$inferSelect;
+
+// ─── User Industry Packs ──────────────────────────────────────────────────────
+export const userIndustryPacks = mysqlTable("user_industry_packs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  industry: varchar("industry", { length: 100 }).notNull(), // solar, hvac, roofing, insurance, realestate, general
+  isActive: boolean("isActive").default(true).notNull(),
+  isPrimary: boolean("isPrimary").default(false).notNull(), // which industry the AI uses for inbound calls
+  planTier: varchar("planTier", { length: 50 }).default("base"), // base, addon
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type UserIndustryPack = typeof userIndustryPacks.$inferSelect;
+export type InsertUserIndustryPack = typeof userIndustryPacks.$inferInsert;
+
+// ─── User Phone Numbers ───────────────────────────────────────────────────────
+export const userPhoneNumbers = mysqlTable("user_phone_numbers", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  phoneNumber: varchar("phoneNumber", { length: 20 }).notNull(),
+  signalwireSid: varchar("signalwireSid", { length: 255 }),
+  friendlyName: varchar("friendlyName", { length: 200 }),
+  isActive: boolean("isActive").default(true).notNull(),
+  isPrimary: boolean("isPrimary").default(true).notNull(),
+  industry: varchar("industry", { length: 100 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type UserPhoneNumber = typeof userPhoneNumbers.$inferSelect;
+export type InsertUserPhoneNumber = typeof userPhoneNumbers.$inferInsert;

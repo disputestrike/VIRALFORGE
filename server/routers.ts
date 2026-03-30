@@ -56,7 +56,7 @@ const leadsRouter = router({
     .mutation(async ({ input, ctx }) => {
       const score = calculateLeadScore(input);
       const segment = score >= 70 ? "hot" : score >= 40 ? "warm" : "cold";
-      await db.createLead({ ...input, score, segment, tags: input.tags ? JSON.stringify(input.tags) : undefined });
+      await db.createLead({ ...input, score, segment, tags: input.tags ? JSON.stringify(input.tags) : undefined , createdBy: ctx.user.id });
       await db.logActivity({ userId: ctx.user.id, entityType: "lead", action: "created", description: `Created lead: ${input.firstName} ${input.lastName}` });
       return { success: true };
     }),
@@ -103,7 +103,7 @@ const leadsRouter = router({
     return { success: true, status };
   }),
 
-  aiSearch: protectedProcedure.input(z.object({ query: z.string() })).mutation(async ({ input }) => {
+  aiSearch: protectedProcedure.input(z.object({ query: z.string() })).mutation(async ({ input, ctx }) => {
     const response = await invokeLLM({
       messages: [
         { role: "system", content: "You are a lead search assistant. Convert natural language queries into structured search filters. Respond with ONLY a JSON object, no other text: {\"search\":\"string or null\",\"segment\":\"hot|warm|cold|unqualified or null\",\"status\":\"new|contacted|qualified|converted|lost or null\",\"verificationStatus\":\"verified|unverified|bounced|pending or null\"}. Only include values clearly specified in the query." },
@@ -113,10 +113,10 @@ const leadsRouter = router({
     });
     try {
       const filters = JSON.parse(response.choices[0].message.content as string);
-      const results = await db.getLeads({ search: filters.search || undefined, segment: filters.segment || undefined, status: filters.status || undefined, verificationStatus: filters.verificationStatus || undefined });
+      const results = await db.getLeads({ search: filters.search || undefined, segment: filters.segment || undefined, status: filters.status || undefined, verificationStatus: filters.verificationStatus || undefined, userId: ctx.user.id });
       return { filters, ...results };
     } catch {
-      const results = await db.getLeads({ search: input.query });
+      const results = await db.getLeads({ search: input.query, userId: ctx.user.id });
       return { filters: { search: input.query }, ...results };
     }
   }),
@@ -128,7 +128,7 @@ const leadsRouter = router({
       for (const lead of input) {
         const score = calculateLeadScore(lead);
         const segment = score >= 70 ? "hot" : score >= 40 ? "warm" : "cold";
-        await db.createLead({ ...lead, score, segment });
+        await db.createLead({ ...lead, score, segment , createdBy: ctx.user.id });
         created++;
       }
       await db.logActivity({ userId: ctx.user.id, entityType: "lead", action: "bulk_import", description: `Imported ${created} leads` });
@@ -253,7 +253,7 @@ const messagesRouter = router({
       if (!lead) throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
 
       // Write message record as queued
-      const msgResult = await db.createMessage({ ...input, status: "queued" });
+      const msgResult = await db.createMessage({ ...input, status: "queued" , createdBy: ctx.user.id });
       const msgId = msgResult.insertId;
 
       let deliveryStatus = "queued";
@@ -357,7 +357,7 @@ const messagesRouter = router({
           body: personalizedBody,
           templateId: input.templateId,
           status: "queued",
-        });
+        createdBy: ctx.user.id });
 
         // Queue real delivery with explicit job ID logging for proof
         if (input.channel === "sms" && lead.phone) {
@@ -721,8 +721,8 @@ const analyticsRouter = router({
 
   recordSnapshot: protectedProcedure
     .input(z.object({ campaignId: z.number().optional(), channel: z.enum(["sms", "email", "voice", "social", "all"]).optional() }))
-    .mutation(async ({ input }) => {
-      const metrics = await db.getGlobalMetrics();
+    .mutation(async ({ input, ctx }) => {
+      const metrics = await db.getGlobalMetrics(ctx.user.id);
       await db.createAnalyticsSnapshot({
         campaignId: input.campaignId,
         channel: input.channel ?? "all",
@@ -804,10 +804,78 @@ const onboardingRouter = router({
       const steps: string[] = (() => { try { const p = JSON.parse(record.completedSteps ?? "[]"); return Array.isArray(p) ? p : []; } catch { return []; } })();
       const updatedSet = input.completed ? Array.from(new Set([...steps, input.step])) : steps.filter((s) => s !== input.step);
       const updated = updatedSet;
-      const allSteps = ["account_setup", "campaign_config", "lead_import", "template_setup", "test_campaign", "go_live", "week1_review", "week2_optimization", "week3_scaling", "week4_handoff"];
+      const allSteps = ["account_setup", "industry_select", "phone_provision", "campaign_config", "lead_import", "template_setup", "test_campaign", "go_live"];
       const status = updated.length >= allSteps.length ? "completed" : updated.length > 0 ? "in_progress" : "not_started";
       await db.updateOnboarding(input.id, { completedSteps: JSON.stringify(updated), status });
       return { success: true, completedSteps: updated, status };
+    }),
+
+  // Provision a phone number for the user during onboarding
+  provisionNumber: protectedProcedure
+    .input(z.object({
+      areaCode: z.string().length(3).optional(),
+      industry: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { RestClient } = require("@signalwire/compatibility-api");
+        const client = RestClient(
+          process.env.SIGNALWIRE_PROJECT_ID!,
+          process.env.SIGNALWIRE_TOKEN!,
+          { signalwireSpaceUrl: process.env.SIGNALWIRE_SPACE_URL! }
+        );
+
+        // Search for available numbers
+        const searchOpts: Record<string, unknown> = { limit: 1 };
+        if (input.areaCode) searchOpts.areaCode = input.areaCode;
+
+        const available = await client.availablePhoneNumbers("US").local.list(searchOpts);
+        if (!available.length) {
+          // Fallback: search without area code
+          const fallback = await client.availablePhoneNumbers("US").local.list({ limit: 1 });
+          if (!fallback.length) throw new Error("No numbers available");
+          available.push(fallback[0]);
+        }
+
+        const numberToBuy = available[0].phoneNumber;
+        const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+          ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+          : "https://apexai-production-d567.up.railway.app";
+
+        // Purchase the number
+        const purchased = await client.incomingPhoneNumbers.create({
+          phoneNumber: numberToBuy,
+          voiceUrl: `${baseUrl}/api/voice/start`,
+          voiceMethod: "POST",
+          smsUrl: `${baseUrl}/api/sms/inbound`,
+          smsMethod: "POST",
+          friendlyName: `ApexAI - ${ctx.user.name || ctx.user.email}`,
+        });
+
+        // Save to user record
+        await db.logActivity({
+          userId: ctx.user.id,
+          entityType: "phone_number",
+          action: "provisioned",
+          description: `Provisioned number ${numberToBuy} for user ${ctx.user.id}`,
+          metadata: { phoneNumber: numberToBuy, sid: purchased.sid, industry: input.industry }
+        });
+
+        console.log(`[Onboarding] Provisioned ${numberToBuy} for user ${ctx.user.id}`);
+        return {
+          success: true,
+          phoneNumber: numberToBuy,
+          formattedNumber: numberToBuy.replace(/(\+1)(\d{3})(\d{3})(\d{4})/, "($2) $3-$4"),
+          sid: purchased.sid,
+        };
+      } catch (err: any) {
+        console.error("[Onboarding] Number provisioning failed:", err);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Could not provision phone number: ${err.message}`,
+        });
+      }
     }),
 });
 
@@ -905,9 +973,9 @@ const appointmentsRouter = router({
       return { success: true };
     }),
 
-  stats: protectedProcedure.query(async () => {
-    const all = await db.getAppointments({});
-    const upcoming = await db.getAppointments({ upcoming: true });
+  stats: protectedProcedure.query(async ({ ctx }) => {
+    const all = await db.getAppointments({ userId: ctx.user.id });
+    const upcoming = await db.getAppointments({ upcoming: true, userId: ctx.user.id });
     const showed = (all as any[]).filter((a) => a.showStatus === "showed").length;
     const noShow = (all as any[]).filter((a) => a.showStatus === "no_show").length;
     const showRate = showed + noShow > 0 ? Math.round((showed / (showed + noShow)) * 100) : 0;

@@ -95,10 +95,12 @@ export async function updateUserRole(userId: number, role: "user" | "admin") {
 }
 
 // ─── Leads ────────────────────────────────────────────────────────────────────
-export async function getLeads(opts?: { search?: string; segment?: string; status?: string; verificationStatus?: string; limit?: number; offset?: number }) {
+export async function getLeads(opts?: { search?: string; segment?: string; status?: string; verificationStatus?: string; limit?: number; offset?: number; userId?: number }) {
   const db = await getDb();
   if (!db) return { leads: [], total: 0 };
   const conditions = [];
+  // TENANT ISOLATION: Always filter by userId (createdBy)
+  if (opts?.userId) conditions.push(eq(leads.createdBy, opts.userId));
   if (opts?.search) {
     const q = `%${opts.search}%`;
     conditions.push(or(like(leads.firstName, q), like(leads.lastName, q), like(leads.email, q), like(leads.company, q), like(leads.industry, q), like(leads.title, q)));
@@ -148,10 +150,12 @@ export async function deleteLead(id: number) {
 }
 
 // ─── Campaigns ────────────────────────────────────────────────────────────────
-export async function getCampaigns(opts?: { status?: string; limit?: number; offset?: number }) {
+export async function getCampaigns(opts?: { status?: string; limit?: number; offset?: number; userId?: number }) {
   const db = await getDb();
   if (!db) return { campaigns: [], total: 0 };
   const conditions = [];
+  // TENANT ISOLATION: Always filter by userId (createdBy)
+  if (opts?.userId) conditions.push(eq(campaigns.createdBy, opts.userId));
   if (opts?.status) conditions.push(eq(campaigns.status, opts.status as "draft" | "active" | "paused" | "completed" | "archived"));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
   const [rows, countRows] = await Promise.all([
@@ -214,10 +218,12 @@ export async function updateCampaignContactStatus(id: number, status: typeof cam
 }
 
 // ─── Messages ─────────────────────────────────────────────────────────────────
-export async function getMessages(opts?: { campaignId?: number; leadId?: number; channel?: string; limit?: number }) {
+export async function getMessages(opts?: { campaignId?: number; leadId?: number; channel?: string; limit?: number; userId?: number }) {
   const db = await getDb();
   if (!db) return [];
   const conditions = [];
+  // TENANT ISOLATION
+  if (opts?.userId) conditions.push(eq(messages.createdBy, opts.userId));
   if (opts?.campaignId) conditions.push(eq(messages.campaignId, opts.campaignId));
   if (opts?.leadId) conditions.push(eq(messages.leadId, opts.leadId));
   if (opts?.channel) conditions.push(eq(messages.channel, opts.channel as "sms" | "email" | "voice" | "social"));
@@ -239,10 +245,12 @@ export async function updateMessageStatus(id: number, status: typeof messages.$i
 }
 
 // ─── Call Recordings ──────────────────────────────────────────────────────────
-export async function getCallRecordings(opts?: { campaignId?: number; leadId?: number; limit?: number }) {
+export async function getCallRecordings(opts?: { campaignId?: number; leadId?: number; limit?: number; userId?: number }) {
   const db = await getDb();
   if (!db) return [];
   const conditions = [];
+  // TENANT ISOLATION
+  if (opts?.userId) conditions.push(eq(callRecordings.createdBy, opts.userId));
   if (opts?.campaignId) conditions.push(eq(callRecordings.campaignId, opts.campaignId));
   if (opts?.leadId) conditions.push(eq(callRecordings.leadId, opts.leadId));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
@@ -257,11 +265,13 @@ export async function createCallRecording(data: typeof callRecordings.$inferInse
 }
 
 // ─── Templates ────────────────────────────────────────────────────────────────
-export async function getTemplates(channel?: string) {
+export async function getTemplates(channel?: string, userId?: number) {
   const db = await getDb();
   if (!db) return [];
   const conditions = [eq(templates.isActive, true)];
   if (channel) conditions.push(eq(templates.channel, channel as "sms" | "email" | "voice" | "social"));
+  // TENANT ISOLATION: show user's own templates + system templates (createdBy is null)
+  if (userId) conditions.push(sql`(templates.createdBy = ${userId} OR templates.createdBy IS NULL)`);
   return db.select().from(templates).where(and(...conditions)).orderBy(desc(templates.createdAt));
 }
 
@@ -285,24 +295,26 @@ export async function deleteTemplate(id: number) {
 }
 
 // ─── Analytics ────────────────────────────────────────────────────────────────
-export async function getAnalyticsSnapshots(opts?: { campaignId?: number; channel?: string; limit?: number }) {
+export async function getAnalyticsSnapshots(opts?: { campaignId?: number; channel?: string; limit?: number; userId?: number }) {
   const db = await getDb();
   if (!db) return [];
   const conditions = [];
+  // TENANT ISOLATION
+  if (opts?.userId) conditions.push(eq(analyticsSnapshots.createdBy, opts.userId));
   if (opts?.campaignId) conditions.push(eq(analyticsSnapshots.campaignId, opts.campaignId));
   if (opts?.channel) conditions.push(eq(analyticsSnapshots.channel, opts.channel as "sms" | "email" | "voice" | "social" | "all"));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
   return db.select().from(analyticsSnapshots).where(where).orderBy(desc(analyticsSnapshots.date)).limit(opts?.limit ?? 30);
 }
 
-export async function getGlobalMetrics() {
+export async function getGlobalMetrics(userId?: number) {
   const db = await getDb();
   if (!db) return { responseRate: 0, scheduleRate: 0, showRate: 0, salesIncrease: 0, totalLeads: 0, totalCampaigns: 0, totalMessages: 0, totalRevenue: 0 };
   const [leadsCount, campaignsData, messagesCount, analyticsData] = await Promise.all([
-    db.select({ count: sql<number>`count(*)` }).from(leads),
-    db.select({ count: sql<number>`count(*)`, revenue: sql<number>`sum(revenueGenerated)`, responses: sql<number>`sum(responseCount)`, scheduled: sql<number>`sum(scheduledCount)`, showed: sql<number>`sum(showCount)`, sent: sql<number>`sum(sentCount)`, converted: sql<number>`sum(convertedCount)` }).from(campaigns),
-    db.select({ count: sql<number>`count(*)` }).from(messages),
-    db.select({ avgResponse: sql<number>`avg(responseRate)`, avgSchedule: sql<number>`avg(scheduleRate)`, avgShow: sql<number>`avg(showRate)`, avgConversion: sql<number>`avg(conversionRate)` }).from(analyticsSnapshots),
+    userId ? db.select({ count: sql<number>`count(*)` }).from(leads).where(eq(leads.createdBy, userId)) : db.select({ count: sql<number>`count(*)` }).from(leads),
+    userId ? db.select({ count: sql<number>`count(*)`, revenue: sql<number>`sum(revenueGenerated)`, responses: sql<number>`sum(responseCount)`, scheduled: sql<number>`sum(scheduledCount)`, showed: sql<number>`sum(showCount)`, sent: sql<number>`sum(sentCount)`, converted: sql<number>`sum(convertedCount)` }).from(campaigns).where(eq(campaigns.createdBy, userId)) : db.select({ count: sql<number>`count(*)`, revenue: sql<number>`sum(revenueGenerated)`, responses: sql<number>`sum(responseCount)`, scheduled: sql<number>`sum(scheduledCount)`, showed: sql<number>`sum(showCount)`, sent: sql<number>`sum(sentCount)`, converted: sql<number>`sum(convertedCount)` }).from(campaigns),
+    userId ? db.select({ count: sql<number>`count(*)` }).from(messages).where(eq(messages.createdBy, userId)) : db.select({ count: sql<number>`count(*)` }).from(messages),
+    userId ? db.select({ avgResponse: sql<number>`avg(responseRate)`, avgSchedule: sql<number>`avg(scheduleRate)`, avgShow: sql<number>`avg(showRate)`, avgConversion: sql<number>`avg(conversionRate)` }).from(analyticsSnapshots).where(eq(analyticsSnapshots.createdBy, userId)) : db.select({ avgResponse: sql<number>`avg(responseRate)`, avgSchedule: sql<number>`avg(scheduleRate)`, avgShow: sql<number>`avg(showRate)`, avgConversion: sql<number>`avg(conversionRate)` }).from(analyticsSnapshots),
   ]);
   const c = campaignsData[0];
   const a = analyticsData[0];
@@ -409,7 +421,7 @@ export async function setSystemConfig(key: string, value: string, category = "ge
 }
 
 // ── Appointments ──────────────────────────────────────────────────────────────
-export async function getAppointments(opts?: { leadId?: number; status?: string; upcoming?: boolean }): Promise<any[]> {
+export async function getAppointments(opts?: { leadId?: number; status?: string; upcoming?: boolean; userId?: number }): Promise<any[]> {
   const conn = await import("mysql2/promise");
   const connection = await conn.createConnection({
     uri: process.env.DATABASE_URL,
@@ -418,6 +430,8 @@ export async function getAppointments(opts?: { leadId?: number; status?: string;
   try {
     const conditions: string[] = ["1=1"];
     const params: any[] = [];
+    // TENANT ISOLATION: filter appointments via leads.createdBy
+    if (opts?.userId) { conditions.push("l.createdBy = ?"); params.push(opts.userId); }
     if (opts?.leadId) { conditions.push("a.leadId = ?"); params.push(opts.leadId); }
     if (opts?.status) { conditions.push("a.confirmationStatus = ?"); params.push(opts.status); }
     if (opts?.upcoming) { conditions.push("a.scheduledTime >= NOW()"); }
