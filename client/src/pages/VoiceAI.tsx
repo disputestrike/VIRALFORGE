@@ -118,6 +118,8 @@ export default function VoiceAI() {
 
   const canGenerate = sf.industry.trim() && sf.companyName.trim() && sf.callerName.trim();
 
+  const signalwireNumber = "+1 (833) 659-6005"; // Will be user-specific after provisioning
+
   return (
     <div className="p-6 space-y-5">
       {/* Header */}
@@ -129,6 +131,21 @@ export default function VoiceAI() {
         <Button onClick={() => setShowScriptGen(true)}>
           <Sparkles className="w-4 h-4 mr-2" /> Generate Script
         </Button>
+      </div>
+
+      {/* 24/7 AI Status Banner */}
+      <div className="flex items-center gap-4 p-4 rounded-xl border border-green-500/30 bg-green-500/5">
+        <div className="flex items-center gap-2">
+          <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" />
+          <span className="text-green-400 font-semibold text-sm">AI LIVE — 24/7</span>
+        </div>
+        <div className="flex-1 text-sm text-muted-foreground">
+          Your AI assistant is answering calls right now. Callers reach a real AI conversation — not voicemail.
+        </div>
+        <div className="text-right text-xs text-muted-foreground hidden md:block">
+          <div className="font-medium text-foreground">{signalwireNumber || "+1 (833) 659-6005"}</div>
+          <div>Your AI phone number</div>
+        </div>
       </div>
 
       {/* Stats */}

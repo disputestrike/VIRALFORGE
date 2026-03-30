@@ -40,18 +40,16 @@ const SUPPORT_TIMELINE = [
   { day: "Day 30", title: "30-Day Results Review", desc: "Full ROI analysis and roadmap for the next 90 days", icon: Zap },
 ];
 
-const ALL_STEPS = ["account_setup", "campaign_config", "lead_import", "template_setup", "test_campaign", "go_live", "week1_review", "week2_optimization", "week3_scaling", "week4_handoff"];
+const ALL_STEPS = ["account_setup", "industry_select", "phone_provision", "campaign_config", "lead_import", "template_setup", "test_campaign", "go_live"];
 const STEP_LABELS: Record<string, string> = {
   account_setup: "Account Setup",
+  industry_select: "Choose Your Industry",
+  phone_provision: "Get Your AI Phone Number",
   campaign_config: "Campaign Configuration",
   lead_import: "Lead Import",
   template_setup: "Template Setup",
   test_campaign: "Test Campaign",
-  go_live: "Go Live",
-  week1_review: "Week 1 Review",
-  week2_optimization: "Week 2 Optimization",
-  week3_scaling: "Week 3 Scaling",
-  week4_handoff: "Week 4 Handoff",
+  go_live: "Go Live — 24/7 AI Active",
 };
 
 const INDUSTRIES = ["Solar", "Roofing", "HVAC", "Real Estate", "Insurance", "Financial Services", "Healthcare", "Legal", "Home Services", "B2B SaaS", "Other"];
@@ -67,6 +65,15 @@ export default function Onboarding() {
     onError: (e) => toast.error(e.message),
   });
   const updateStepMutation = trpc.onboarding.updateStep.useMutation({ onSuccess: () => utils.onboarding.list.invalidate() });
+  const provisionNumberMutation = trpc.onboarding.provisionNumber.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Your AI phone number is ready: ${data.formattedNumber}`);
+      utils.onboarding.list.invalidate();
+    },
+    onError: (e) => toast.error(`Could not provision number: ${e.message}`),
+  });
+  const [provisionedNumber, setProvisionedNumber] = useState<string | null>(null);
+  const [selectedIndustry, setSelectedIndustry] = useState<string>("");
 
   const records = onboardings ?? [];
 

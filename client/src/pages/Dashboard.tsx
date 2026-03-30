@@ -86,6 +86,15 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* 24/7 AI Status */}
+      <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-green-500/20 bg-green-500/5 text-sm">
+        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
+        <span className="text-green-400 font-medium">AI Assistant LIVE</span>
+        <span className="text-muted-foreground">· Your 24/7 AI is answering calls right now on</span>
+        <span className="font-mono text-foreground text-xs bg-secondary px-2 py-0.5 rounded">+1 (833) 659-6005</span>
+        <Link href="/voice-ai" className="ml-auto text-primary text-xs hover:underline flex-shrink-0">View calls →</Link>
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

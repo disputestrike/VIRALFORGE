@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Link } from "wouter";
 import {
-  Archive, BarChart3, Bot, Calendar, CheckCircle2, Mail, Megaphone,
+  Archive, BarChart3, Bot, Calendar, Calendar as CalendarIcon, CheckCircle2, Mail, Megaphone,
   MessageSquare, Pause, Phone, Play, Plus, RefreshCw, Share2, Target,
   Trash2, UserPlus, Users, Zap
 } from "lucide-react";
@@ -341,14 +341,44 @@ export default function Campaigns() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">Start Date</Label>
-                <Input className="bg-secondary border-border" type="date" value={form.startDate}
-                  onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))} />
+                <Label className="text-xs flex items-center gap-1.5">
+                  <CalendarIcon className="w-3 h-3 text-muted-foreground" />
+                  Start Date
+                </Label>
+                <div className="relative">
+                  <Input
+                    className="bg-secondary border-border cursor-pointer pr-8"
+                    type="date"
+                    value={form.startDate}
+                    min={new Date().toISOString().split("T")[0]}
+                    onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
+                  />
+                </div>
+                {form.startDate && (
+                  <p className="text-xs text-primary">
+                    {new Date(form.startDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">End Date</Label>
-                <Input className="bg-secondary border-border" type="date" value={form.endDate}
-                  onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} />
+                <Label className="text-xs flex items-center gap-1.5">
+                  <CalendarIcon className="w-3 h-3 text-muted-foreground" />
+                  End Date
+                </Label>
+                <div className="relative">
+                  <Input
+                    className="bg-secondary border-border cursor-pointer pr-8"
+                    type="date"
+                    value={form.endDate}
+                    min={form.startDate || new Date().toISOString().split("T")[0]}
+                    onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
+                  />
+                </div>
+                {form.endDate && form.startDate && (
+                  <p className="text-xs text-muted-foreground">
+                    {Math.ceil((new Date(form.endDate).getTime() - new Date(form.startDate).getTime()) / (1000 * 60 * 60 * 24))} day campaign
+                  </p>
+                )}
               </div>
             </div>
 
