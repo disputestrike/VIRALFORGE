@@ -31,8 +31,11 @@ const DEFAULT_VOICES = {
 };
 
 function getProvider(): "elevenlabs" | "cartesia" {
-  const env = (process.env.TTS_PROVIDER || "cartesia").toLowerCase();
+  const env = (process.env.TTS_PROVIDER || "").toLowerCase();
+  if (env === "elevenlabs" && process.env.ELEVENLABS_API_KEY) return "elevenlabs";
   if (env === "cartesia" && process.env.CARTESIA_API_KEY) return "cartesia";
+  // Prefer ElevenLabs when both providers are configured so we don't default to
+  // a dead secondary provider on production calls.
   if (process.env.ELEVENLABS_API_KEY) return "elevenlabs";
   if (process.env.CARTESIA_API_KEY) return "cartesia";
   throw new Error("No TTS provider configured - add ELEVENLABS_API_KEY or CARTESIA_API_KEY");
@@ -111,6 +114,32 @@ async function synthesizeCartesia(text: string, voiceId: string): Promise<Buffer
   return Buffer.from(await response.arrayBuffer());
 }
 
+function shouldFailOverProvider(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return [
+    "401",
+    "402",
+    "payment_required",
+    "insufficient credits",
+    "insufficient_credit",
+    "quota",
+    "unusual_activity",
+    "Free Tier",
+  ].some((token) => message.toLowerCase().includes(token.toLowerCase()));
+}
+
+async function synthesizeWithProvider(
+  provider: "elevenlabs" | "cartesia",
+  text: string,
+  voiceId: string,
+  options?: VoiceSynthesisOptions
+): Promise<Buffer> {
+  if (provider === "cartesia") {
+    return synthesizeCartesia(text, voiceId);
+  }
+  return synthesizeElevenLabs(text, voiceId, options);
+}
+
 export async function synthesizeSpeech(
   text: string,
   voiceIdOrOptions?: VoiceId | VoiceSynthesisOptions
@@ -123,23 +152,21 @@ export async function synthesizeSpeech(
 
   console.log(`[TTS] Provider: ${provider} | Voice: ${voice}`);
 
-  if (provider === "cartesia") {
-    return synthesizeCartesia(text, voice);
-  }
-
   try {
-    return await synthesizeElevenLabs(text, voice, options);
+    return await synthesizeWithProvider(provider, text, voice, options);
   } catch (err: any) {
-    const msg = err?.message || "";
-    if (
-      msg.includes("401") ||
-      msg.includes("402") ||
-      msg.includes("payment_required") ||
-      msg.includes("unusual_activity") ||
-      msg.includes("Free Tier")
-    ) {
-      console.warn("[TTS] ElevenLabs blocked - falling back to Cartesia");
-      return synthesizeCartesia(text, DEFAULT_VOICES.cartesia);
+    const fallbackProvider = provider === "cartesia" ? "elevenlabs" : "cartesia";
+    const fallbackConfigured = fallbackProvider === "cartesia"
+      ? !!process.env.CARTESIA_API_KEY
+      : !!process.env.ELEVENLABS_API_KEY;
+    if (fallbackConfigured && shouldFailOverProvider(err)) {
+      console.warn(`[TTS] ${provider} unavailable - falling back to ${fallbackProvider}`);
+      return synthesizeWithProvider(
+        fallbackProvider,
+        text,
+        DEFAULT_VOICES[fallbackProvider],
+        options
+      );
     }
     throw err;
   }

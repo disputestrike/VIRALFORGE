@@ -61,6 +61,7 @@ async function runMigrations() {
     );
 
     await migrate(db, { migrationsFolder });
+    await ensureCriticalVoiceSchema(connection);
     await connection.end();
     console.log("[Migration] Migrations completed successfully");
   } catch (error) {
@@ -68,6 +69,26 @@ async function runMigrations() {
     // Don't crash the server — let it start even if migrations fail
     // The DB might already be up to date
   }
+}
+
+async function ensureCriticalVoiceSchema(connection: any) {
+  // Railway production has shown cases where the migration runner completes but
+  // `leads.createdBy` still does not exist, which breaks inbound/outbound call
+  // session setup. Verify it explicitly on boot.
+  const [rows] = await connection.execute(
+    `SELECT COUNT(*) AS count
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'leads'
+       AND COLUMN_NAME = 'createdBy'`
+  );
+  const count = Number((rows as Array<{ count: number }>)[0]?.count ?? 0);
+  if (count > 0) return;
+
+  console.warn("[Migration] leads.createdBy missing after migration run - applying fallback ALTER TABLE");
+  await connection.execute("ALTER TABLE leads ADD COLUMN createdBy INT DEFAULT NULL");
+  await connection.execute("CREATE INDEX idx_leads_created_by ON leads(createdBy)");
+  console.log("[Migration] Added fallback leads.createdBy column and index");
 }
 
 async function startServer() {

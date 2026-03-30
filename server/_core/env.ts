@@ -62,7 +62,7 @@ export const ENV = {
   get voiceEnabled()  { return this.signalwireProjectId !== "" && this.signalwireToken !== ""; },
   get smsEnabled()    { return this.signalwireProjectId !== "" && this.signalwireToken !== ""; },
   get emailEnabled()  { return this.resendApiKey !== ""; },
-  get ttsEnabled()    { return this.elevenLabsApiKey !== ""; },
+  get ttsEnabled()    { return this.elevenLabsApiKey !== "" || (process.env.CARTESIA_API_KEY ?? "") !== ""; },
   get sttEnabled()    { return this.openAiApiKey !== ""; },
   get queueEnabled()  { return this.redisUrl !== ""; },
   get aiEnabled()     { return this.anthropicApiKey !== ""; },

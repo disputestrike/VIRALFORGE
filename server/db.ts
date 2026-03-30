@@ -119,15 +119,37 @@ export async function getLeads(opts?: { search?: string; segment?: string; statu
 export async function getLeadById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(leads).where(eq(leads.id, id)).limit(1);
-  return result[0];
+  try {
+    const result = await db.select().from(leads).where(eq(leads.id, id)).limit(1);
+    return result[0];
+  } catch (error: any) {
+    if (!isMissingCreatedByColumnError(error)) throw error;
+    console.warn("[Database] leads.createdBy missing in live schema - falling back to legacy lead select by id");
+    const rows = await legacyLeadQuery(
+      db,
+      "SELECT id, firstName, lastName, email, phone, company, industry, title, linkedinUrl, website, city, state, country, score, segment, verificationStatus, status, source, notes, tags, customFields, createdAt, updatedAt FROM leads WHERE id = ? LIMIT 1",
+      [id]
+    );
+    return rows[0];
+  }
 }
 
 export async function getLeadByPhone(phone: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(leads).where(eq(leads.phone, phone)).limit(1);
-  return result[0];
+  try {
+    const result = await db.select().from(leads).where(eq(leads.phone, phone)).limit(1);
+    return result[0];
+  } catch (error: any) {
+    if (!isMissingCreatedByColumnError(error)) throw error;
+    console.warn("[Database] leads.createdBy missing in live schema - falling back to legacy lead select by phone");
+    const rows = await legacyLeadQuery(
+      db,
+      "SELECT id, firstName, lastName, email, phone, company, industry, title, linkedinUrl, website, city, state, country, score, segment, verificationStatus, status, source, notes, tags, customFields, createdAt, updatedAt FROM leads WHERE phone = ? LIMIT 1",
+      [phone]
+    );
+    return rows[0];
+  }
 }
 
 export async function createLead(data: typeof leads.$inferInsert): Promise<{ insertId: number }> {
@@ -542,4 +564,30 @@ export async function updateLocalNumberLastUsed(phoneNumber: string): Promise<vo
   } finally {
     await connection.end();
   }
+}
+
+function isMissingCreatedByColumnError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as any;
+  const query = typeof err?.query === "string" ? err.query : "";
+  const causeMessage = typeof err?.cause?.sqlMessage === "string" ? err.cause.sqlMessage : "";
+  const message = typeof err?.message === "string" ? err.message : "";
+  return (
+    (query.includes("from `leads`") || query.includes("FROM leads")) &&
+    (
+      message.includes("Unknown column 'createdBy'") ||
+      causeMessage.includes("Unknown column 'createdBy'")
+    )
+  );
+}
+
+async function legacyLeadQuery(
+  db: MySql2Database,
+  query: string,
+  params: unknown[]
+): Promise<Array<Record<string, unknown>>> {
+  const [rows] = await (db as any).execute(query, params);
+  return Array.isArray(rows)
+    ? rows.map((row: Record<string, unknown>) => ({ ...row, createdBy: null }))
+    : [];
 }

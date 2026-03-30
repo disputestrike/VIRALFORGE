@@ -216,6 +216,16 @@ export function getActiveSessions(): VoiceSession[] {
   return Array.from(sessions.values()).filter(s => s.status === "active");
 }
 
+export function getRecentSessions(limit = 20): VoiceSession[] {
+  const deduped = new Map<string, VoiceSession>();
+  for (const session of sessions.values()) {
+    deduped.set(session.sessionId, session);
+  }
+  return Array.from(deduped.values())
+    .sort((a, b) => (b.updatedAt ?? b.startTime) - (a.updatedAt ?? a.startTime))
+    .slice(0, limit);
+}
+
 export default {
   createSession,
   getSession,
@@ -226,4 +236,5 @@ export default {
   persistSessionToDatabase,
   startSessionPersistenceInterval,
   getActiveSessions,
+  getRecentSessions,
 };
