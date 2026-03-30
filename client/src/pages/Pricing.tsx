@@ -167,7 +167,7 @@ export default function Pricing() {
 
             <div className="bg-card border border-border rounded-xl p-6">
               <p className="text-sm font-medium mb-4 text-muted-foreground uppercase tracking-wider">Everything Included</p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 {inboundFeatures.map((f) => (
                   <div key={f} className="flex items-center gap-2 text-sm">
                     <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
@@ -226,7 +226,7 @@ export default function Pricing() {
 
             <div className="bg-card border border-border rounded-xl p-6">
               <p className="text-sm font-medium mb-4 text-muted-foreground uppercase tracking-wider">Everything Included</p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 {outboundFeatures.map((f) => (
                   <div key={f} className="flex items-center gap-2 text-sm">
                     <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
@@ -241,7 +241,7 @@ export default function Pricing() {
           <div className="bg-card border border-border rounded-xl p-8 text-center">
             <h3 className="text-xl font-bold mb-2">Why ApexAI vs Retell, Bland, or Vapi?</h3>
             <p className="text-muted-foreground text-sm mb-6">Same AI quality. Full CRM dashboard included. No per-minute billing surprises.</p>
-            <div className="grid grid-cols-3 gap-6 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
               <div>
                 <p className="text-muted-foreground mb-1">Retell AI</p>
                 <p className="font-bold text-lg">$0.07/min</p>

@@ -152,7 +152,7 @@ export default function Messages() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Total Sent", value: total, icon: <Send className="w-4 h-4 text-primary" />, color: "text-foreground" },
           { label: "Delivered", value: delivered, icon: <CheckCheck className="w-4 h-4 text-green-400" />, color: "text-green-400" },

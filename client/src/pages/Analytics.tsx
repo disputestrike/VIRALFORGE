@@ -119,7 +119,7 @@ export default function Analytics() {
       </div>
 
       {/* 4 Core Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: "Avg Response Rate", value: `${metrics?.responseRate ?? 0}%`, desc: "Leads who replied", color: "text-green-400", border: "border-green-500/20" },
           { label: "Avg Schedule Rate", value: `${metrics?.scheduleRate ?? 0}%`, desc: "Responses → booked", color: "text-blue-400", border: "border-blue-500/20" },

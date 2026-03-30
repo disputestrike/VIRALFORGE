@@ -125,7 +125,7 @@ export default function LandingPageFull() {
           </p>
 
           {/* Inbound + Outbound pills */}
-          <div className="flex flex-wrap justify-center gap-3 mb-10">
+          <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-8 sm:mb-10 px-2">
             {[
               { icon: PhoneIncoming, label: "Answers inbound calls 24/7", color: GREEN },
               { icon: PhoneOutgoing, label: "Makes outbound calls at scale", color: BLUE_LIGHT },
@@ -571,7 +571,7 @@ export default function LandingPageFull() {
                 We're backed by a team with 50+ AI products shipped. ApexAI is built on Starlight Global's infrastructure — enterprise-grade, SOC 2 ready, and built to scale globally. This is not a side project. We're investing $5M+ to make ApexAI the default platform for AI-powered sales globally.
               </p>
               <div className="flex flex-wrap gap-3 mb-4">
-                {[["SOC 2 Type II", GREEN], ["HIPAA Ready", "#fb923c"], ["GDPR Compliant", BLUE_LIGHT], ["TCPA Compliant", "#c084fc"]].map(([label, color]) => (
+                {[["SOC 2 Ready", GREEN], ["HIPAA Aligned", "#fb923c"], ["GDPR Aware", BLUE_LIGHT], ["TCPA Framework", "#c084fc"]].map(([label, color]) => (
                   <span key={label} className="px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5"
                     style={{ backgroundColor: `${color}15`, border: `1px solid ${color}35`, color }}>
                     <Shield className="w-3 h-3" /> {label}
@@ -702,14 +702,14 @@ export default function LandingPageFull() {
             style={{ borderTop: `1px solid ${DIM3}` }}>
             <div className="flex items-center gap-2 flex-wrap">
               {[
-                ["SOC 2 Type II", GREEN],
-                ["HIPAA Ready", "#fb923c"],
-                ["GDPR", BLUE_LIGHT],
-                ["TCPA", "#c084fc"],
+                ["SOC 2 Ready",      GREEN],
+                ["HIPAA Aligned",    "#fb923c"],
+                ["GDPR Aware",       BLUE_LIGHT],
+                ["TCPA Framework",   "#c084fc"],
               ].map(([label, color]) => (
                 <span key={label} className="px-3 py-1 rounded-full text-xs font-medium"
                   style={{ backgroundColor: `${color}15`, border: `1px solid ${color}30`, color }}>
-                  ✓ {label}
+                  {label}
                 </span>
               ))}
             </div>

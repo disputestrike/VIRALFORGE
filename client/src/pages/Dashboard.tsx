@@ -121,7 +121,7 @@ export default function Dashboard() {
 
       {/* Appointments Quick Stats */}
       {apptStats && (apptStats.total > 0 || (upcomingAppts?.length ?? 0) > 0) && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           {[
             { label: "Total Appointments", value: apptStats.total, color: "text-blue-400", href: "/appointments" },
             { label: "Upcoming", value: apptStats.upcoming, color: "text-green-400", href: "/appointments" },
@@ -162,7 +162,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Total Leads", value: metrics?.totalLeads ?? 0, icon: Users, color: "text-blue-400" },
           { label: "Active Campaigns", value: metrics?.totalCampaigns ?? 0, icon: Megaphone, color: "text-green-400" },

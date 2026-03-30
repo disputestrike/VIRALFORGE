@@ -172,3 +172,43 @@
     }
   }
 }
+/* ── Mobile global fixes ─────────────────────────────────────────────── */
+@layer base {
+  /* Prevent horizontal scroll on mobile */
+  html, body {
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Better touch targets on mobile */
+  button, [role="button"], a, input, select, textarea {
+    min-height: 36px;
+  }
+
+  /* Tables scroll horizontally on mobile */
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Prevent inputs from zooming on iOS (font-size >= 16px) */
+  input, select, textarea {
+    font-size: 16px;
+  }
+
+  @media (min-width: 640px) {
+    input, select, textarea {
+      font-size: 0.875rem;
+    }
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Better tap highlight on mobile */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}

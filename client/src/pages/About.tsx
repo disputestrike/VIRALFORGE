@@ -16,9 +16,9 @@ const DIM3 = "rgba(255,255,255,0.08)";
 const compliance = [
   {
     icon: Shield,
-    label: "SOC 2 Type II",
+    label: "SOC 2 Ready",
     color: GREEN,
-    heading: "SOC 2 Type II — Security Controls",
+    heading: "SOC 2 Ready — Security Controls",
     body: "ApexAI is built on Railway infrastructure, which is SOC 2 Type II certified. Our access controls, audit logging, data isolation, and encryption-in-transit meet the Trust Service Criteria for Security, Availability, and Confidentiality. Every user account is fully siloed — no cross-tenant data access is possible.",
     items: [
       "Role-based access control (RBAC)",
@@ -31,9 +31,9 @@ const compliance = [
   },
   {
     icon: Lock,
-    label: "HIPAA Ready",
+    label: "HIPAA Aligned",
     color: "#fb923c",
-    heading: "HIPAA Ready",
+    heading: "HIPAA Aligned",
     body: "ApexAI does not store Protected Health Information (PHI) by default. For healthcare clients who use our inbound AI for patient scheduling, we are structured to operate under a Business Associate Agreement (BAA). Our data handling, audit trails, and access controls are aligned with HIPAA technical safeguard requirements.",
     items: [
       "No PHI stored by default",
@@ -46,9 +46,9 @@ const compliance = [
   },
   {
     icon: Globe,
-    label: "GDPR Compliant",
+    label: "GDPR Aware",
     color: BLUE_LIGHT,
-    heading: "GDPR Compliant",
+    heading: "GDPR Aware",
     body: "ApexAI is committed to GDPR compliance for customers and prospects in the European Union. We collect only the minimum necessary data, provide clear data deletion pathways, and do not sell personal data to third parties. Users have the right to access, correct, and delete their data at any time.",
     items: [
       "Data minimization — only what's needed",
@@ -61,9 +61,9 @@ const compliance = [
   },
   {
     icon: FileCheck,
-    label: "TCPA Compliant",
+    label: "TCPA Framework",
     color: "#c084fc",
-    heading: "TCPA Compliant Outreach",
+    heading: "TCPA Framework",
     body: "All outbound AI calls and SMS messages sent through ApexAI are designed to comply with the Telephone Consumer Protection Act (TCPA). Our platform requires opt-in consent before any automated outreach, respects DNC (Do Not Call) registry rules, and includes required caller ID disclosure for all AI-initiated calls.",
     items: [
       "Opt-in consent required before outreach",
@@ -180,15 +180,15 @@ export default function About() {
             </Badge>
             <h2 className="text-3xl font-bold text-white mb-3">Enterprise-Grade from Day One</h2>
             <p className="text-lg max-w-2xl mx-auto" style={{ color: DIM }}>
-              We don't bolt on compliance after the fact. SOC 2, HIPAA, GDPR, and TCPA requirements are built into the architecture of ApexAI from the ground up.
+              We've implemented the technical controls and operational practices that align with SOC 2, HIPAA, GDPR, and TCPA requirements. We are currently pursuing formal certification. Until then, we document exactly what's in place.
             </p>
           </div>
 
           {/* Badge row */}
           <div className="flex flex-wrap justify-center gap-4 mb-14">
             {[
-              { label: "SOC 2 Type II", color: GREEN,        icon: Shield    },
-              { label: "HIPAA Ready",   color: "#fb923c",    icon: Lock      },
+              { label: "SOC 2 Ready", color: GREEN,        icon: Shield    },
+              { label: "HIPAA Aligned",   color: "#fb923c",    icon: Lock      },
               { label: "GDPR",          color: BLUE_LIGHT,   icon: Globe     },
               { label: "TCPA",          color: "#c084fc",    icon: FileCheck },
             ].map(({ label, color, icon: Icon }) => (

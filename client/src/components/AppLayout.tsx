@@ -101,13 +101,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
     : "U";
 
   const sidebarWidth = collapsed ? "64px" : "224px";
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background flex">
       {/* Sidebar */}
       <aside
         style={{ width: sidebarWidth, minWidth: sidebarWidth }}
-        className="bg-[var(--sidebar)] border-r border-border flex flex-col fixed h-full z-20 transition-all duration-200"
+        className={`bg-[var(--sidebar)] border-r border-border flex flex-col fixed h-full z-20 transition-all duration-200 ${mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
       >
         {/* Logo + collapse button */}
         <div className="h-14 flex items-center border-b border-border px-3 gap-2 overflow-hidden">
@@ -251,13 +252,29 @@ export default function AppLayout({ children }: AppLayoutProps) {
         </div>
       </aside>
 
+      {/* Mobile overlay backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-10 md:hidden"
+          style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
       {/* Main content */}
       <main
-        style={{ marginLeft: sidebarWidth }}
-        className="flex-1 min-h-screen overflow-auto transition-all duration-200"
+        className="flex-1 min-h-screen overflow-auto transition-all duration-200 md:ml-[var(--sidebar-width)]"
+        style={{ "--sidebar-width": sidebarWidth } as React.CSSProperties}
       >
         {/* Top bar with theme toggle */}
-        <div className="h-12 border-b border-border flex items-center justify-end px-4 bg-background sticky top-0 z-30">
+        <div className="h-12 border-b border-border flex items-center justify-between px-4 bg-background sticky top-0 z-30">
+          {/* Mobile hamburger */}
+          <button className="md:hidden p-1.5 rounded-md text-muted-foreground hover:text-foreground" onClick={() => setMobileOpen(!mobileOpen)}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+          </button>
+          <div className="hidden md:block" />{/* spacer on desktop */}
           <div className="flex items-center gap-2">
             {/* Sun icon */}
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">

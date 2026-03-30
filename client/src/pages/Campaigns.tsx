@@ -296,7 +296,7 @@ export default function Campaigns() {
               <Textarea className="bg-secondary border-border resize-none" rows={2} value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Goal</Label>
                 <Select value={form.goal} onValueChange={(v) => setForm((f) => ({ ...f, goal: v as typeof GOALS[number] }))}>
@@ -339,7 +339,7 @@ export default function Campaigns() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3" style={{ overflow: "visible" }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" style={{ overflow: "visible" }}>
               <div className="space-y-1.5">
                 <Label className="text-xs flex items-center gap-1.5">
                   <CalendarIcon className="w-3 h-3 text-muted-foreground" />
