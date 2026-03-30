@@ -690,7 +690,7 @@ const templatesRouter = router({
 
 // ─── Analytics Router ─────────────────────────────────────────────────────────
 const analyticsRouter = router({
-  globalMetrics: protectedProcedure.query(async () => db.getGlobalMetrics()),
+  globalMetrics: protectedProcedure.query(async ({ ctx }) => db.getGlobalMetrics(ctx.user.id)),
 
   snapshots: protectedProcedure
     .input(z.object({ campaignId: z.number().optional(), channel: z.string().optional(), limit: z.number().optional() }).optional())

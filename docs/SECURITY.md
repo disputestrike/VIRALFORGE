@@ -1,6 +1,9 @@
 # ApexAI Security Documentation
 
 ## Authentication & Authorization
+Session cookies are configured with `httpOnly: true`, `sameSite: "strict"`, and `secure: true` in production — preventing XSS token theft and CSRF attacks.
+
+
 - **Authentication**: Google OAuth 2.0 via JWT sessions
 - **Session Management**: HTTP-only cookies, SameSite=Strict
 - **Authorization**: Role-based (user/admin) enforced at tRPC procedure level
