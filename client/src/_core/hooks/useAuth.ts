@@ -38,6 +38,8 @@ export function useAuth(options?: UseAuthOptions) {
     } finally {
       utils.auth.me.setData(undefined, null);
       await utils.auth.me.invalidate();
+      // Always redirect to landing page on sign out
+      window.location.href = "/";
     }
   }, [logoutMutation, utils]);
 

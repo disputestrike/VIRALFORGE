@@ -339,24 +339,23 @@ export default function Campaigns() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3" style={{ overflow: "visible" }}>
               <div className="space-y-1.5">
                 <Label className="text-xs flex items-center gap-1.5">
                   <CalendarIcon className="w-3 h-3 text-muted-foreground" />
                   Start Date
                 </Label>
-                <div className="relative">
-                  <Input
-                    className="bg-secondary border-border cursor-pointer pr-8"
-                    type="date"
-                    value={form.startDate}
-                    min={new Date().toISOString().split("T")[0]}
-                    onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
-                  />
-                </div>
+                <Input
+                  className="bg-secondary border-border cursor-pointer w-full"
+                  type="date"
+                  value={form.startDate}
+                  min={new Date().toISOString().split("T")[0]}
+                  onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
+                  style={{ colorScheme: "dark" }}
+                />
                 {form.startDate && (
                   <p className="text-xs text-primary">
-                    {new Date(form.startDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                    {new Date(form.startDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
                   </p>
                 )}
               </div>
@@ -365,18 +364,17 @@ export default function Campaigns() {
                   <CalendarIcon className="w-3 h-3 text-muted-foreground" />
                   End Date
                 </Label>
-                <div className="relative">
-                  <Input
-                    className="bg-secondary border-border cursor-pointer pr-8"
-                    type="date"
-                    value={form.endDate}
-                    min={form.startDate || new Date().toISOString().split("T")[0]}
-                    onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
-                  />
-                </div>
+                <Input
+                  className="bg-secondary border-border cursor-pointer w-full"
+                  type="date"
+                  value={form.endDate}
+                  min={form.startDate || new Date().toISOString().split("T")[0]}
+                  onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
+                  style={{ colorScheme: "dark" }}
+                />
                 {form.endDate && form.startDate && (
                   <p className="text-xs text-muted-foreground">
-                    {Math.ceil((new Date(form.endDate).getTime() - new Date(form.startDate).getTime()) / (1000 * 60 * 60 * 24))} day campaign
+                    {Math.max(1, Math.ceil((new Date(form.endDate + "T12:00:00").getTime() - new Date(form.startDate + "T12:00:00").getTime()) / (1000 * 60 * 60 * 24)))} day campaign
                   </p>
                 )}
               </div>
