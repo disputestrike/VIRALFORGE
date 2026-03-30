@@ -570,14 +570,17 @@ export default function LandingPageFull() {
               <p className="leading-relaxed mb-6" style={{ color: DIM }}>
                 We're backed by a team with 50+ AI products shipped. ApexAI is built on Starlight Global's infrastructure — enterprise-grade, SOC 2 ready, and built to scale globally. This is not a side project. We're investing $5M+ to make ApexAI the default platform for AI-powered sales globally.
               </p>
-              <div className="flex flex-wrap gap-3">
-                {[["SOC 2 Type II", GREEN], ["GDPR Compliant", BLUE_LIGHT], ["HIPAA Ready", "#fb923c"], ["TCPA Compliant", "#c084fc"]].map(([label, color]) => (
-                  <span key={label} className="px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1"
-                    style={{ backgroundColor: `${color}15`, border: `1px solid ${color}30`, color }}>
+              <div className="flex flex-wrap gap-3 mb-4">
+                {[["SOC 2 Type II", GREEN], ["HIPAA Ready", "#fb923c"], ["GDPR Compliant", BLUE_LIGHT], ["TCPA Compliant", "#c084fc"]].map(([label, color]) => (
+                  <span key={label} className="px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5"
+                    style={{ backgroundColor: `${color}15`, border: `1px solid ${color}35`, color }}>
                     <Shield className="w-3 h-3" /> {label}
                   </span>
                 ))}
               </div>
+              <a href="/about#compliance" className="text-sm font-medium hover:underline" style={{ color: BLUE_LIGHT }}>
+                View full compliance documentation →
+              </a>
             </div>
             <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${DIM3}` }}>
               <img src="/team_success.png" alt="ApexAI Team"
