@@ -1061,6 +1061,28 @@ const settingsRouter = router({
     }),
 });
 
+
+// ─── Business Extractor Router ────────────────────────────────────────────────
+const extractorRouter = router({
+  // Extract from URL — crawl website and return structured business info
+  fromUrl: protectedProcedure
+    .input(z.object({ url: z.string().min(3) }))
+    .mutation(async ({ input }) => {
+      const { extractFromUrl } = await import("./_core/services/businessExtractor");
+      const result = await extractFromUrl(input.url);
+      return result;
+    }),
+
+  // Extract from plain text / pasted content
+  fromText: protectedProcedure
+    .input(z.object({ text: z.string().min(20) }))
+    .mutation(async ({ input }) => {
+      const { extractFromText } = await import("./_core/services/businessExtractor");
+      const result = await extractFromText(input.text);
+      return result;
+    }),
+});
+
 // ─── Demo Call Router (PUBLIC — for landing page "call me now") ───────────────
 const demoCallRouter = router({
   // Trigger an outbound AI demo call from the landing page — captures lead data
@@ -1194,6 +1216,7 @@ export const appRouter = router({
   // INTEGRATION: Add Omni AI webhook endpoints
   webhooks: webhooksRouter,
   settings: settingsRouter,
+  extractor: extractorRouter,
   demoCall: demoCallRouter,
   ghl: ghlRouter,
 });

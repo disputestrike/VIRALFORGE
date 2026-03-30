@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import BusinessSetupWidget from "@/components/BusinessSetupWidget";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +15,7 @@ import { Link } from "wouter";
 import {
   Archive, BarChart3, Bot, Calendar, Calendar as CalendarIcon, CheckCircle2, Mail, Megaphone,
   MessageSquare, Pause, Phone, Play, Plus, RefreshCw, Share2, Target,
-  Trash2, UserPlus, Users, Zap
+  Trash2, UserPlus, Users, Zap, Sparkles,
 } from "lucide-react";
 
 const channelIcons: Record<string, React.ReactNode> = {
@@ -45,6 +46,7 @@ const INDUSTRIES = ["Roofing", "Solar", "HVAC", "Real Estate", "Insurance", "Fin
 
 export default function Campaigns() {
   const [showCreate, setShowCreate] = useState(false);
+  const [showBusinessSetup, setShowBusinessSetup] = useState(false);
   const [showAddContact, setShowAddContact] = useState<number | null>(null);
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState("all");

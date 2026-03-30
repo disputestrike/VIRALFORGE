@@ -712,6 +712,58 @@ async function startServer() {
     }
   });
 
+
+  // ─── PDF/DOCUMENT UPLOAD → Business Extractor ────────────────────────────────
+  app.post("/api/extract/document", async (req, res) => {
+    try {
+      const multer = (await import("multer")).default;
+      const upload = multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+        fileFilter: (_req, file, cb) => {
+          const allowed = ["application/pdf", "text/plain", "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+          if (allowed.includes(file.mimetype) || file.originalname.match(/\.(pdf|txt|doc|docx)$/i)) {
+            cb(null, true);
+          } else {
+            cb(new Error("Only PDF, TXT, DOC, DOCX files allowed"));
+          }
+        },
+      }).single("document");
+
+      upload(req, res, async (err) => {
+        if (err) {
+          res.status(400).json({ error: err.message });
+          return;
+        }
+        if (!req.file) {
+          res.status(400).json({ error: "No file uploaded" });
+          return;
+        }
+
+        try {
+          const { extractFromPdf, extractFromText } = await import("./services/businessExtractor");
+          let result;
+
+          if (req.file.mimetype === "application/pdf" || req.file.originalname.match(/\.pdf$/i)) {
+            result = await extractFromPdf(req.file.buffer);
+          } else {
+            // txt/doc — read as text
+            result = await extractFromText(req.file.buffer.toString("utf-8"));
+          }
+
+          console.log(`[Extract] Extracted from ${req.file?.originalname}: ${result.businessName}`);
+          res.json({ success: true, data: result });
+        } catch (extractErr: any) {
+          console.error("[Extract] Failed:", extractErr);
+          res.status(500).json({ error: extractErr.message || "Extraction failed" });
+        }
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ─── SMS INBOUND WEBHOOK ──────────────────────────────────────────────────
   app.post("/api/sms/inbound", validateTwilioSignature, async (req, res) => {
     const { From, To, Body, MessageSid } = req.body;
