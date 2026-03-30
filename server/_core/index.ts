@@ -13,6 +13,7 @@ import * as voiceSessionManager from "./services/voiceSessionManager";
 import { apiRateLimiter, aiRateLimiter, authRateLimiter, webhookRateLimiter } from "./middleware/rateLimiter";
 import * as voiceProcessingService from "./services/voiceProcessingService";
 import { startSessionPersistenceInterval } from "./services/voiceSessionManager";
+import { VoiceRealtimePipeline } from "./services/voiceRealtimePipeline";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -129,15 +130,15 @@ async function startServer() {
             campaignId: job.data.campaignId,
           });
 
-          // Write call record to DB
-          await dbMod.createCallRecording({
-            leadId: lead.id,
-            campaignId: job.data.campaignId,
-            status: "completed",
-            outcome: "no_answer",
-            calledAt: new Date(),
-          });
           await dbMod.updateLead(lead.id, { status: "contacted" });
+          await dbMod.logActivity({
+            userId: lead.createdBy ?? undefined,
+            entityType: "call",
+            entityId: lead.id,
+            action: "initiated",
+            description: `Outbound call initiated for ${lead.firstName} ${lead.lastName}`,
+            metadata: { callSid: result.callSid, campaignId: job.data.campaignId },
+          });
 
           console.log(`[CallWorker] ✅ PROCESSING→COMPLETED | jobId: ${job.id} | callSid: ${result.callSid} | leadId: ${lead.id}`);
           return result;
@@ -400,8 +401,14 @@ async function startServer() {
     try {
       if (From) {
         const db = await import("../db");
+        const outboundLeadId = leadId ? parseInt(leadId, 10) : null;
+        let lead: any = outboundLeadId ? await db.getLeadById(outboundLeadId) : null;
+        let ownerId = lead?.createdBy ?? null;
+
         // Look up which user owns the called number (To) for proper tenant assignment
-        const ownerId = To ? await db.getUserIdByPhoneNumber(To) : 1;
+        if (!ownerId) {
+          ownerId = To ? await db.getUserIdByPhoneNumber(To) : 1;
+        }
 
         // Load owner's settings (transfer number, language)
         let ownerSettings: { transferNumber?: string; language?: string } = {};
@@ -416,7 +423,10 @@ async function startServer() {
           }
         } catch {}
 
-        let lead = await db.getLeadByPhone(From);
+        // Inbound calls create/find lead by caller phone. Outbound calls use explicit leadId.
+        if (!lead) {
+          lead = await db.getLeadByPhone(From);
+        }
         if (!lead) {
           lead = await db.createLead({
             firstName: "Inbound",
@@ -430,8 +440,14 @@ async function startServer() {
           }) as any;
         }
         const vm = await import("./services/voiceSessionManager");
+        const { getUserVoiceSettings } = await import("./services/voiceProfiles");
+        const voiceSettings = ownerId ? await getUserVoiceSettings(ownerId) : { voiceProfileId: "cartesia-sarah-sales" };
         if (!vm.getSession(sessionId)) {
-          vm.createSession((lead as any).id ?? 0, "default", sessionId);
+          vm.createSession((lead as any).id ?? 0, "default", sessionId, {
+            userId: ownerId ?? 1,
+            language: ownerSettings.language || "en",
+            voiceProfileId: voiceSettings.voiceProfileId,
+          });
           vm.startSessionPersistenceInterval(sessionId);
         }
       }
@@ -846,6 +862,13 @@ async function startServer() {
       wss.handleUpgrade(request, socket, head, (ws) => {
         console.log("[WS-UPGRADE] handleUpgrade success — WebSocket connected", { sessionId });
         console.log(`[Voice] WebSocket connected: ${sessionId}`);
+        console.log("[VOICE-WS] connected", { sessionId, leadId, isInbound });
+        (ws as any)._voicePipeline = new VoiceRealtimePipeline({
+          socket: ws as any,
+          requestSessionId: sessionId,
+          requestLeadId: leadId,
+          logger: console,
+        });
 
         let streamSid: string | null = null;
         const audioChunks: Buffer[] = [];
@@ -930,6 +953,10 @@ async function startServer() {
         };
 
         ws.on("message", async (data: Buffer) => {
+          if ((ws as any)._voicePipeline) {
+            await (ws as any)._voicePipeline.handleRawMessage(data);
+            return;
+          }
           try {
             const message = JSON.parse(data.toString());
 
@@ -1063,10 +1090,18 @@ async function startServer() {
         });
 
         ws.on("error", (error) => {
+          if ((ws as any)._voicePipeline) {
+            (ws as any)._voicePipeline.handleError(error);
+            return;
+          }
           console.error("[VOICE-WS] error", error);
         });
 
         ws.on("close", (code, reason) => {
+          if ((ws as any)._voicePipeline) {
+            (ws as any)._voicePipeline.handleClose(code, reason?.toString());
+            return;
+          }
           console.log("[VOICE-WS] closed", {
             code,
             reason: reason?.toString(),

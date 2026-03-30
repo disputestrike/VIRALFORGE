@@ -263,7 +263,7 @@ export function determineResponseMode(
     return state.fallbackCount < 2 ? "clarify" : "handoff";
   }
 
-  return "follow_up" as ResponseMode;
+  return "clarify";
 }
 
 export function addTurn(

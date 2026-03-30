@@ -25,8 +25,8 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
 const leadsRouter = router({
   list: protectedProcedure
     .input(z.object({ search: z.string().optional(), segment: z.string().optional(), status: z.string().optional(), verificationStatus: z.string().optional(), limit: z.number().optional(), offset: z.number().optional() }).optional())
-    .query(async ({ input }) => {
-      return db.getLeads(input ?? {});
+    .query(async ({ input, ctx }) => {
+      return db.getLeads({ ...(input ?? {}), userId: ctx.user.id });
     }),
 
   get: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
@@ -176,7 +176,7 @@ const leadsRouter = router({
 const campaignsRouter = router({
   list: protectedProcedure
     .input(z.object({ status: z.string().optional(), limit: z.number().optional(), offset: z.number().optional() }).optional())
-    .query(async ({ input }) => db.getCampaigns(input ?? {})),
+    .query(async ({ input, ctx }) => db.getCampaigns({ ...(input ?? {}), userId: ctx.user.id })),
 
   get: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
     const campaign = await db.getCampaignById(input.id);
@@ -295,7 +295,7 @@ const campaignsRouter = router({
 const messagesRouter = router({
   list: protectedProcedure
     .input(z.object({ campaignId: z.number().optional(), leadId: z.number().optional(), channel: z.string().optional(), limit: z.number().optional() }).optional())
-    .query(async ({ input }) => db.getMessages(input ?? {})),
+    .query(async ({ input, ctx }) => db.getMessages({ ...(input ?? {}), userId: ctx.user.id })),
 
   send: protectedProcedure
     .input(z.object({
@@ -368,7 +368,7 @@ const messagesRouter = router({
 
   getCallRecordings: protectedProcedure
     .input(z.object({ campaignId: z.number().optional(), leadId: z.number().optional(), limit: z.number().optional() }).optional())
-    .query(async ({ input }) => db.getCallRecordings(input ?? {})),
+    .query(async ({ input, ctx }) => db.getCallRecordings({ ...(input ?? {}), userId: ctx.user.id })),
 
   clearTestRecordings: protectedProcedure
     .mutation(async ({ ctx }) => {
@@ -561,11 +561,11 @@ const voiceAIRouter = router({
 
       // Feature flags from env
       const features = {
-        voice: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
-        sms: !!(process.env.TWILIO_ACCOUNT_SID),
+        voice: !!(process.env.SIGNALWIRE_PROJECT_ID && process.env.SIGNALWIRE_TOKEN),
+        sms: !!(process.env.SIGNALWIRE_PROJECT_ID && process.env.SIGNALWIRE_TOKEN),
         email: !!(process.env.RESEND_API_KEY),
         stt: !!(process.env.OPENAI_API_KEY),
-        tts: !!(process.env.ELEVENLABS_API_KEY),
+        tts: !!(process.env.ELEVENLABS_API_KEY || process.env.CARTESIA_API_KEY),
         ai: !!(process.env.ANTHROPIC_API_KEY),
         gcal: !!(process.env.VITE_GCAL_BOOKING_URL),
       };
@@ -584,15 +584,15 @@ LIVE ACCOUNT DATA:
 FEATURE STATUS (what's enabled right now):
 ${features.ai ? "✅ AI/Script generation — working" : "❌ AI — add ANTHROPIC_API_KEY"}
 ${features.stt ? "✅ Voice transcription (Whisper) — working" : "❌ STT — add OPENAI_API_KEY"}
-${features.voice ? "✅ Outbound calls — working" : "❌ Calls — add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER"}
-${features.sms ? "✅ SMS — working" : "❌ SMS — add TWILIO_ACCOUNT_SID"}
+${features.voice ? "✅ Outbound calls — working" : "❌ Calls — add SIGNALWIRE_PROJECT_ID, SIGNALWIRE_TOKEN, SIGNALWIRE_SPACE_URL, SIGNALWIRE_PHONE_NUMBER"}
+${features.sms ? "✅ SMS — working" : "❌ SMS — add SIGNALWIRE_PROJECT_ID, SIGNALWIRE_TOKEN, SIGNALWIRE_PHONE_NUMBER"}
 ${features.email ? "✅ Email — working" : "❌ Email — add RESEND_API_KEY"}
-${features.tts ? "✅ AI Voice (ElevenLabs) — working" : "❌ AI Voice — add ELEVENLABS_API_KEY"}
+${features.tts ? "✅ AI Voice — working" : "❌ AI Voice — add ELEVENLABS_API_KEY or CARTESIA_API_KEY"}
 ${features.gcal ? "✅ Google Calendar booking — working" : "❌ Google Calendar — add VITE_GCAL_BOOKING_URL"}
 
 HOW APEXAI WORKS:
 - Leads flow: new → contacted → qualified → converted
-- AI calls need: Twilio (dial) + ElevenLabs (speak) + OpenAI Whisper (transcribe) + Anthropic (respond)
+- AI calls need: SignalWire (dial/stream) + ElevenLabs or Cartesia (speak) + OpenAI Whisper (transcribe) + Anthropic (respond)
 - Appointments are auto-booked when AI detects prospect agreeing to a time during a call
 - Bulk send queues SMS/email jobs via BullMQ/Redis — processes even without Twilio (fails gracefully with reason)
 - Script generator uses Anthropic to write personalized scripts per industry
@@ -987,7 +987,7 @@ const appointmentsRouter = router({
       status: z.string().optional(),
       upcoming: z.boolean().optional(),
     }).optional())
-    .query(async ({ input }) => db.getAppointments(input ?? {})),
+    .query(async ({ input, ctx }) => db.getAppointments({ ...(input ?? {}), userId: ctx.user.id })),
 
   create: protectedProcedure
     .input(z.object({
@@ -1047,12 +1047,19 @@ const appointmentsRouter = router({
 const settingsRouter = router({
   get: protectedProcedure.query(async ({ ctx }) => {
     const db_mod = await import("./db");
+    const { getUserVoiceSettings } = await import("./_core/services/voiceProfiles");
     const [user] = await (await db_mod.getDb() as any)
       .select()
       .from((await import("../drizzle/schema")).users)
       .where((await import("drizzle-orm")).eq((await import("../drizzle/schema")).users.id, ctx.user.id))
       .limit(1);
-    return user ?? ctx.user;
+    const voiceSettings = await getUserVoiceSettings(ctx.user.id);
+    return { ...(user ?? ctx.user), ...voiceSettings };
+  }),
+
+  voiceProfiles: protectedProcedure.query(async () => {
+    const { listVoiceProfiles } = await import("./_core/services/voiceProfiles");
+    return listVoiceProfiles();
   }),
 
   update: protectedProcedure
@@ -1061,17 +1068,24 @@ const settingsRouter = router({
       language: z.enum(["en","es","fr","de","pt","it","nl","pl","ru","zh","ja","ko"]).optional(),
       plan: z.string().optional(),
       agencyName: z.string().optional(),
+      voiceProfileId: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db_mod = await import("./db");
       const drizzle_orm = await import("drizzle-orm");
       const schema = await import("../drizzle/schema");
+      const { setUserVoiceProfileId } = await import("./_core/services/voiceProfiles");
       const db_inst = await db_mod.getDb();
       if (!db_inst) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const { voiceProfileId, ...userInput } = input;
 
       await (db_inst as any).update(schema.users)
-        .set({ ...input, updatedAt: new Date() })
+        .set({ ...userInput, updatedAt: new Date() })
         .where(drizzle_orm.eq(schema.users.id, ctx.user.id));
+
+      if (voiceProfileId) {
+        await setUserVoiceProfileId(ctx.user.id, voiceProfileId);
+      }
 
       await db_mod.logActivity({
         userId: ctx.user.id,

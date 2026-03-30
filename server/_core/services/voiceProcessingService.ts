@@ -7,7 +7,7 @@ import * as voiceSessionManager from "./voiceSessionManager";
 import * as conversationEngine from "./conversationEngine";
 import { transcribeAudio } from "./sttService";
 import { synthesizeSpeech } from "./ttsService";
-import * as db from "../../db";
+import { resolveVoiceProfile } from "./voiceProfiles";
 
 /**
  * Process raw audio from a SignalWire media stream.
@@ -16,13 +16,27 @@ import * as db from "../../db";
 export async function processAudioMessage(
   sessionId: string,
   audioBuffer: Buffer
-): Promise<{ audioPayload: string; text: string; response: string; action: string }> {
+): Promise<{
+  audioPayload: string;
+  text: string;
+  response: string;
+  action: string;
+  timings: { sttMs: number; classificationMs: number; llmMs: number; ttsMs: number };
+}> {
   const session = voiceSessionManager.getSession(sessionId);
+  const timings = {
+    sttMs: 0,
+    classificationMs: 0,
+    llmMs: 0,
+    ttsMs: 0,
+  };
 
   // ── Step 1: STT (Speech to Text) ─────────────────────────────────────────
   let userText = "";
   try {
+    const sttStartedAt = Date.now();
     userText = await transcribeAudio(audioBuffer);
+    timings.sttMs = Date.now() - sttStartedAt;
     console.log(`[VoiceProcessing] STT: "${userText}"`);
   } catch (sttError) {
     console.error("[VoiceProcessing] STT failed:", sttError);
@@ -37,6 +51,7 @@ export async function processAudioMessage(
       text: "",
       response: "",
       action: "continue",
+      timings,
     };
   }
 
@@ -62,11 +77,13 @@ export async function processAudioMessage(
     const result = await generateResponse(userText, callState);
     aiResponse = result.response;
     action = result.action ?? "follow_up";
+    timings.classificationMs = result.timings?.classificationMs ?? 0;
+    timings.llmMs = result.timings?.llmMs ?? (Date.now() - tLLM);
 
     // Persist updated state
     updateCallState(sessionId, result.updatedState);
 
-    console.log(`[VoiceProcessing] LLM: "${aiResponse}" (${Date.now()-tLLM}ms, stage: ${result.updatedState.stage}, mode: ${result.updatedState.responseMode})`);
+    console.log(`[VoiceProcessing] LLM: "${aiResponse}" (${timings.llmMs}ms, stage: ${result.updatedState.stage}, mode: ${result.updatedState.responseMode})`);
   } catch (llmError) {
     console.error("[VoiceProcessing] LLM failed:", llmError);
     aiResponse = "Let me transfer you to one of our team members. Please hold.";
@@ -101,9 +118,20 @@ export async function processAudioMessage(
   let audioPayload = "";
   try {
     const tTTS = Date.now();
-    const audioBuffer = await synthesizeSpeech(aiResponse);
+    const voiceProfile = await resolveVoiceProfile({
+      userId: session?.userId,
+      leadId: session?.leadId,
+      explicitVoiceProfileId: session?.voiceProfileId,
+    });
+    const audioBuffer = await synthesizeSpeech(aiResponse, {
+      voiceId: voiceProfile.externalVoiceId,
+      provider: voiceProfile.provider === "other" ? undefined : voiceProfile.provider,
+      speed: voiceProfile.speed,
+      stability: voiceProfile.stability,
+    });
     audioPayload = audioBuffer.toString("base64");
-    console.log(`[VoiceProcessing] TTS: ${audioBuffer.length} bytes (${Date.now()-tTTS}ms)`);
+    timings.ttsMs = Date.now() - tTTS;
+    console.log(`[VoiceProcessing] TTS: ${audioBuffer.length} bytes (${timings.ttsMs}ms)`);
   } catch (ttsError) {
     console.error("[VoiceProcessing] TTS failed:", ttsError);
     // No audio to send back — call will be silent on this turn
@@ -114,6 +142,7 @@ export async function processAudioMessage(
     text: userText,
     response: aiResponse,
     action,
+    timings,
   };
 }
 

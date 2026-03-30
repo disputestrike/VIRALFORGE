@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,13 +18,23 @@ const LANGUAGES = [
 ];
 
 export default function Settings() {
-  const { data: user } = trpc.auth.me.useQuery();
+  const { data: user } = trpc.settings.get.useQuery();
+  const { data: voiceProfiles } = trpc.settings.voiceProfiles.useQuery();
   const utils = trpc.useUtils();
 
   const [transferNumber, setTransferNumber] = useState((user as any)?.transferNumber || "");
   const [language, setLanguage] = useState((user as any)?.language || "en");
   const [agencyName, setAgencyName] = useState((user as any)?.agencyName || "");
+  const [voiceProfileId, setVoiceProfileId] = useState((user as any)?.voiceProfileId || "cartesia-sarah-sales");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    setTransferNumber((user as any)?.transferNumber || "");
+    setLanguage((user as any)?.language || "en");
+    setAgencyName((user as any)?.agencyName || "");
+    setVoiceProfileId((user as any)?.voiceProfileId || "cartesia-sarah-sales");
+  }, [user]);
 
   const updateMutation = trpc.settings.update.useMutation({
     onSuccess: () => {
@@ -44,6 +54,7 @@ export default function Settings() {
       transferNumber: transferNumber || undefined,
       language: language as any,
       agencyName: agencyName || undefined,
+      voiceProfileId,
     });
   };
 
@@ -121,6 +132,34 @@ export default function Settings() {
                 {lang.name.split(" ")[0]}
               </button>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-primary" />
+            Voice Profile
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Choose the default telephony voice for your live AI calls. Campaign-level overrides can use a different profile later.
+          </p>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Default voice</Label>
+            <select
+              value={voiceProfileId}
+              onChange={e => setVoiceProfileId(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg text-sm bg-secondary border border-border"
+            >
+              {(voiceProfiles ?? []).map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.label} · {profile.provider} · {profile.useCase}
+                </option>
+              ))}
+            </select>
           </div>
         </CardContent>
       </Card>

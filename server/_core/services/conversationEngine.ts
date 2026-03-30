@@ -32,6 +32,10 @@ export interface ConversationResult {
   action: ConversationAction;
   confidence: number;
   updatedState: CallState;
+  timings: {
+    classificationMs: number;
+    llmMs: number;
+  };
 }
 
 // ── Intent classifier ─────────────────────────────────────────────────────────
@@ -46,6 +50,9 @@ async function classifyIntent(utterance: string, industry: string): Promise<{
 
   if (u.match(/transfer|human|person|agent|representative|speak.*(someone|one)/)) {
     return { intent: "human_handoff_request", isQuestion: false, sentiment: "neutral" };
+  }
+  if (u.match(/^(hello|hi|hey|good morning|good afternoon)\b/) || u.match(/is this (apex|apex ai|apexai)/)) {
+    return { intent: "product_question", isQuestion: true, sentiment: "neutral" };
   }
   if (u.match(/not interested|no thanks|stop|remove|don't call|busy/)) {
     return { intent: "booking_resistance", isQuestion: false, sentiment: "neutral" };
@@ -79,6 +86,7 @@ export async function generateResponse(
   state: CallState,
   clientConfig?: Partial<ClientConfig>
 ): Promise<ConversationResult> {
+  const classificationStartedAt = Date.now();
 
   const pack = INDUSTRY_PACKS[state.industry] || INDUSTRY_PACKS.general;
   const businessName = clientConfig?.businessName || "ApexAI";
@@ -86,6 +94,7 @@ export async function generateResponse(
 
   // 1. Classify intent
   const classification = await classifyIntent(userText, state.industry);
+  const classificationMs = Date.now() - classificationStartedAt;
 
   // 2. Update state with user turn
   let updatedState = addTurn(state, "user", userText);
@@ -129,7 +138,9 @@ export async function generateResponse(
   let action: ConversationAction = "follow_up";
 
   try {
+    const llmStartedAt = Date.now();
     const result = await invokeLLM({ messages });
+    const llmMs = Date.now() - llmStartedAt;
     const content = result.choices[0]?.message?.content || "";
     const clean = content.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
     const parsed = JSON.parse(clean);
@@ -153,6 +164,8 @@ export async function generateResponse(
       updatedState = { ...updatedState, stage: "qualification" };
     }
 
+    updatedState = addTurn(updatedState, "assistant", response);
+    return { response, action, confidence: 0.85, updatedState, timings: { classificationMs, llmMs } };
   } catch (err) {
     console.error("[ConversationEngine] LLM error:", err);
     updatedState = { ...updatedState, fallbackCount: updatedState.fallbackCount + 1 };
@@ -163,7 +176,7 @@ export async function generateResponse(
   // 11. Add assistant turn to history
   updatedState = addTurn(updatedState, "assistant", response);
 
-  return { response, action, confidence: 0.85, updatedState };
+  return { response, action, confidence: 0.85, updatedState, timings: { classificationMs, llmMs: 0 } };
 }
 
 // ── Backward compat wrapper ───────────────────────────────────────────────────
@@ -262,6 +275,7 @@ Mode: ${responseMode}. Stage: ${state.stage}.${activeQ}${noBook}
 ${areas} ${offers}
 ${langInstruction}
 Rules: Max 2 short sentences. Answer what caller just said. Natural speech. No lists.
+Never jump to booking while a question is unresolved. If the caller is just checking identity or saying hello, answer directly and invite the next question.
 Reply ONLY with JSON: {"response":"...","action":"follow_up|book_appointment|propose_times|transfer|end_call","confidence":0.9}`;
 }
 

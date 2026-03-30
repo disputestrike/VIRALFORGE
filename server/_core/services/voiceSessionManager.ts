@@ -9,40 +9,68 @@ export interface VoiceSession {
   sessionId: string;
   leadId: number;
   campaignId: string;
+  userId?: number | null;
   callSid?: string;
   startTime: number;
   endTime?: number;
   status: "active" | "completed" | "failed";
+  turnState: "idle" | "assistant_speaking" | "user_speaking" | "processing";
+  greetingSent: boolean;
   conversationHistory: Array<{ role: "user" | "assistant"; content: string; timestamp: number }>;
   proposedSlots: Array<{ time: Date; label: string }>;
   appointmentBooked: boolean;
   appointmentId?: number;
   outcome?: "interested" | "not_interested" | "callback" | "scheduled" | "voicemail" | "no_answer";
   sentiment?: "positive" | "neutral" | "negative";
+  language?: string;
+  voiceProfileId?: string;
   transcript: string;
+  trace: Array<{ ts: number; event: string; data?: Record<string, unknown> }>;
 }
 
 // In-memory session store (keyed by sessionId OR callSid)
 const sessions = new Map<string, VoiceSession>();
 
-export function createSession(leadId: number, campaignId: string, callSid?: string): VoiceSession {
+export function createSession(
+  leadId: number,
+  campaignId: string,
+  callSid?: string,
+  options?: {
+    userId?: number | null;
+    language?: string;
+    voiceProfileId?: string;
+  }
+): VoiceSession {
   const sessionId = callSid || `session_${leadId}_${Date.now()}`;
   const session: VoiceSession = {
     sessionId,
     leadId,
     campaignId,
+    userId: options?.userId ?? null,
     callSid,
     startTime: Date.now(),
     status: "active",
+    turnState: "idle",
+    greetingSent: false,
     conversationHistory: [],
     proposedSlots: [],
     appointmentBooked: false,
     transcript: "",
+    language: options?.language ?? "en",
+    voiceProfileId: options?.voiceProfileId,
+    trace: [],
   };
   sessions.set(sessionId, session);
   if (callSid && callSid !== sessionId) {
     sessions.set(callSid, session); // also index by callSid
   }
+  traceEvent(sessionId, "session_created", {
+    leadId,
+    campaignId,
+    userId: session.userId ?? null,
+    language: session.language ?? "en",
+    voiceProfileId: session.voiceProfileId ?? null,
+  });
   console.log(`[VoiceSession] Created session ${sessionId} for lead ${leadId}`);
   return session;
 }
@@ -67,6 +95,30 @@ export function updateSession(sessionId: string, updates: Partial<VoiceSession>)
   const session = sessions.get(sessionId);
   if (!session) return;
   Object.assign(session, updates);
+}
+
+export function setTurnState(
+  sessionId: string,
+  turnState: VoiceSession["turnState"],
+  data?: Record<string, unknown>
+): void {
+  const session = sessions.get(sessionId);
+  if (!session) return;
+  session.turnState = turnState;
+  traceEvent(sessionId, `turn_${turnState}`, data);
+}
+
+export function traceEvent(
+  sessionId: string,
+  event: string,
+  data?: Record<string, unknown>
+): void {
+  const session = sessions.get(sessionId);
+  if (!session) return;
+  session.trace.push({ ts: Date.now(), event, data });
+  if (session.trace.length > 200) {
+    session.trace = session.trace.slice(-200);
+  }
 }
 
 export function completeSession(sessionId: string, outcome?: VoiceSession["outcome"]): void {
@@ -127,6 +179,7 @@ export async function persistSessionToDatabase(sessionId: string): Promise<void>
         : null,
       sentiment: session.sentiment ?? "neutral",
       scheduledAppointment: session.appointmentBooked,
+      createdBy: session.userId ?? undefined,
       calledAt: new Date(session.startTime),
     });
 
