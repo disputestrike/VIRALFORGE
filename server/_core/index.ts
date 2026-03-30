@@ -400,6 +400,8 @@ async function startServer() {
     try {
       if (From) {
         const db = await import("../db");
+        // Look up which user owns the called number (To) for proper tenant assignment
+        const ownerId = To ? await db.getUserIdByPhoneNumber(To) : 1;
         let lead = await db.getLeadByPhone(From);
         if (!lead) {
           lead = await db.createLead({
@@ -410,6 +412,7 @@ async function startServer() {
             status: "new",
             score: 60,
             segment: "warm",
+            createdBy: ownerId ?? 1,
           }) as any;
         }
         const vm = await import("./services/voiceSessionManager");
@@ -558,6 +561,7 @@ async function startServer() {
           status: "new",
           score: 60, // Inbound = warm lead
           segment: "warm",
+          createdBy: 1, // System: assigned to account owner of this number
         });
         lead = newLead as any;
         console.log(`[Inbound] Created new lead ${(lead as any).id} from ${From}`);
@@ -677,6 +681,7 @@ async function startServer() {
           status: "new",
           score: 50,
           segment: "warm",
+          createdBy: 1, // System: assigned to account owner of this number
         }) as any;
       }
 

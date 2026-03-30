@@ -489,6 +489,21 @@ export async function createManualAppointment(data: { leadId: number; scheduledT
 }
 
 // ── Local Number Pool (SignalWire local presence) ─────────────────────────
+// Look up which user owns a given phone number (for inbound call routing)
+export async function getUserIdByPhoneNumber(phoneNumber: string): Promise<number | null> {
+  const db = await getDb();
+  if (!db) return null;
+  try {
+    // Check user_phone_numbers table (provisioned numbers)
+    const [rows] = await (db as any).execute(
+      "SELECT userId FROM user_phone_numbers WHERE phoneNumber = ? AND isActive = TRUE LIMIT 1",
+      [phoneNumber]
+    );
+    if (Array.isArray(rows) && rows.length > 0) return (rows[0] as any).userId;
+  } catch { /* table may not exist yet */ }
+  return 1; // Fallback to system admin
+}
+
 export async function getLocalNumberByAreaCode(areaCode: string): Promise<{ phoneNumber: string } | null> {
   const conn = await import("mysql2/promise");
   const connection = await conn.createConnection({
