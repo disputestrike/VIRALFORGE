@@ -292,3 +292,33 @@ export const userPhoneNumbers = mysqlTable("user_phone_numbers", {
 
 export type UserPhoneNumber = typeof userPhoneNumbers.$inferSelect;
 export type InsertUserPhoneNumber = typeof userPhoneNumbers.$inferInsert;
+
+// ─── Agency Sub-Accounts ──────────────────────────────────────────────────────
+export const agencyClients = mysqlTable("agency_clients", {
+  id: int("id").autoincrement().primaryKey(),
+  agencyUserId: int("agencyUserId").notNull(),      // the agency owner
+  clientUserId: int("clientUserId"),                 // ApexAI user if they have one
+  clientName: varchar("clientName", { length: 200 }).notNull(),
+  clientEmail: varchar("clientEmail", { length: 320 }),
+  clientPhone: varchar("clientPhone", { length: 20 }),
+  businessName: varchar("businessName", { length: 200 }),
+  industry: varchar("industry", { length: 100 }),
+  plan: varchar("plan", { length: 50 }).default("starter"),
+  status: mysqlEnum("status", ["active","paused","cancelled","pending"]).default("active").notNull(),
+  minutesIncluded: int("minutesIncluded").default(500),
+  minutesUsed: int("minutesUsed").default(0),
+  // Billing
+  monthlyRate: float("monthlyRate").default(149),    // what agency charges client
+  costToAgency: float("costToAgency").default(99),   // what they pay ApexAI
+  // Settings
+  transferNumber: varchar("transferNumber", { length: 20 }),
+  language: varchar("language", { length: 20 }).default("en"),
+  aiPhoneNumber: varchar("aiPhoneNumber", { length: 20 }),
+  signalwireSid: varchar("signalwireSid", { length: 255 }),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AgencyClient = typeof agencyClients.$inferSelect;
+export type InsertAgencyClient = typeof agencyClients.$inferInsert;

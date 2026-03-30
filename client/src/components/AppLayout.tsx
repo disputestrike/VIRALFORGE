@@ -19,6 +19,7 @@ import {
   Zap,
   FileText,
   Settings2,
+  Building2,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "./ui/button";

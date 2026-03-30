@@ -1084,6 +1084,188 @@ const settingsRouter = router({
 });
 
 
+
+// ─── Agency Router ────────────────────────────────────────────────────────────
+const agencyRouter = router({
+  // List all clients under this agency
+  listClients: protectedProcedure.query(async ({ ctx }) => {
+    const db_inst = await db.getDb();
+    if (!db_inst) return [];
+    const { agencyClients } = await import("../drizzle/schema");
+    const { eq, desc } = await import("drizzle-orm");
+    return (db_inst as any).select().from(agencyClients)
+      .where(eq(agencyClients.agencyUserId, ctx.user.id))
+      .orderBy(desc(agencyClients.createdAt));
+  }),
+
+  // Add a new client
+  addClient: protectedProcedure
+    .input(z.object({
+      clientName: z.string().min(1),
+      clientEmail: z.string().email().optional(),
+      clientPhone: z.string().optional(),
+      businessName: z.string().optional(),
+      industry: z.string().optional(),
+      plan: z.string().optional().default("starter"),
+      monthlyRate: z.number().optional().default(149),
+      minutesIncluded: z.number().optional().default(500),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db_inst = await db.getDb();
+      if (!db_inst) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { agencyClients } = await import("../drizzle/schema");
+
+      await (db_inst as any).insert(agencyClients).values({
+        agencyUserId: ctx.user.id,
+        clientName: input.clientName,
+        clientEmail: input.clientEmail,
+        clientPhone: input.clientPhone,
+        businessName: input.businessName,
+        industry: input.industry,
+        plan: input.plan,
+        monthlyRate: input.monthlyRate,
+        minutesIncluded: input.minutesIncluded,
+        notes: input.notes,
+        status: "active",
+      });
+
+      await db.logActivity({
+        userId: ctx.user.id,
+        entityType: "agency_client",
+        action: "added",
+        description: `Added agency client: ${input.clientName}`,
+      });
+
+      return { success: true };
+    }),
+
+  // Update client
+  updateClient: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      clientName: z.string().optional(),
+      clientEmail: z.string().optional(),
+      businessName: z.string().optional(),
+      industry: z.string().optional(),
+      plan: z.string().optional(),
+      status: z.enum(["active","paused","cancelled","pending"]).optional(),
+      monthlyRate: z.number().optional(),
+      minutesIncluded: z.number().optional(),
+      transferNumber: z.string().optional(),
+      language: z.string().optional(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db_inst = await db.getDb();
+      if (!db_inst) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { agencyClients } = await import("../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+      const { id, ...rest } = input;
+
+      await (db_inst as any).update(agencyClients)
+        .set({ ...rest, updatedAt: new Date() })
+        .where(and(eq(agencyClients.id, id), eq(agencyClients.agencyUserId, ctx.user.id)));
+
+      return { success: true };
+    }),
+
+  // Provision a phone number for a client
+  provisionClientNumber: protectedProcedure
+    .input(z.object({ clientId: z.number(), areaCode: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const db_inst = await db.getDb();
+      if (!db_inst) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { agencyClients } = await import("../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+
+      // Verify ownership
+      const [client] = await (db_inst as any).select().from(agencyClients)
+        .where(and(eq(agencyClients.id, input.clientId), eq(agencyClients.agencyUserId, ctx.user.id)))
+        .limit(1);
+      if (!client) throw new TRPCError({ code: "NOT_FOUND" });
+
+      // Buy number from SignalWire
+      const RestClient = require("@signalwire/compatibility-api").RestClient;
+      const swClient = RestClient(
+        process.env.SIGNALWIRE_PROJECT_ID!,
+        process.env.SIGNALWIRE_TOKEN!,
+        { signalwireSpaceUrl: process.env.SIGNALWIRE_SPACE_URL! }
+      );
+
+      const searchOpts: Record<string, unknown> = { limit: 1 };
+      if (input.areaCode) searchOpts.areaCode = input.areaCode;
+      const available = await swClient.availablePhoneNumbers("US").local.list(searchOpts);
+      if (!available.length) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No numbers available" });
+
+      const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+        : "https://apexai-production-d567.up.railway.app";
+
+      const purchased = await swClient.incomingPhoneNumbers.create({
+        phoneNumber: available[0].phoneNumber,
+        voiceUrl: `${baseUrl}/api/voice/start`,
+        voiceMethod: "POST",
+        smsUrl: `${baseUrl}/api/sms/inbound`,
+        smsMethod: "POST",
+        friendlyName: `ApexAI Agency - ${client.clientName}`,
+      });
+
+      // Save to client record
+      await (db_inst as any).update(agencyClients)
+        .set({ aiPhoneNumber: available[0].phoneNumber, signalwireSid: purchased.sid })
+        .where(eq(agencyClients.id, input.clientId));
+
+      await db.logActivity({
+        userId: ctx.user.id,
+        entityType: "agency_client",
+        entityId: input.clientId,
+        action: "number_provisioned",
+        description: `Provisioned ${available[0].phoneNumber} for ${client.clientName}`,
+      });
+
+      return { success: true, phoneNumber: available[0].phoneNumber, sid: purchased.sid };
+    }),
+
+  // Remove client
+  removeClient: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db_inst = await db.getDb();
+      if (!db_inst) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { agencyClients } = await import("../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+
+      await (db_inst as any).update(agencyClients)
+        .set({ status: "cancelled" })
+        .where(and(eq(agencyClients.id, input.id), eq(agencyClients.agencyUserId, ctx.user.id)));
+
+      return { success: true };
+    }),
+
+  // Agency stats
+  stats: protectedProcedure.query(async ({ ctx }) => {
+    const db_inst = await db.getDb();
+    if (!db_inst) return { totalClients: 0, activeClients: 0, monthlyRevenue: 0, totalMinutes: 0 };
+    const { agencyClients } = await import("../drizzle/schema");
+    const { eq, sql } = await import("drizzle-orm");
+
+    const clients = await (db_inst as any).select().from(agencyClients)
+      .where(eq(agencyClients.agencyUserId, ctx.user.id));
+
+    const active = clients.filter((c: any) => c.status === "active");
+    const revenue = active.reduce((sum: number, c: any) => sum + (c.monthlyRate || 0), 0);
+    const minutes = clients.reduce((sum: number, c: any) => sum + (c.minutesUsed || 0), 0);
+
+    return {
+      totalClients: clients.length,
+      activeClients: active.length,
+      monthlyRevenue: revenue,
+      totalMinutes: minutes,
+    };
+  }),
+});
+
 // ─── Business Extractor Router ────────────────────────────────────────────────
 const extractorRouter = router({
   // Extract from URL — crawl website and return structured business info
@@ -1238,6 +1420,7 @@ export const appRouter = router({
   // INTEGRATION: Add Omni AI webhook endpoints
   webhooks: webhooksRouter,
   settings: settingsRouter,
+  agency: agencyRouter,
   extractor: extractorRouter,
   demoCall: demoCallRouter,
   ghl: ghlRouter,

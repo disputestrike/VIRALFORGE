@@ -267,6 +267,69 @@ export default function LandingPageFull() {
         </div>
       </section>
 
+      {/* ── TRAINED ON SALES ── */}
+      <section className="py-16 px-6" style={{ backgroundColor: D, borderTop: `1px solid ${DIM3}` }}>
+        <div className="max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <Badge className="mb-4" style={{ backgroundColor: "rgba(192,132,252,0.15)", color: "#c084fc", border: "1px solid rgba(192,132,252,0.3)" }}>
+                <Mic className="w-3 h-3 mr-1.5" /> The AI Behind the Calls
+              </Badge>
+              <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+                Not a Chatbot. Not a Script. A Sales Professional.
+              </h2>
+              <p className="leading-relaxed mb-4" style={{ color: DIM }}>
+                Our AI was built from the ground up on millions of real sales conversations across every industry. It learned what works — and what doesn't — from the best closers in solar, roofing, HVAC, insurance, real estate, and more.
+              </p>
+              <p className="leading-relaxed mb-6" style={{ color: DIM }}>
+                It understands context. It handles objections on the fly. It knows when to push, when to back off, and when to close. Your prospects won't know they're talking to AI — they'll just know they're talking to someone who can actually help them.
+              </p>
+              <div className="space-y-3">
+                {[
+                  "Trained on millions of real sales calls across every industry",
+                  "Handles live objections — price, timing, competition, skepticism",
+                  "Adapts tone and approach in real time based on caller response",
+                  "Never has a bad day. Never rushes. Always follows your script perfectly.",
+                  "Speaks 12 languages — reach every market without extra staff",
+                ].map(f => (
+                  <div key={f} className="flex items-start gap-2 text-sm" style={{ color: "rgba(255,255,255,0.75)" }}>
+                    <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: "#c084fc" }} />
+                    {f}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div className="p-5 rounded-2xl" style={{ backgroundColor: "#1a1e2a", border: "1px solid rgba(192,132,252,0.2)" }}>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: "#c084fc" }}>The Human vs AI Question</p>
+                <p className="text-sm leading-relaxed mb-4" style={{ color: "rgba(255,255,255,0.65)" }}>
+                  The #1 question we get: <em className="text-white">"Can AI really replace a salesperson?"</em>
+                </p>
+                <p className="text-sm leading-relaxed mb-4" style={{ color: "rgba(255,255,255,0.65)" }}>
+                  Our AI isn't trying to replace your best closers — it's trying to be the best SDR you've ever had. It qualifies every lead, overcomes objections, and hands off only the ready-to-buy prospects to your team.
+                </p>
+                <p className="text-sm font-semibold text-white">
+                  Your best rep closes deals. Our AI fills their calendar.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { stat: "1M+", label: "Sales conversations trained on" },
+                  { stat: "12", label: "Languages spoken fluently" },
+                  { stat: "24/7", label: "Never sleeps, never quits" },
+                  { stat: "< 1s", label: "Response time on every call" },
+                ].map(({ stat, label }) => (
+                  <div key={label} className="p-4 rounded-xl text-center" style={{ backgroundColor: "#1a1e2a", border: "1px solid rgba(255,255,255,0.08)" }}>
+                    <p className="text-2xl font-black text-white mb-1">{stat}</p>
+                    <p className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── OUTBOUND ── */}
       <section id="features" className="py-20 px-6" style={{ backgroundColor: D2 }}>
         <div className="max-w-5xl mx-auto">

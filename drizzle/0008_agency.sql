@@ -1,0 +1,27 @@
+-- Migration: Agency sub-account system
+CREATE TABLE IF NOT EXISTS agency_clients (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  agencyUserId INT NOT NULL,
+  clientUserId INT DEFAULT NULL,
+  clientName VARCHAR(200) NOT NULL,
+  clientEmail VARCHAR(320),
+  clientPhone VARCHAR(20),
+  businessName VARCHAR(200),
+  industry VARCHAR(100),
+  plan VARCHAR(50) DEFAULT 'starter',
+  status ENUM('active','paused','cancelled','pending') DEFAULT 'active' NOT NULL,
+  minutesIncluded INT DEFAULT 500,
+  minutesUsed INT DEFAULT 0,
+  monthlyRate FLOAT DEFAULT 149,
+  costToAgency FLOAT DEFAULT 99,
+  transferNumber VARCHAR(20),
+  language VARCHAR(20) DEFAULT 'en',
+  aiPhoneNumber VARCHAR(20),
+  signalwireSid VARCHAR(255),
+  notes TEXT,
+  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+  INDEX idx_agency_user (agencyUserId),
+  INDEX idx_client_user (clientUserId),
+  INDEX idx_status (status)
+);
