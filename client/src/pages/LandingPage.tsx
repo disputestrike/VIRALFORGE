@@ -13,6 +13,8 @@ import { useState } from "react";
 import LiveTicker from "@/components/LiveTicker";
 import ROICalculator from "@/components/ROICalculator";
 import CommunityWins from "@/components/CommunityWins";
+import DemoCallWidget from "@/components/DemoCallWidget";
+import IndustryDemos from "@/components/IndustryDemos";
 
 const staticTestimonials = [
   { name: "Moises R.", industry: "Roofing", result: "200+ appointments, 160 contracts, $2M in two weeks", before: "Manual cold calling, 5% response rate", after: "AI-driven outreach, 47% response rate" },
@@ -63,7 +65,7 @@ export default function LandingPageFull() {
           </Link>
 
           <nav className="hidden md:flex items-center gap-8 text-sm" style={{ color: DIM2 }}>
-            {["#features", "#inbound", "#pricing", "#case-studies", "#about"].map((href) => (
+            {["#features", "#inbound", "#demos", "#pricing", "#case-studies", "#about"].map((href) => (
               <a key={href} href={href} className="hover:text-white transition-colors capitalize">
                 {href.replace("#", "").replace("-", " ")}
               </a>
@@ -90,7 +92,7 @@ export default function LandingPageFull() {
 
         {mobileMenuOpen && (
           <div className="md:hidden border-t p-4 space-y-3" style={{ backgroundColor: D2, borderColor: DIM3 }}>
-            {["#features", "#inbound", "#pricing", "#case-studies", "#about"].map((href) => (
+            {["#features", "#inbound", "#demos", "#pricing", "#case-studies", "#about"].map((href) => (
               <a key={href} href={href} className="block text-sm py-1 capitalize" style={{ color: DIM2 }}
                 onClick={() => setMobileMenuOpen(false)}>
                 {href.replace("#", "").replace("-", " ")}
@@ -450,6 +452,12 @@ export default function LandingPageFull() {
       {/* ── ROI CALCULATOR ── */}
       <ROICalculator />
 
+      {/* ── INDUSTRY AUDIO DEMOS ── */}
+      <IndustryDemos />
+
+      {/* ── DEMO CALL WIDGET ── */}
+      <DemoCallWidget />
+
       {/* ── CASE STUDIES ── */}
       <section id="case-studies" className="py-20 px-6" style={{ backgroundColor: D }}>
         <div className="max-w-5xl mx-auto">
@@ -649,6 +657,90 @@ export default function LandingPageFull() {
               No credit card required · Setup in minutes · Works 24/7 from day one
             </p>
           </div>
+        </div>
+      </section>
+
+      {/* ── AGENCY + WHITE LABEL ── */}
+      <section className="py-20 px-6" style={{ backgroundColor: D }}>
+        <div className="max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <Badge className="mb-4" style={{ backgroundColor: "rgba(192,132,252,0.15)", color: "#c084fc", border: "1px solid rgba(192,132,252,0.3)" }}>
+                Agency Program
+              </Badge>
+              <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+                Run an Agency? Scale Your Clients with AI.
+              </h2>
+              <p className="leading-relaxed mb-6" style={{ color: DIM }}>
+                Manage unlimited client accounts, resell AI voice services, and white-label the platform as your own. Our agency program gives you the tools to build a recurring revenue business on top of ApexAI.
+              </p>
+              <div className="space-y-3 mb-6">
+                {[
+                  "Unlimited client sub-accounts",
+                  "White-label dashboard (your brand, your colors)",
+                  "Resell AI calling minutes at a premium",
+                  "Direct client billing",
+                  "Dedicated account manager",
+                  "Agency-only pricing tiers",
+                ].map(f => (
+                  <div key={f} className="flex items-center gap-2 text-sm" style={{ color: "rgba(255,255,255,0.7)" }}>
+                    <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: "#c084fc" }} />
+                    {f}
+                  </div>
+                ))}
+              </div>
+              <a href="mailto:agency@apexai.io">
+                <Button size="lg" style={{ backgroundColor: "#c084fc", borderColor: "#c084fc" }}>
+                  Apply for Agency Access <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </a>
+            </div>
+            <div className="space-y-4">
+              {[
+                { tier: "Agency", price: "$499/mo", desc: "Up to 10 client accounts, rebilling enabled", color: "#c084fc" },
+                { tier: "White Label Agency", price: "$999/mo", desc: "Unlimited accounts, fully branded dashboard", color: "#818cf8" },
+                { tier: "Enterprise White Label", price: "Custom", desc: "Onboard other agencies, Slack support, CSM", color: BLUE_LIGHT },
+              ].map(({ tier, price, desc, color }) => (
+                <div key={tier} className="p-5 rounded-xl" style={{ backgroundColor: D2, border: `1px solid ${DIM3}` }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold text-white">{tier}</span>
+                    <span className="font-black text-lg" style={{ color }}>{price}</span>
+                  </div>
+                  <p className="text-xs" style={{ color: DIM2 }}>{desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── CRM INTEGRATIONS ── */}
+      <section className="py-16 px-6" style={{ backgroundColor: D2, borderTop: `1px solid ${DIM3}` }}>
+        <div className="max-w-5xl mx-auto text-center">
+          <h2 className="text-3xl font-bold text-white mb-3">Works with Your Existing Tools</h2>
+          <p className="mb-10" style={{ color: DIM }}>Connect ApexAI to 6,000+ apps via our webhook API and native integrations</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 mb-8">
+            {[
+              { name: "GoHighLevel", color: "#f97316" },
+              { name: "Salesforce", color: "#00a1e0" },
+              { name: "HubSpot", color: "#ff7a59" },
+              { name: "Pipedrive", color: "#34d399" },
+              { name: "Zoho CRM", color: "#e42527" },
+              { name: "Close.io", color: "#5b72e7" },
+            ].map(({ name, color }) => (
+              <div key={name} className="p-3 rounded-xl text-center" style={{ backgroundColor: D3, border: `1px solid ${DIM3}` }}>
+                <div className="w-8 h-8 rounded-lg mx-auto mb-2 flex items-center justify-center font-black text-sm"
+                  style={{ backgroundColor: `${color}20`, color }}>
+                  {name[0]}
+                </div>
+                <p className="text-xs font-medium text-white">{name}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-sm" style={{ color: DIM2 }}>
+            Plus Zapier, Make, n8n, and any webhook-compatible platform.{" "}
+            <a href="/dashboard" className="text-primary hover:underline">View integration docs →</a>
+          </p>
         </div>
       </section>
 

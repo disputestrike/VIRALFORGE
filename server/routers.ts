@@ -85,6 +85,42 @@ const leadsRouter = router({
       return { success: true };
     }),
 
+  // High-speed bulk blast — queue ALL campaign contacts simultaneously
+  blast: protectedProcedure
+    .input(z.object({ campaignId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const campaign = await db.getCampaignById(input.campaignId);
+      if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
+      if (campaign.createdBy !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+
+      const contacts = await db.getCampaignContacts(input.campaignId);
+      if (!contacts.length) throw new TRPCError({ code: "BAD_REQUEST", message: "No contacts in campaign" });
+
+      const { addCallJob } = await import("./_core/services/queue");
+      let queued = 0;
+      // Queue ALL simultaneously — BullMQ handles concurrency (50 at a time)
+      await Promise.all(contacts.map(async (c) => {
+        try {
+          const lead = await db.getLeadById(c.leadId);
+          if (lead?.phone) {
+            await addCallJob({ leadId: lead.id, campaignId: input.campaignId });
+            queued++;
+          }
+        } catch {}
+      }));
+
+      await db.updateCampaign(input.campaignId, { status: "active" });
+      await db.logActivity({
+        userId: ctx.user.id,
+        entityType: "campaign",
+        entityId: input.campaignId,
+        action: "blast",
+        description: `High-speed blast: ${queued} calls queued simultaneously`,
+      });
+
+      return { success: true, queued, message: `${queued} calls queued simultaneously` };
+    }),
+
   delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
     await db.deleteLead(input.id);
     await db.logActivity({ userId: ctx.user.id, entityType: "lead", entityId: input.id, action: "deleted" });
@@ -983,6 +1019,157 @@ const appointmentsRouter = router({
   }),
 });
 
+
+
+// ─── User Settings Router ─────────────────────────────────────────────────────
+const settingsRouter = router({
+  get: protectedProcedure.query(async ({ ctx }) => {
+    const db_mod = await import("./db");
+    const [user] = await (await db_mod.getDb() as any)
+      .select()
+      .from((await import("../drizzle/schema")).users)
+      .where((await import("drizzle-orm")).eq((await import("../drizzle/schema")).users.id, ctx.user.id))
+      .limit(1);
+    return user ?? ctx.user;
+  }),
+
+  update: protectedProcedure
+    .input(z.object({
+      transferNumber: z.string().optional(),
+      language: z.enum(["en","es","fr","de","pt","it","nl","pl","ru","zh","ja","ko"]).optional(),
+      plan: z.string().optional(),
+      agencyName: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db_mod = await import("./db");
+      const drizzle_orm = await import("drizzle-orm");
+      const schema = await import("../drizzle/schema");
+      const db_inst = await db_mod.getDb();
+      if (!db_inst) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+
+      await (db_inst as any).update(schema.users)
+        .set({ ...input, updatedAt: new Date() })
+        .where(drizzle_orm.eq(schema.users.id, ctx.user.id));
+
+      await db_mod.logActivity({
+        userId: ctx.user.id,
+        entityType: "user_settings",
+        action: "updated",
+        description: `Settings updated: ${JSON.stringify(input)}`,
+      });
+      return { success: true };
+    }),
+});
+
+// ─── Demo Call Router (PUBLIC — for landing page "call me now") ───────────────
+const demoCallRouter = router({
+  // Trigger an outbound AI demo call from the landing page — captures lead data
+  request: publicProcedure
+    .input(z.object({
+      firstName: z.string().min(1),
+      phone: z.string().min(10),
+      email: z.string().email().optional(),
+      industry: z.string().optional().default("general"),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        // Save as a lead first
+        const leadResult = await db.createLead({
+          firstName: input.firstName,
+          lastName: "Demo",
+          phone: input.phone,
+          email: input.email,
+          source: "demo_call",
+          status: "new",
+          score: 70,
+          segment: "hot",
+          industry: input.industry,
+          createdBy: 1, // system account — demo leads
+        });
+
+        // Trigger outbound call immediately
+        const { initiateCall } = await import("./_core/services/signalwireService");
+        const result = await initiateCall({
+          leadId: leadResult.insertId,
+          phoneNumber: input.phone,
+        });
+
+        await db.logActivity({
+          entityType: "demo_call",
+          entityId: leadResult.insertId,
+          action: "demo_requested",
+          description: `Demo call requested by ${input.firstName} (${input.phone}) — industry: ${input.industry}`,
+          metadata: { callSid: result.callSid, phone: input.phone, email: input.email },
+        });
+
+        console.log(`[DemoCall] Triggered for ${input.firstName} at ${input.phone} | callSid: ${result.callSid}`);
+        return { success: true, message: "Your AI demo call is connecting now!" };
+      } catch (err: any) {
+        console.error("[DemoCall] Failed:", err);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Could not connect demo call. Please try again.",
+        });
+      }
+    }),
+});
+
+// ─── GoHighLevel Webhook Router (PUBLIC) ──────────────────────────────────────
+const ghlRouter = router({
+  // Webhook endpoint for GoHighLevel to trigger outbound AI calls
+  triggerCall: publicProcedure
+    .input(z.object({
+      contactId: z.string().optional(),
+      firstName: z.string().optional(),
+      lastName: z.string().optional(),
+      phone: z.string().min(10),
+      email: z.string().email().optional(),
+      industry: z.string().optional(),
+      campaignId: z.number().optional(),
+      apiKey: z.string().optional(), // optional webhook secret
+    }))
+    .mutation(async ({ input }) => {
+      // Validate webhook secret if configured
+      const expectedKey = process.env.GHL_WEBHOOK_SECRET;
+      if (expectedKey && input.apiKey !== expectedKey) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid webhook key" });
+      }
+
+      try {
+        // Upsert lead
+        let lead = await db.getLeadByPhone(input.phone);
+        if (!lead) {
+          const result = await db.createLead({
+            firstName: input.firstName || "GHL",
+            lastName: input.lastName || "Lead",
+            phone: input.phone,
+            email: input.email,
+            source: "gohighlevel",
+            status: "new",
+            score: 65,
+            segment: "warm",
+            industry: input.industry,
+            createdBy: 1,
+          });
+          lead = { id: result.insertId } as any;
+        }
+
+        // Queue outbound call
+        const { addCallJob } = await import("./_core/services/queue");
+        await addCallJob({
+          leadId: (lead as any).id,
+          campaignId: input.campaignId,
+        });
+
+        console.log(`[GHL Webhook] Call queued for ${input.phone} (contactId: ${input.contactId})`);
+        return { success: true, leadId: (lead as any).id };
+      } catch (err: any) {
+        console.error("[GHL Webhook] Failed:", err);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
+      }
+    }),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -1006,6 +1193,9 @@ export const appRouter = router({
   saas: saasRouter,
   // INTEGRATION: Add Omni AI webhook endpoints
   webhooks: webhooksRouter,
+  settings: settingsRouter,
+  demoCall: demoCallRouter,
+  ghl: ghlRouter,
 });
 
 export type AppRouter = typeof appRouter;

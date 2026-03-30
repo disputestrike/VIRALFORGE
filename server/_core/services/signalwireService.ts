@@ -133,3 +133,56 @@ export default {
   validateWebhookSignature,
   getOptimalCallerNumber,
 };
+
+// ─── Answering Machine Detection (Voicemail) ─────────────────────────────────
+export async function initiateCallWithAMD(data: {
+  leadId: number;
+  phoneNumber: string;
+  campaignId?: number;
+  voicemailMessage?: string; // if set, leaves VM instead of hanging up
+}): Promise<{ callSid: string; status: string }> {
+  const client = getSignalWireClient();
+  if (!ENV.signalwirePhoneNumber) throw new Error("SIGNALWIRE_PHONE_NUMBER required");
+
+  const baseUrl = ENV.publicUrl;
+  const sessionId = `session_${Date.now()}`;
+  const callerNumber = await getOptimalCallerNumber(data.phoneNumber);
+
+  const call = await client.calls.create({
+    to: data.phoneNumber,
+    from: callerNumber,
+    url: `${baseUrl}/api/voice/start?leadId=${data.leadId}&sessionId=${sessionId}&campaignId=${data.campaignId || ""}`,
+    statusCallback: `${baseUrl}/api/voice/status`,
+    statusCallbackMethod: "POST",
+    machineDetection: "DetectMessageEnd", // AMD enabled
+    machineDetectionTimeout: 8,
+    asyncAmd: true,
+    asyncAmdStatusCallback: `${baseUrl}/api/voice/amd-status`,
+    asyncAmdStatusCallbackMethod: "POST",
+    record: true,
+    recordingStatusCallback: `${baseUrl}/api/voice/recording`,
+  });
+
+  console.log(`[SignalWire AMD] Call initiated: ${call.sid} → ${data.phoneNumber}`);
+  return { callSid: call.sid, status: call.status };
+}
+
+// ─── Live Transfer to Human ───────────────────────────────────────────────────
+export async function transferCallToHuman(callSid: string, transferTo: string): Promise<void> {
+  const client = getSignalWireClient();
+  const baseUrl = ENV.publicUrl;
+
+  // Update call with new TwiML that dials the human
+  await client.calls(callSid).update({
+    twiml: `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Please hold while I transfer you to one of our specialists.</Say>
+  <Dial callerId="${ENV.signalwirePhoneNumber}" timeout="30">
+    <Number>${transferTo}</Number>
+  </Dial>
+  <Say>I'm sorry, our team is unavailable right now. Please call back during business hours.</Say>
+</Response>`,
+  });
+
+  console.log(`[SignalWire] Live transfer: ${callSid} → ${transferTo}`);
+}

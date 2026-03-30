@@ -18,6 +18,16 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  // Transfer number — where to route live call handoffs
+  transferNumber: varchar("transferNumber", { length: 20 }),
+  // Language preference for AI voice
+  language: varchar("language", { length: 20 }).default("en"),
+  // Plan tier
+  plan: varchar("plan", { length: 50 }).default("trial"),
+  // Agency settings
+  isAgency: boolean("isAgency").default(false),
+  agencyName: varchar("agencyName", { length: 200 }),
+  whiteLabel: boolean("whiteLabel").default(false),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

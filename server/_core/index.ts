@@ -203,7 +203,7 @@ async function startServer() {
           throw error;
         }
       },
-      { connection: redisConnection as any, concurrency: 5 }
+      { connection: redisConnection as any, concurrency: 50 } // High-speed: 50 simultaneous calls
     );
 
     smsWorker.on("completed", (job) => {
@@ -402,6 +402,20 @@ async function startServer() {
         const db = await import("../db");
         // Look up which user owns the called number (To) for proper tenant assignment
         const ownerId = To ? await db.getUserIdByPhoneNumber(To) : 1;
+
+        // Load owner's settings (transfer number, language)
+        let ownerSettings: { transferNumber?: string; language?: string } = {};
+        try {
+          const { getDb } = await import("../db");
+          const { users } = await import("../../drizzle/schema");
+          const { eq } = await import("drizzle-orm");
+          const dbInst = await getDb();
+          if (dbInst && ownerId) {
+            const [ownerUser] = await (dbInst as any).select().from(users).where(eq(users.id, ownerId)).limit(1);
+            if (ownerUser) ownerSettings = { transferNumber: ownerUser.transferNumber, language: ownerUser.language || "en" };
+          }
+        } catch {}
+
         let lead = await db.getLeadByPhone(From);
         if (!lead) {
           lead = await db.createLead({
@@ -661,6 +675,41 @@ async function startServer() {
         <Say>Thank you for waiting. Please stay on the line.</Say>
       </Response>
     `);
+  });
+
+
+  // ─── AMD (Voicemail Detection) Status Callback ────────────────────────────
+  app.post("/api/voice/amd-status", validateTwilioSignature, async (req, res) => {
+    const { CallSid, AnsweredBy } = req.body;
+    console.log(`[AMD] CallSid: ${CallSid} | AnsweredBy: ${AnsweredBy}`);
+
+    // AnsweredBy: human, machine_start, machine_end_beep, machine_end_silence, fax, unknown
+    if (AnsweredBy && AnsweredBy.startsWith("machine")) {
+      console.log(`[AMD] Voicemail detected for ${CallSid} — ending call`);
+      // Optionally update lead status
+      try {
+        const db = await import("../db");
+        // Future: leave pre-recorded voicemail here via TTS
+      } catch {}
+    }
+    res.status(200).send("OK");
+  });
+
+  // ─── Live Transfer to Human ─────────────────────────────────────────────────
+  app.post("/api/voice/transfer", validateTwilioSignature, async (req, res) => {
+    const { CallSid, TransferTo } = req.body;
+    if (!CallSid || !TransferTo) {
+      res.status(400).json({ error: "CallSid and TransferTo required" });
+      return;
+    }
+    try {
+      const { transferCallToHuman } = await import("./services/signalwireService");
+      await transferCallToHuman(CallSid, TransferTo);
+      res.status(200).json({ success: true });
+    } catch (err: any) {
+      console.error("[Transfer] Failed:", err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // ─── SMS INBOUND WEBHOOK ──────────────────────────────────────────────────

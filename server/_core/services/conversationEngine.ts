@@ -112,7 +112,8 @@ export async function generateResponse(
     forbiddenActions.push("ask_for_qualification_info");
   }
 
-  const systemPrompt = buildSystemPrompt(pack, clientConfig, responseMode, updatedState, forbiddenActions, agentName, businessName);
+  const language = (updatedState as any).language || "en";
+  const systemPrompt = buildSystemPrompt(pack, clientConfig, responseMode, updatedState, forbiddenActions, agentName, businessName, language);
 
   // 6. Build minimal context (last 4 turns only — keep LLM fast)
   const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
@@ -227,6 +228,13 @@ export async function proposeAppointmentTimes(leadId: number): Promise<{
 
 // ── Prompt builder ────────────────────────────────────────────────────────────
 
+// 12 supported languages
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: "English", es: "Spanish", fr: "French", de: "German",
+  pt: "Portuguese", it: "Italian", nl: "Dutch", pl: "Polish",
+  ru: "Russian", zh: "Chinese (Mandarin)", ja: "Japanese", ko: "Korean",
+};
+
 function buildSystemPrompt(
   pack: IndustryPack,
   clientConfig: Partial<ClientConfig> | undefined,
@@ -234,7 +242,8 @@ function buildSystemPrompt(
   state: CallState,
   forbiddenActions: string[],
   agentName: string,
-  businessName: string
+  businessName: string,
+  language = "en"
 ): string {
   // SHORT prompt = low latency. Only inject what matters this turn.
   const noBook = !state.bookingAllowed ? " Do NOT offer appointments yet." : "";
@@ -244,10 +253,14 @@ function buildSystemPrompt(
     ? `Service areas: ${clientConfig.serviceAreas.slice(0, 5).join(", ")}.` : "";
   const offers = clientConfig?.discounts?.length
     ? `Offers: ${clientConfig.discounts.join(", ")}.` : "";
+  const langName = LANGUAGE_NAMES[language] || "English";
+  const langInstruction = language !== "en"
+    ? `IMPORTANT: Respond ONLY in ${langName}. The caller speaks ${langName}.` : "";
 
   return `You are ${agentName} for ${businessName}. ${pack.systemContext}
 Mode: ${responseMode}. Stage: ${state.stage}.${activeQ}${noBook}
 ${areas} ${offers}
+${langInstruction}
 Rules: Max 2 short sentences. Answer what caller just said. Natural speech. No lists.
 Reply ONLY with JSON: {"response":"...","action":"follow_up|book_appointment|propose_times|transfer|end_call","confidence":0.9}`;
 }
