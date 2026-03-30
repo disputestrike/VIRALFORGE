@@ -47,6 +47,21 @@ const INDUSTRIES = ["Roofing", "Solar", "HVAC", "Real Estate", "Insurance", "Fin
 export default function Campaigns() {
   const [showCreate, setShowCreate] = useState(false);
   const [showBusinessSetup, setShowBusinessSetup] = useState(false);
+
+  const handleBusinessExtracted = (data: any) => {
+    setForm(f => ({
+      ...f,
+      name: data.campaignName || f.name,
+      description: data.campaignScript
+        ? `${data.valueProposition || ""}
+
+AI Opening Script: "${data.campaignScript}"`.trim()
+        : data.valueProposition || f.description,
+      industry: data.industry || f.industry,
+    }));
+    setShowBusinessSetup(false);
+    setShowCreate(true);
+  };
   const [showAddContact, setShowAddContact] = useState<number | null>(null);
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -119,9 +134,15 @@ export default function Campaigns() {
           <h1 className="text-2xl font-bold">Campaigns</h1>
           <p className="text-muted-foreground text-sm mt-1">{stats.total} campaigns · Multi-channel outreach automation</p>
         </div>
-        <Button size="sm" onClick={() => setShowCreate(true)}>
-          <Plus className="w-4 h-4 mr-2" /> New Campaign
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setShowBusinessSetup(true)}
+            className="border-primary/30 text-primary hover:bg-primary/10">
+            <Sparkles className="w-4 h-4 mr-1.5" /> Smart Setup
+          </Button>
+          <Button size="sm" onClick={() => setShowCreate(true)}>
+            <Plus className="w-4 h-4 mr-2" /> New Campaign
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -282,6 +303,19 @@ export default function Campaigns() {
       </Tabs>
 
       {/* Create Campaign Dialog */}
+      {/* Business Setup Widget Modal */}
+      {showBusinessSetup && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+          onClick={(e) => e.target === e.currentTarget && setShowBusinessSetup(false)}>
+          <div className="w-full max-w-lg">
+            <BusinessSetupWidget
+              onExtracted={handleBusinessExtracted}
+              onClose={() => setShowBusinessSetup(false)}
+            />
+          </div>
+        </div>
+      )}
+
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-lg bg-card border-border max-h-[90vh] overflow-y-auto">
           <DialogHeader>
