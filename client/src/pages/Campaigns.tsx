@@ -323,7 +323,14 @@ AI Opening Script: "${data.campaignScript}"`.trim()
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label className="text-xs">Campaign Name *</Label>
+              <div className="flex items-center justify-between mb-1">
+                <Label className="text-xs">Campaign Name *</Label>
+                <button type="button"
+                  onClick={() => { setShowCreate(false); setShowBusinessSetup(true); }}
+                  className="text-xs text-primary hover:underline flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" /> Auto-fill from website/doc
+                </button>
+              </div>
               <Input className="bg-secondary border-border" placeholder="e.g. Solar Q1 Outreach" value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
             </div>

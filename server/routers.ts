@@ -232,6 +232,28 @@ const campaignsRouter = router({
       return { success: true };
     }),
 
+  // High-speed bulk blast — queue ALL contacts simultaneously
+  blast: protectedProcedure
+    .input(z.object({ campaignId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const campaign = await db.getCampaignById(input.campaignId);
+      if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
+      if (campaign.createdBy !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+      const contacts = await db.getCampaignContacts(input.campaignId);
+      if (!contacts.length) throw new TRPCError({ code: "BAD_REQUEST", message: "No contacts in campaign" });
+      const { addCallJob } = await import("./_core/services/queue");
+      let queued = 0;
+      await Promise.all(contacts.map(async (c) => {
+        try {
+          const lead = await db.getLeadById(c.leadId);
+          if (lead?.phone) { await addCallJob({ leadId: lead.id, campaignId: input.campaignId }); queued++; }
+        } catch {}
+      }));
+      await db.updateCampaign(input.campaignId, { status: "active" });
+      await db.logActivity({ userId: ctx.user.id, entityType: "campaign", entityId: input.campaignId, action: "blast", description: `High-speed blast: ${queued} calls queued simultaneously` });
+      return { success: true, queued, message: `${queued} calls queued simultaneously` };
+    }),
+
   delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
     await db.deleteCampaign(input.id);
     await db.logActivity({ userId: ctx.user.id, entityType: "campaign", entityId: input.id, action: "deleted" });
