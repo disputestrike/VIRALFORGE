@@ -184,12 +184,10 @@ export function createCallEngine(opts: EngineOptions): void {
         try {
           const msg = JSON.parse(data);
           if (msg.type === "chunk" && msg.data) {
-            // Cartesia sends PCM16 — convert to mulaw for SignalWire
+            // Cartesia sends PCM16 s16le at 8kHz — convert to mulaw for SignalWire
             if (streamSid && sigWs.readyState === WebSocket.OPEN) {
-              const pcm = Buffer.from(msg.data, "base64");
-              // Cartesia outputs at 8kHz mulaw directly if configured correctly
-              // Otherwise we need to resample 16kHz → 8kHz
-              const mulaw = pcm16ToMulaw(pcm);
+              const pcm16 = Buffer.from(msg.data, "base64");
+              const mulaw = pcm16ToMulaw(pcm16);
               sigWs.send(JSON.stringify({
                 event: "media",
                 streamSid,
@@ -197,6 +195,8 @@ export function createCallEngine(opts: EngineOptions): void {
               }));
               isSpeaking = true;
             }
+          } else if (msg.type === "error") {
+            log(`Cartesia error msg: ${JSON.stringify(msg)}`);
           } else if (msg.type === "done") {
             isSpeaking = false;
             if (streamSid && sigWs.readyState === WebSocket.OPEN) {
@@ -222,7 +222,7 @@ export function createCallEngine(opts: EngineOptions): void {
       transcript: text,
       output_format: {
         container: "raw",
-        encoding: "pcm_mulaw",  // Request mulaw directly — no conversion needed
+        encoding: "pcm_s16le",  // Cartesia outputs PCM16, we convert to mulaw
         sample_rate: 8000,
       },
       speed: voiceProfile.speed,
@@ -252,14 +252,15 @@ export function createCallEngine(opts: EngineOptions): void {
   // ── Deepgram STT ────────────────────────────────────────────────────────────
   function connectDeepgram() {
     const params = new URLSearchParams({
-      model: "nova-2-phonecall",  // optimized for phone mulaw audio
+      model: "nova-2",           // nova-2 with mulaw 8kHz phone audio
       encoding: "mulaw",
       sample_rate: "8000",
       channels: "1",
       punctuate: "true",
-      interim_results: "false",  // only final results to reduce noise
-      endpointing: "500",         // 500ms silence = end of speech
+      interim_results: "true",
+      endpointing: "500",
       utterance_end_ms: "1000",
+      vad_events: "true",
       smart_format: "true",
     });
 
@@ -580,16 +581,25 @@ export function createCallEngine(opts: EngineOptions): void {
       if (sigWs) (sigWs as any)._callSid = callSid;
       log(`Stream started: ${streamSid}`);
 
-      // 200ms pause then greeting
-      setTimeout(async () => {
+      // Wait for Cartesia WS to be ready, then send greeting
+      const waitForCartesia = async () => {
+        let waited = 0;
+        while (!cartesiaWs || cartesiaWs.readyState !== 1) {  // 1 = OPEN
+          if (waited > 3000 || isEnded) return;
+          await new Promise(r => setTimeout(r, 50));
+          waited += 50;
+        }
+        // 200ms natural pause before speaking
+        await new Promise(r => setTimeout(r, 200));
         if (!isEnded) {
           const greeting = "Hi, thanks for calling. How can I help you today?";
           await speak(greeting, generationEpoch);
           log("[GREETING] Sent");
-          // Allow barge-in 2 seconds after greeting starts
-          setTimeout(() => { greetingDone = true; }, 2000);
+          // Allow barge-in 2.5 seconds after greeting starts
+          setTimeout(() => { greetingDone = true; log("[GREETING] Barge-in enabled"); }, 2500);
         }
-      }, 300);
+      };
+      waitForCartesia();
     }
 
     else if (event === "media") {

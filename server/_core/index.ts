@@ -73,21 +73,21 @@ async function runMigrations() {
       const conn2 = await mysql2.createConnection({ uri: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
       if (conn2) {
         const alterStatements = [
-          "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `transferNumber` varchar(50) NULL",
-          "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `language` varchar(10) DEFAULT 'en'",
-          "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `plan` varchar(50) DEFAULT 'trial'",
-          "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `isAgency` tinyint(1) DEFAULT 0",
-          "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `agencyName` varchar(255) NULL",
-          "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `whiteLabel` tinyint(1) DEFAULT 0",
-          "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `picture` varchar(512) NULL",
-          "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `voiceProfileId` varchar(100) NULL",
+          "ALTER TABLE `users` ADD COLUMN `transferNumber` varchar(50) NULL",
+          "ALTER TABLE `users` ADD COLUMN `language` varchar(10) DEFAULT 'en'",
+          "ALTER TABLE `users` ADD COLUMN `plan` varchar(50) DEFAULT 'trial'",
+          "ALTER TABLE `users` ADD COLUMN `isAgency` tinyint(1) DEFAULT 0",
+          "ALTER TABLE `users` ADD COLUMN `agencyName` varchar(255) NULL",
+          "ALTER TABLE `users` ADD COLUMN `whiteLabel` tinyint(1) DEFAULT 0",
+          "ALTER TABLE `users` ADD COLUMN `picture` varchar(512) NULL",
+          "ALTER TABLE `users` ADD COLUMN `voiceProfileId` varchar(100) NULL",
         ];
         for (const sql of alterStatements) {
           try {
             await conn2.execute(sql);
           } catch (e: any) {
-            // Ignore "duplicate column" errors — column already exists
-            if (!e.message?.includes("Duplicate column")) {
+            // Error 1060 = Duplicate column (already exists) — safe to ignore
+            if (e.errno !== 1060 && !e.message?.includes("Duplicate column name")) {
               console.log(`[Migration] ALTER note: ${e.message?.slice(0, 80)}`);
             }
           }
