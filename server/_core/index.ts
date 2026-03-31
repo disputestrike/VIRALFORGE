@@ -104,24 +104,44 @@ async function runMigrations() {
   }
 }
 
-async function ensureCriticalVoiceSchema(connection: any) {
-  // Railway production has shown cases where the migration runner completes but
-  // `leads.createdBy` still does not exist, which breaks inbound/outbound call
-  // session setup. Verify it explicitly on boot.
-  const [rows] = await connection.execute(
-    `SELECT COUNT(*) AS count
-     FROM information_schema.COLUMNS
-     WHERE TABLE_SCHEMA = DATABASE()
-       AND TABLE_NAME = 'leads'
-       AND COLUMN_NAME = 'createdBy'`
-  );
-  const count = Number((rows as Array<{ count: number }>)[0]?.count ?? 0);
-  if (count > 0) return;
+/** Per-table check — do not return early after leads; `call_recordings.createdBy` etc. can still be missing on older Railway DBs. */
+const TENANT_CREATED_BY: Array<{ table: string; index: string }> = [
+  { table: "leads", index: "idx_leads_created_by" },
+  { table: "campaigns", index: "idx_campaigns_created_by" },
+  { table: "messages", index: "idx_messages_created_by" },
+  { table: "templates", index: "idx_templates_created_by" },
+  { table: "call_recordings", index: "idx_call_recordings_created_by" },
+  { table: "analytics_snapshots", index: "idx_analytics_snapshots_created_by" },
+];
 
-  console.warn("[Migration] leads.createdBy missing after migration run - applying fallback ALTER TABLE");
-  await connection.execute("ALTER TABLE leads ADD COLUMN createdBy INT DEFAULT NULL");
-  await connection.execute("CREATE INDEX idx_leads_created_by ON leads(createdBy)");
-  console.log("[Migration] Added fallback leads.createdBy column and index");
+async function ensureCriticalVoiceSchema(connection: any) {
+  for (const { table, index } of TENANT_CREATED_BY) {
+    const [rows] = await connection.execute(
+      `SELECT COUNT(*) AS count
+       FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = ?
+         AND COLUMN_NAME = 'createdBy'`,
+      [table]
+    );
+    const count = Number((rows as Array<{ count: number }>)[0]?.count ?? 0);
+    if (count > 0) continue;
+
+    console.warn(`[Migration] ${table}.createdBy missing after migration run — applying fallback ALTER TABLE`);
+    try {
+      await connection.execute(`ALTER TABLE \`${table}\` ADD COLUMN createdBy INT DEFAULT NULL`);
+    } catch (e: any) {
+      if (e.errno !== 1060 && !String(e.message).includes("Duplicate column")) throw e;
+    }
+    try {
+      await connection.execute(`CREATE INDEX \`${index}\` ON \`${table}\` (createdBy)`);
+    } catch (e: any) {
+      if (e.errno !== 1061 && !String(e.message).includes("Duplicate key")) {
+        console.warn(`[Migration] Index ${index} note:`, String(e.message).slice(0, 120));
+      }
+    }
+    console.log(`[Migration] Added fallback ${table}.createdBy`);
+  }
 }
 
 async function startServer() {
