@@ -45,6 +45,11 @@ export const ENV = {
   // ── OpenAI (Whisper STT) ──────────────────────────────────
   openAiApiKey: process.env.OPENAI_API_KEY ?? "",
 
+  // ── Live voice stack (realtime engine) ────────────────────
+  deepgramApiKey:  process.env.DEEPGRAM_API_KEY ?? "",
+  cartesiaApiKey:  process.env.CARTESIA_API_KEY ?? "",
+  cerebrasApiKey:  process.env.CEREBRAS_API_KEY ?? "",
+
   // ── Public URL (SignalWire webhook callbacks) ─────────────
   publicDomain: process.env.RAILWAY_PUBLIC_DOMAIN ?? "",
   publicUrl: process.env.RAILWAY_PUBLIC_DOMAIN
@@ -63,7 +68,12 @@ export const ENV = {
   get smsEnabled()    { return this.signalwireProjectId !== "" && this.signalwireToken !== ""; },
   get emailEnabled()  { return this.resendApiKey !== ""; },
   get ttsEnabled()    { return this.elevenLabsApiKey !== "" || (process.env.CARTESIA_API_KEY ?? "") !== ""; },
-  get sttEnabled()    { return this.openAiApiKey !== ""; },
+  get sttEnabled()    { return this.openAiApiKey !== "" || this.deepgramApiKey !== ""; },
+  /** Streaming phone pipeline: Deepgram + Cartesia + (Cerebras or Claude) */
+  get voiceRealtimeReady() {
+    const llm = this.cerebrasApiKey !== "" || this.anthropicApiKey !== "";
+    return this.deepgramApiKey !== "" && this.cartesiaApiKey !== "" && llm;
+  },
   get queueEnabled()  { return this.redisUrl !== ""; },
   get aiEnabled()     { return this.anthropicApiKey !== ""; },
 };

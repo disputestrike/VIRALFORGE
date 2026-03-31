@@ -13,8 +13,7 @@ import * as voiceSessionManager from "./services/voiceSessionManager";
 import { apiRateLimiter, aiRateLimiter, authRateLimiter, webhookRateLimiter } from "./middleware/rateLimiter";
 import * as voiceProcessingService from "./services/voiceProcessingService";
 import { startSessionPersistenceInterval } from "./services/voiceSessionManager";
-import { VoiceRealtimePipeline } from "./services/voiceRealtimePipeline";
-// NEW: Real-time voice engine — Deepgram STT + Cerebras/Claude + Cartesia TTS
+// Live calls: realtimeVoiceEngine — Deepgram STT → Cerebras (fast) / Claude (smart) → Cartesia TTS (NOT Deepgram for TTS).
 import { createCallEngine } from "../realtime/realtimeVoiceEngine";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -168,22 +167,24 @@ async function startServer() {
 
     if (redisConnection) {
     // Call worker
+    type CallJobPayload = { leadId: number; campaignId?: number };
     const callWorker = new Worker(
       "calls",
       async (job) => {
-        console.log(`[CallWorker] ▶ QUEUED→PROCESSING | jobId: ${job.id} | leadId: ${job.data.leadId}`);
+        const data = job.data as CallJobPayload;
+        console.log(`[CallWorker] ▶ QUEUED→PROCESSING | jobId: ${job.id} | leadId: ${data.leadId}`);
         const dbMod = await import("../db");
         try {
-          const lead = await dbMod.getLeadById(job.data.leadId);
+          const lead = await dbMod.getLeadById(data.leadId);
           if (!lead?.phone) {
-            throw new Error(`Lead ${job.data.leadId} has no phone number`);
+            throw new Error(`Lead ${data.leadId} has no phone number`);
           }
 
           const l = lead as any;
           const result = await initiateCall({
             leadId: l.id as number,
             phoneNumber: l.phone as string,
-            campaignId: job.data.campaignId,
+            campaignId: data.campaignId,
           });
 
           await dbMod.updateLead(l.id as number, { status: "contacted" });
@@ -193,13 +194,13 @@ async function startServer() {
             entityId: l.id as number,
             action: "initiated",
             description: `Outbound call initiated for ${l.firstName} ${l.lastName}`,
-            metadata: { callSid: (result as any).callSid, campaignId: job.data.campaignId },
+            metadata: { callSid: (result as any).callSid, campaignId: data.campaignId },
           });
 
-          console.log(`[CallWorker] ✅ PROCESSING→COMPLETED | jobId: ${job.id} | callSid: ${result.callSid} | leadId: ${lead.id}`);
+          console.log(`[CallWorker] ✅ PROCESSING→COMPLETED | jobId: ${job.id} | callSid: ${(result as any).callSid} | leadId: ${lead.id}`);
           return result;
         } catch (error) {
-          await dbMod.updateLead(job.data.leadId, { status: "contacted" }).catch(() => {});
+          await dbMod.updateLead(data.leadId, { status: "contacted" }).catch(() => {});
           console.error(`[CallWorker] ❌ PROCESSING→FAILED | jobId: ${job.id} | reason: ${(error as Error).message}`);
           throw error;
         }
@@ -424,11 +425,14 @@ async function startServer() {
         database: ENV.databaseUrl ? "configured" : "missing",
         redis:    ENV.redisUrl    ? "configured" : "missing — using in-memory fallback",
         voice:    ENV.voiceEnabled  ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
+        voiceRealtime: ENV.voiceRealtimeReady
+          ? "ready (deepgram+cartesia+llm)"
+          : "incomplete — set DEEPGRAM_API_KEY, CARTESIA_API_KEY, CEREBRAS_API_KEY or ANTHROPIC_API_KEY",
         sms:      ENV.smsEnabled    ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         email:    ENV.emailEnabled  ? "ready"  : "disabled — add RESEND_API_KEY",
-        stt:      ENV.sttEnabled    ? "ready"  : "disabled — add OPENAI_API_KEY",
-        tts:      ENV.ttsEnabled    ? "ready"  : "disabled — add ELEVENLABS_API_KEY",
-        ai:       ENV.aiEnabled     ? "ready"  : "disabled — add BUILT_IN_FORGE_API_KEY",
+        stt:      ENV.sttEnabled    ? "ready"  : "disabled — add OPENAI_API_KEY or DEEPGRAM_API_KEY",
+        tts:      ENV.ttsEnabled    ? "ready"  : "disabled — add ELEVENLABS_API_KEY or CARTESIA_API_KEY",
+        ai:       ENV.aiEnabled     ? "ready"  : "disabled — add ANTHROPIC_API_KEY",
       },
     });
   });
@@ -1087,10 +1091,9 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
         console.log(`[Voice] WebSocket connected: ${sessionId}`);
         console.log("[VOICE-WS] connected", { sessionId, leadId, isInbound });
 
-        // ── NEW: Use Deepgram Voice Agent (unified STT+LLM+TTS) ──────────────
-        // This replaces the old fragmented pipeline completely
-        // Deepgram handles: streaming STT + LLM + TTS + barge-in + turn-taking
-        // We just bridge SignalWire ↔ Deepgram
+        // Live path: SignalWire audio ↔ createCallEngine (realtimeVoiceEngine.ts)
+        // Deepgram = streaming STT only. Cartesia = TTS. Cerebras/Claude = LLM.
+        // (deepgramVoiceAgent.ts = alternate Deepgram Voice Agent API — not wired here.)
         let resolvedUserId: number | undefined;
         let resolvedLeadId: number | undefined;
         let businessName: string | undefined;

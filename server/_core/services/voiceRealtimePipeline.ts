@@ -707,6 +707,7 @@ export class VoiceRealtimePipeline {
     try {
       const { synthesizeSpeech } = await import("./ttsService");
       const audio = await synthesizeSpeech(text);
+      this.isSpeaking = true;
       this.setSpeakingTimeout(Math.ceil(audio.length / 8) + 2000);
       this.sendMedia(audio.toString("base64"));
       this.sendMark(`batch_${Date.now()}`);

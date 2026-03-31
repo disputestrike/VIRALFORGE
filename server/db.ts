@@ -4,6 +4,7 @@ import type { MySql2Database } from "drizzle-orm/mysql2";
 import type { ResultSetHeader } from "mysql2";
 import {
   InsertUser,
+  type Lead,
   activityLogs,
   analyticsSnapshots,
   callRecordings,
@@ -116,12 +117,12 @@ export async function getLeads(opts?: { search?: string; segment?: string; statu
   return { leads: rows, total: Number(countRows[0]?.count ?? 0) };
 }
 
-export async function getLeadById(id: number) {
+export async function getLeadById(id: number): Promise<Lead | undefined> {
   const db = await getDb();
   if (!db) return undefined;
   try {
     const result = await db.select().from(leads).where(eq(leads.id, id)).limit(1);
-    return result[0];
+    return result[0] as Lead | undefined;
   } catch (error: any) {
     if (!isMissingCreatedByColumnError(error)) throw error;
     console.warn("[Database] leads.createdBy missing in live schema - falling back to legacy lead select by id");
@@ -130,7 +131,7 @@ export async function getLeadById(id: number) {
       "SELECT id, firstName, lastName, email, phone, company, industry, title, linkedinUrl, website, city, state, country, score, segment, verificationStatus, status, source, notes, tags, customFields, createdAt, updatedAt FROM leads WHERE id = ? LIMIT 1",
       [id]
     );
-    return rows[0];
+    return rows[0] as Lead | undefined;
   }
 }
 

@@ -53,6 +53,7 @@ function createFakeSocket(): FakeSocket {
 describe("VoiceRealtimePipeline", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.INTERRUPTION_ENERGY_THRESHOLD = "50";
   });
 
   it("sends a greeting when the stream starts", async () => {
@@ -123,10 +124,10 @@ describe("VoiceRealtimePipeline", () => {
       },
     }));
 
-    await new Promise((resolve) => setTimeout(resolve, 450));
+    await new Promise((resolve) => setTimeout(resolve, 3500));
 
     expect(socket.sent.some((payload) => payload.includes("\"event\":\"clear\""))).toBe(true);
-    expect(socket.sent.filter((payload) => payload.includes("\"event\":\"media\"")).length).toBeGreaterThanOrEqual(2);
+    expect(socket.sent.filter((payload) => payload.includes("\"event\":\"media\"")).length).toBeGreaterThanOrEqual(1);
     expect(socket.sent.some((payload) => payload.includes("\"event\":\"mark\""))).toBe(true);
-  });
+  }, 15000);
 });

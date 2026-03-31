@@ -2,12 +2,11 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import Appointments from "@/pages/Appointments";
-import { Route, Switch } from "wouter";
+import { Redirect, Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import LandingPage from "./pages/LandingPage";
 import { useAuth } from "./_core/hooks/useAuth";
-import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
 import Campaigns from "./pages/Campaigns";
@@ -55,8 +54,10 @@ function Router() {
       <Route path="/terms" component={Terms} />
       <Route path="/security" component={Security} />
 
-      {/* App home (authenticated users) */}
-      <Route path="/app" component={Home} />
+      {/* Legacy alias — single public marketing surface lives at / */}
+      <Route path="/app">
+        <Redirect to="/" />
+      </Route>
 
       {/* App routes — wrapped in AppLayout */}
       <Route path="/dashboard">

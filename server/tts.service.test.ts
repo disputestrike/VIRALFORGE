@@ -25,7 +25,7 @@ describe("ttsService", () => {
     vi.unstubAllGlobals();
   });
 
-  it("prefers elevenlabs when both providers are configured and no explicit provider is set", async () => {
+  it("prefers cartesia when both providers are configured and no explicit provider is set", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       arrayBuffer: async () => Uint8Array.from([1, 2, 3]).buffer,
@@ -38,7 +38,7 @@ describe("ttsService", () => {
 
     expect(audio.length).toBeGreaterThan(0);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0]?.[0]).toContain("api.elevenlabs.io");
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("api.cartesia.ai");
   });
 
   it("falls back to elevenlabs when cartesia returns insufficient credits", async () => {

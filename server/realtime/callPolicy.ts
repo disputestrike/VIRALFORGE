@@ -20,13 +20,50 @@ export function createCallState(): CallState {
   return {
     mode: "answer",
     activeQuestion: null,
-    questionAnswered: true,
+    questionAnswered: false,
     interestConfirmed: false,
     bookingAllowed: false,
     objectionCount: 0,
     turnCount: 0,
     endCallRequested: false,
   };
+}
+
+/** Heuristic: caller asked something that must be answered before booking */
+export function detectUserQuestion(transcript: string): boolean {
+  const t = transcript.toLowerCase();
+  if (t.includes("?")) return true;
+  const q = [
+    "how much",
+    "what is",
+    "who is",
+    "do you",
+    "can you",
+    "are you",
+    "tell me",
+    "explain",
+    "discount",
+    "cost",
+    "price",
+    "zip",
+    "serve",
+    "coverage",
+    "area",
+    "where",
+    "when",
+    "why",
+  ];
+  return q.some((k) => t.includes(k));
+}
+
+/** Booking slots may only be offered when policy allows */
+export function canOfferBooking(state: CallState): boolean {
+  return (
+    state.questionAnswered &&
+    state.interestConfirmed &&
+    state.bookingAllowed &&
+    !state.endCallRequested
+  );
 }
 
 export function detectEndCallIntent(transcript: string): boolean {
@@ -72,8 +109,14 @@ export function updateCallState(state: CallState, transcript: string): CallState
     updated.objectionCount++;
   }
 
+  if (detectUserQuestion(transcript)) {
+    updated.activeQuestion = transcript.slice(0, 220);
+    updated.questionAnswered = false;
+    updated.bookingAllowed = false;
+  }
+
   const t = transcript.toLowerCase();
-  if (["yes", "yeah", "sure", "sounds good", "interested"].some(p => t.includes(p))) {
+  if (["yes", "yeah", "sure", "sounds good", "interested", "let's do it", "book it"].some((p) => t.includes(p))) {
     if (updated.questionAnswered) {
       updated.interestConfirmed = true;
     }
@@ -97,7 +140,8 @@ export function updateCallState(state: CallState, transcript: string): CallState
 export function markQuestionAnswered(state: CallState): CallState {
   const updated = { ...state };
   updated.questionAnswered = true;
-  if (updated.questionAnswered && updated.interestConfirmed) {
+  updated.activeQuestion = null;
+  if (updated.interestConfirmed) {
     updated.bookingAllowed = true;
   }
   if (updated.mode === "answer") updated.mode = "qualify";

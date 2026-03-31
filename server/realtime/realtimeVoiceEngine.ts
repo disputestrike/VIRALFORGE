@@ -18,13 +18,27 @@ import {
   createCallState,
   updateCallState,
   markQuestionAnswered,
-  detectEndCallIntent,
   isObjection,
   isComplexTurn,
+  canOfferBooking,
   type CallState,
 } from "./callPolicy";
-import { getVoiceProfile, DEFAULT_VOICE, type VoiceProfile } from "./voiceProfiles";
+import { getVoiceProfile, type VoiceProfile } from "./voiceProfiles";
 import voiceSessionManager from "../_core/services/voiceSessionManager";
+import { traceStart, traceEvent, traceEnd, traceTurnTiming } from "./voiceMetrics";
+import {
+  createTurnController,
+  onUserSpeechStart,
+  onAssistantSpeakStart,
+  onProcessing,
+  type TurnControllerState,
+} from "./turnController";
+import { mergeClientConfig, type ClientConfig } from "./clientConfig";
+import {
+  extractZipFromTranscript,
+  lookupDiscountsSpoken,
+  lookupServiceAreaSpoken,
+} from "./toolLayer";
 
 // ── Clients ───────────────────────────────────────────────────────────────────
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
@@ -86,7 +100,12 @@ function pcm16ToMulaw(pcm: Buffer): Buffer {
 }
 
 // ── System prompt builder ─────────────────────────────────────────────────────
-function buildPrompt(state: CallState, businessName: string, industry: string): string {
+function buildPrompt(
+  state: CallState,
+  businessName: string,
+  industry: string,
+  client: ClientConfig
+): string {
   const modeInstructions = {
     answer: "Answer the caller's question directly. Then ask one follow-up.",
     qualify: "Find out what they need. Ask ONE qualifying question.",
@@ -95,11 +114,21 @@ function buildPrompt(state: CallState, businessName: string, industry: string): 
     close: 'Say exactly: "No problem, thanks for calling, have a great day." Nothing else.',
   };
 
+  const bookingLocked = !canOfferBooking(state);
+  const bookingRule = bookingLocked
+    ? "DO NOT offer appointment times or calendar slots. Answer the question or offer one next step that is NOT scheduling."
+    : "You may offer specific times only if the caller is ready to book.";
+
   return `You are a high-performance AI phone agent for ${businessName}.
 Industry: ${industry}
 
 CURRENT MODE: ${state.mode.toUpperCase()}
 INSTRUCTION: ${modeInstructions[state.mode]}
+BOOKING POLICY: ${bookingRule}
+
+CONFIG FACTS (prefer these over guessing):
+- Service areas / ZIPs: ${client.serviceAreas.length ? client.serviceAreas.join(", ") : "not listed — do not claim coverage without verification"}
+- Discounts: ${client.discountsLine || "say promotions vary by eligibility"}
 
 ABSOLUTE RULES:
 - MAX 2 sentences per response. NEVER more. This is enforced.
@@ -144,17 +173,29 @@ export function createCallEngine(opts: EngineOptions): void {
     sessionId,
     leadId,
     userId,
-    businessName = "ApexAI",
-    industry = "business services",
+    businessName: optBusinessName = "ApexAI",
+    industry: optIndustry = "business services",
     voiceProfileId,
   } = opts;
 
   const callId = `call_${Date.now()}`;
+  traceStart(callId);
+  traceEvent(callId, "engine_init");
   const log = (msg: string) => console.log(`[${callId}] ${msg}`);
+
+  let businessName = optBusinessName;
+  let industry = optIndustry;
+  let clientConfig: ClientConfig = mergeClientConfig({
+    businessName,
+    industry,
+  });
 
   // State
   let streamSid = "";
   let callSid = "";
+  let activeSessionId: string | undefined = sessionId;
+  let activeLeadId: number | undefined = leadId;
+  let activeUserId: number | undefined = userId;
   let dgWs: WebSocket | null = null;
   let cartesiaWs: WebSocket | null = null;
   let cartesiaContextId = "";
@@ -164,9 +205,17 @@ export function createCallEngine(opts: EngineOptions): void {
   let greetingDone = false;  // prevent barge-in during greeting
   let dgReady = false;       // don't send audio to Deepgram until connected
   let callState = createCallState();
+  let turnCtl: TurnControllerState = createTurnController();
   let keepaliveTimer: NodeJS.Timeout | null = null;
-  const voiceProfile = getVoiceProfile(voiceProfileId || "professional-female");
+  let voiceProfile: VoiceProfile = getVoiceProfile(voiceProfileId || "professional-female");
   const conversationHistory: { role: "user" | "assistant"; content: string }[] = [];
+  let turnStartedAt = 0;
+  let firstMediaLogged = false;
+
+  function ensureAudioPipeline(): void {
+    if (!cartesiaWs || cartesiaWs.readyState !== WebSocket.OPEN) connectCartesia();
+    if (!dgWs || dgWs.readyState !== WebSocket.OPEN) connectDeepgram();
+  }
 
   // ── Cartesia ────────────────────────────────────────────────────────────────
   function connectCartesia() {
@@ -177,6 +226,7 @@ export function createCallEngine(opts: EngineOptions): void {
     ws.on("open", () => {
       log("Cartesia connected");
       cartesiaWs = ws;
+      traceEvent(callId, "cartesia_ready");
     });
 
     ws.on("message", (data: Buffer | string) => {
@@ -195,6 +245,8 @@ export function createCallEngine(opts: EngineOptions): void {
                 media: { payload: mulaw.toString("base64") },
               }));
               isSpeaking = true;
+              turnCtl = onAssistantSpeakStart(turnCtl);
+              traceEvent(callId, "tts_first_chunk", { bytes: mulaw.length });
               log(`Sent audio to SignalWire`);
             } else {
               log(`CANNOT SEND: streamSid=${streamSid} wsState=${sigWs.readyState}`);
@@ -281,6 +333,7 @@ export function createCallEngine(opts: EngineOptions): void {
       log("Deepgram STT connected");
       dgWs = ws;
       dgReady = true;
+      traceEvent(callId, "deepgram_ready");
     });
 
     ws.on("message", async (raw: Buffer | string) => {
@@ -297,11 +350,13 @@ export function createCallEngine(opts: EngineOptions): void {
           // Barge-in: only after greeting is done to prevent echo loop
           if (isSpeaking && greetingDone && transcript.length > 3) {
             log(`[BARGE-IN] User spoke: "${transcript}"`);
-            stopSpeaking();
+            turnCtl = onUserSpeechStart(turnCtl);
             generationEpoch++;
+            stopSpeaking();
           }
 
           if (isFinal && speechFinal && greetingDone) {
+            traceEvent(callId, "stt_final", { textLen: transcript.length });
             log(`[STT] Final: "${transcript}"`);
             await handleUserTurn(transcript);
           }
@@ -317,20 +372,42 @@ export function createCallEngine(opts: EngineOptions): void {
   async function handleUserTurn(transcript: string): Promise<void> {
     if (isEnded) return;
 
+    turnCtl = onProcessing(turnCtl);
     const epoch = ++generationEpoch;
+    turnStartedAt = Date.now();
     callState = updateCallState(callState, transcript);
+
+    // Deterministic ZIP / discount snippets when user asks (before LLM)
+    const zip = extractZipFromTranscript(transcript);
+    const tl = transcript.toLowerCase();
+    if (zip && (tl.includes("zip") || tl.includes("serve") || tl.includes("area") || tl.includes("coverage"))) {
+      const line = lookupServiceAreaSpoken(zip, clientConfig);
+      await speak(line, epoch);
+      callState = markQuestionAnswered(callState);
+      traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+      return;
+    }
+    if (tl.includes("discount") || tl.includes("promo") || tl.includes("deal")) {
+      const line = lookupDiscountsSpoken(clientConfig);
+      await speak(line, epoch);
+      callState = markQuestionAnswered(callState);
+      traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+      return;
+    }
 
     // End call immediately
     if (callState.endCallRequested) {
       log("[POLICY] End call detected");
+      traceEvent(callId, "hangup_signal", { reason: "end_intent" });
       await speak("No problem, thanks for calling, have a great day.", epoch);
-      setTimeout(() => cleanup(), 2000);
+      setTimeout(() => cleanup(), 1500);
       return;
     }
 
     conversationHistory.push({ role: "user", content: transcript });
 
     const useClause = isObjection(transcript) || isComplexTurn(transcript) || callState.objectionCount > 0;
+    traceEvent(callId, "llm_route", { path: useClause ? "claude" : "cerebras" });
     log(`[ROUTE] ${useClause ? "Claude (smart)" : "Cerebras (fast)"}`);
 
     try {
@@ -339,18 +416,21 @@ export function createCallEngine(opts: EngineOptions): void {
       } else {
         await respondCerebras(epoch);
       }
+      traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
     } catch (e: any) {
       log(`[ERROR] LLM failed: ${e.message}`);
-      // Fallback to Claude if Cerebras fails
       if (!useClause) {
-        try { await respondClaude(epoch); } catch {}
+        try {
+          await respondClaude(epoch);
+          traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+        } catch {}
       }
     }
   }
 
   async function respondCerebras(epoch: number): Promise<void> {
     const client = cerebrasPool.getClient();
-    const prompt = buildPrompt(callState, businessName, industry);
+    const prompt = buildPrompt(callState, businessName, industry, clientConfig);
     const messages = [
       { role: "system" as const, content: prompt },
       ...conversationHistory.slice(-8),
@@ -368,7 +448,7 @@ export function createCallEngine(opts: EngineOptions): void {
   }
 
   async function respondClaude(epoch: number): Promise<void> {
-    const prompt = buildPrompt(callState, businessName, industry);
+    const prompt = buildPrompt(callState, businessName, industry, clientConfig);
     const messages = conversationHistory.slice(-8).map(m => ({
       role: m.role,
       content: m.content,
@@ -496,13 +576,18 @@ export function createCallEngine(opts: EngineOptions): void {
 
     if (toolName === "end_call") {
       await speak("No problem, thanks for calling, have a great day.", epoch);
-      setTimeout(() => cleanup(), 2000);
+      setTimeout(() => cleanup(), 1500);
     } else if (toolName === "book_appointment") {
+      if (!canOfferBooking(callState)) {
+        log("[TOOL] book_appointment blocked — policy");
+        await speak("Got it. What day works for a quick call?", epoch);
+        return;
+      }
       try {
         const { createManualAppointment } = await import("../db");
         await (createManualAppointment as any)({
-          leadId: leadId || 0,
-          userId: userId || 1,
+          leadId: activeLeadId || 0,
+          userId: activeUserId || 1,
           scheduledAt: `${toolArgs.date || "TBD"} ${toolArgs.time || "TBD"}`,
           notes: `AI booking. Caller: ${toolArgs.name}, Phone: ${toolArgs.phone}`,
           status: "confirmed",
@@ -512,8 +597,8 @@ export function createCallEngine(opts: EngineOptions): void {
     } else if (toolName === "save_lead") {
       try {
         const { updateLead } = await import("../db");
-        if (leadId) {
-          await (updateLead as any)(leadId, {
+        if (activeLeadId) {
+          await (updateLead as any)(activeLeadId, {
             firstName: toolArgs.firstName,
             phone: toolArgs.phone,
             email: toolArgs.email,
@@ -554,10 +639,11 @@ export function createCallEngine(opts: EngineOptions): void {
       } catch {}
     }
 
-    if (sessionId) {
+    traceEnd(callId);
+    if (activeSessionId) {
       try {
-        voiceSessionManager.completeSession(sessionId);
-        await voiceSessionManager.persistSessionToDatabase(sessionId);
+        voiceSessionManager.completeSession(activeSessionId);
+        await voiceSessionManager.persistSessionToDatabase(activeSessionId);
       } catch {}
     }
 
@@ -573,8 +659,8 @@ export function createCallEngine(opts: EngineOptions): void {
 
     if (event === "connected") {
       log("SignalWire connected");
-      connectCartesia();
-      connectDeepgram();
+      traceEvent(callId, "ws_connected");
+      ensureAudioPipeline();
 
       // Keepalive
       keepaliveTimer = setInterval(() => {
@@ -585,27 +671,61 @@ export function createCallEngine(opts: EngineOptions): void {
     }
 
     else if (event === "start") {
+      ensureAudioPipeline();
       streamSid = msg.streamSid || msg.start?.streamSid || "";
       callSid = msg.start?.callSid || msg.callSid || streamSid;
+      const params = msg.start?.customParameters || msg.customParameters || {};
+      if (params.sessionId) activeSessionId = String(params.sessionId);
+      if (params.leadId !== undefined && params.leadId !== "")
+        activeLeadId = parseInt(String(params.leadId), 10);
       if (sigWs) (sigWs as any)._callSid = callSid;
-      log(`Stream started: ${streamSid}`);
+      traceEvent(callId, "stream_start", {
+        streamSid,
+        callSid,
+        sessionId: activeSessionId,
+        leadId: activeLeadId,
+      });
+      log(`Stream started: ${streamSid} session=${activeSessionId} lead=${activeLeadId}`);
 
-      // Wait for Cartesia WS to be ready, then send greeting
       const waitForCartesia = async () => {
         let waited = 0;
-        while (!cartesiaWs || cartesiaWs.readyState !== 1) {  // 1 = OPEN
+        while (!cartesiaWs || cartesiaWs.readyState !== 1) {
           if (waited > 3000 || isEnded) return;
-          await new Promise(r => setTimeout(r, 50));
+          await new Promise((r) => setTimeout(r, 50));
           waited += 50;
         }
-        // 200ms natural pause before speaking
-        await new Promise(r => setTimeout(r, 200));
+        try {
+          if (activeLeadId) {
+            const { getLeadById } = await import("../db");
+            const lead = await getLeadById(activeLeadId);
+            if (lead) {
+              const l = lead as { industry?: string | null };
+              if (l.industry) industry = l.industry;
+              clientConfig = mergeClientConfig({
+                businessName,
+                industry,
+              });
+            }
+          }
+          const sess = activeSessionId ? voiceSessionManager.getSession(activeSessionId) : null;
+          if (sess?.voiceProfileId) voiceProfile = getVoiceProfile(sess.voiceProfileId);
+          if (sess?.userId) activeUserId = sess.userId ?? undefined;
+          if (activeSessionId && callSid) {
+            voiceSessionManager.updateSession(activeSessionId, { callSid } as any);
+          }
+        } catch (e) {
+          log(`Session bind: ${e}`);
+        }
+        await new Promise((r) => setTimeout(r, 200));
         if (!isEnded) {
-          const greeting = "Hi, thanks for calling. How can I help you today?";
+          const greeting = `Hi, thanks for calling ${clientConfig.businessName}. How can I help you today?`;
           await speak(greeting, generationEpoch);
+          traceEvent(callId, "greeting_sent");
           log("[GREETING] Sent");
-          // Allow barge-in 2.5 seconds after greeting starts
-          setTimeout(() => { greetingDone = true; log("[GREETING] Barge-in enabled"); }, 2500);
+          setTimeout(() => {
+            greetingDone = true;
+            log("[GREETING] Barge-in enabled");
+          }, 2500);
         }
       };
       waitForCartesia();
@@ -614,11 +734,14 @@ export function createCallEngine(opts: EngineOptions): void {
     else if (event === "media") {
       const payload = msg.media?.payload;
       if (!payload) return;
+      if (!firstMediaLogged) {
+        firstMediaLogged = true;
+        traceEvent(callId, "first_media_in");
+      }
 
-        // SignalWire sends mulaw 8kHz base64 — decode to binary and send to Deepgram
       if (dgReady && dgWs && dgWs.readyState === WebSocket.OPEN) {
         const audio = Buffer.from(payload, "base64");
-        dgWs.send(audio);  // Send raw binary mulaw to Deepgram
+        dgWs.send(audio);
       }
     }
 
