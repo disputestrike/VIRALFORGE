@@ -543,8 +543,8 @@ async function startServer() {
     const statusCallback = `https://${wsHost}/api/voice/status`;
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Connect>
-    <Stream url="${streamUrl}">
+  <Connect action="${statusCallback}" method="POST">
+    <Stream url="${streamUrl}" track="inbound_track">
       <Parameter name="sessionId" value="${sid}" />
       <Parameter name="leadId" value="${leadId}" />
     </Stream>
@@ -692,8 +692,8 @@ async function startServer() {
     res.type("text/xml");
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Connect>
-    <Stream url="${streamUrl}">
+  <Connect action="${statusCallback}" method="POST">
+    <Stream url="${streamUrl}" track="inbound_track">
       <Parameter name="sessionId" value="${sid}" />
       <Parameter name="leadId" value="" />
     </Stream>

@@ -185,19 +185,22 @@ export function createCallEngine(opts: EngineOptions): void {
           const msg = JSON.parse(data);
           if (msg.type === "chunk" && msg.data) {
             // Cartesia sends PCM16 s16le at 8kHz — convert to mulaw for SignalWire
+            const pcm16 = Buffer.from(msg.data, "base64");
+            const mulaw = pcm16ToMulaw(pcm16);
+            log(`Cartesia audio chunk: pcm=${pcm16.length}b mulaw=${mulaw.length}b streamSid=${streamSid} wsState=${sigWs.readyState}`);
             if (streamSid && sigWs.readyState === WebSocket.OPEN) {
-              log(`Cartesia chunk: ${msg.data?.length || 0} chars → sending to SignalWire`);
-              const pcm16 = Buffer.from(msg.data, "base64");
-              const mulaw = pcm16ToMulaw(pcm16);
               sigWs.send(JSON.stringify({
                 event: "media",
                 streamSid,
                 media: { payload: mulaw.toString("base64") },
               }));
               isSpeaking = true;
+              log(`Sent audio to SignalWire`);
+            } else {
+              log(`CANNOT SEND: streamSid=${streamSid} wsState=${sigWs.readyState}`);
             }
           } else if (msg.type === "error") {
-            log(`Cartesia error msg: ${JSON.stringify(msg)}`);
+            log(`Cartesia error: ${JSON.stringify(msg)}`);
           } else if (msg.type === "done") {
             isSpeaking = false;
             if (streamSid && sigWs.readyState === WebSocket.OPEN) {
@@ -213,7 +216,11 @@ export function createCallEngine(opts: EngineOptions): void {
   }
 
   function cartesiaSend(text: string, continueCtx = true) {
-    if (!cartesiaWs || cartesiaWs.readyState !== WebSocket.OPEN) return;
+    if (!cartesiaWs || cartesiaWs.readyState !== WebSocket.OPEN) {
+      log(`cartesiaSend SKIPPED: no ws or not open (state=${cartesiaWs?.readyState})`);
+      return;
+    }
+    log(`cartesiaSend: "${text.slice(0,40)}" voiceId=${voiceProfile.cartesiaId}`);
     if (!cartesiaContextId) cartesiaContextId = `ctx_${Date.now()}`;
 
     cartesiaWs.send(JSON.stringify({
@@ -470,6 +477,7 @@ export function createCallEngine(opts: EngineOptions): void {
 
   async function speak(text: string, epoch: number): Promise<void> {
     if (epoch !== generationEpoch || isEnded) return;
+    log(`speak() called: "${text.slice(0,50)}" cartesiaWs=${cartesiaWs?.readyState}`);
     cartesiaSend(text, false);
     cartesiaFlush();
     conversationHistory.push({ role: "assistant", content: text });
