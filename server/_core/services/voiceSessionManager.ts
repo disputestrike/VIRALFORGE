@@ -218,11 +218,11 @@ export function getActiveSessions(): VoiceSession[] {
 
 export function getRecentSessions(limit = 20): VoiceSession[] {
   const deduped = new Map<string, VoiceSession>();
-  for (const session of sessions.values()) {
+  for (const session of Array.from(sessions.values())) {
     deduped.set(session.sessionId, session);
   }
   return Array.from(deduped.values())
-    .sort((a, b) => (b.updatedAt ?? b.startTime) - (a.updatedAt ?? a.startTime))
+    .sort((a, b) => b.startTime - a.startTime)
     .slice(0, limit);
 }
 

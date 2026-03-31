@@ -27,34 +27,34 @@ export async function scheduleFollowUp(
   const lead = await db.getLeadById(leadId);
   if (!lead) return { scheduled: false };
 
-  if (action === "sms" && lead.phone) {
+  if (action === "sms" && (lead as any).phone) {
     const job = await queueService.addSmsJob({
       leadId,
-      phone: lead.phone,
+      phone: (lead as any).phone as string,
       type: "follow_up",
-      leadName: `${lead.firstName} ${lead.lastName}`,
+      leadName: `${(lead as any).firstName} ${(lead as any).lastName}`,
       delay: delayMs,
     });
-    console.log(`[FollowUp] SMS scheduled | leadId: ${leadId} | jobId: ${job.jobId} | delay: ${delayMs}ms`);
-    return { scheduled: true, jobId: job.jobId };
+    console.log(`[FollowUp] SMS scheduled | leadId: ${leadId} | jobId: ${(job as any).jobId} | delay: ${delayMs}ms`);
+    return { scheduled: true, jobId: (job as any).jobId as string };
   }
 
-  if (action === "email" && lead.email) {
+  if (action === "email" && (lead as any).email) {
     const job = await queueService.addEmailJob({
       leadId,
-      email: lead.email,
+      email: (lead as any).email as string,
       type: "follow_up",
-      leadName: `${lead.firstName} ${lead.lastName}`,
+      leadName: `${(lead as any).firstName} ${(lead as any).lastName}`,
       delay: delayMs,
     });
-    console.log(`[FollowUp] Email scheduled | leadId: ${leadId} | jobId: ${job.jobId} | delay: ${delayMs}ms`);
+    console.log(`[FollowUp] Email scheduled | leadId: ${leadId} | jobId: ${(job as any).jobId} | delay: ${delayMs}ms`);
     return { scheduled: true, jobId: job.jobId };
   }
 
   if (action === "call") {
     const job = await queueService.addCallJob({ leadId, delay: delayMs } as any);
     console.log(`[FollowUp] Call scheduled | leadId: ${leadId} | jobId: ${job.jobId} | delay: ${delayMs}ms`);
-    return { scheduled: true, jobId: job.jobId };
+    return { scheduled: true, jobId: (job as any).jobId as string };
   }
 
   return { scheduled: false };

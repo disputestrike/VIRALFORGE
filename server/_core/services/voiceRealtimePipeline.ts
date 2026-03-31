@@ -141,31 +141,38 @@ export class VoiceRealtimePipeline {
 
     voiceSessionManager.traceEvent(sessionId, "greeting_generation_started");
     try {
-      const voiceProfile = await resolveVoiceProfile({
-        userId: session.userId,
-        leadId: session.leadId,
-        explicitVoiceProfileId: session.voiceProfileId,
-      });
+      // Resolve voice profile with fallback to Cartesia Sarah
+      let voiceId: string | undefined;
+      let provider: "cartesia" | "elevenlabs" | undefined;
+      try {
+        const voiceProfile = await resolveVoiceProfile({
+          userId: session.userId,
+          leadId: session.leadId,
+          explicitVoiceProfileId: session.voiceProfileId,
+        });
+        voiceId = voiceProfile.externalVoiceId;
+        provider = voiceProfile.provider === "other" ? undefined : voiceProfile.provider;
+      } catch (profileErr) {
+        this.logger.warn("[VOICE-WS] resolveVoiceProfile failed — using default Cartesia voice", profileErr);
+        voiceId = "694f9389-aac1-45b6-b726-9d9369183238"; // Cartesia Sarah
+        provider = "cartesia";
+      }
 
       const greetingStartedAt = Date.now();
       const greetingAudio = await synthesizeSpeech(
-        "Hello, thank you for calling ApexAI. This is Apex AI. How can I help you today?",
+        "Hello, thank you for calling. This is ApexAI. How can I help you today?",
         {
-          voiceId: voiceProfile.externalVoiceId,
-          provider: voiceProfile.provider === "other" ? undefined : voiceProfile.provider,
-          speed: voiceProfile.speed,
-          stability: voiceProfile.stability,
+          voiceId,
+          provider,
         }
       );
       const payload = greetingAudio.toString("base64");
 
       voiceSessionManager.updateSession(sessionId, {
         greetingSent: true,
-        voiceProfileId: voiceProfile.id,
       });
       voiceSessionManager.setTurnState(sessionId, "assistant_speaking", {
         phase: "greeting",
-        voiceProfileId: voiceProfile.id,
       });
       voiceSessionManager.traceEvent(sessionId, "greeting_playback_start", {
         payloadBytes: greetingAudio.length,

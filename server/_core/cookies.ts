@@ -39,10 +39,14 @@ export function getSessionCookieOptions(
   //       ? hostname
   //       : undefined;
 
+  // In production always set secure:true — Railway terminates TLS at the proxy
+  // so req.protocol may be "http" even on HTTPS requests. sameSite:"none" REQUIRES
+  // secure:true or browsers silently drop the cookie (Safari, Chrome 80+).
+  const isProduction = process.env.NODE_ENV === "production";
   return {
     httpOnly: true,
     path: "/",
     sameSite: "none",
-    secure: isSecureRequest(req),
+    secure: isProduction ? true : isSecureRequest(req),
   };
 }

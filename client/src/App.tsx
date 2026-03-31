@@ -18,6 +18,8 @@ import Analytics from "./pages/Analytics";
 import Testimonials from "./pages/Testimonials";
 import Onboarding from "./pages/Onboarding";
 import Admin from "./pages/Admin";
+import Settings from "@/pages/Settings";
+import Agency from "@/pages/Agency";
 import AppLayout from "./components/AppLayout";
 import Login from "./pages/login";
 import About from "./pages/About";
@@ -77,6 +79,12 @@ function Router() {
       </Route>
       <Route path="/admin">
         <AppLayout><Admin /></AppLayout>
+      </Route>
+      <Route path="/settings">
+        <AppLayout><Settings /></AppLayout>
+      </Route>
+      <Route path="/agency">
+        <AppLayout><Agency /></AppLayout>
       </Route>
 
       <Route path="/404" component={NotFound} />

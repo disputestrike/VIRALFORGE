@@ -134,7 +134,7 @@ export async function resolveVoiceProfile(args: {
   let userId = args.userId ?? null;
   if (!userId && args.leadId) {
     const lead = await getLeadById(args.leadId);
-    userId = lead?.createdBy ?? null;
+    userId = ((lead as any)?.createdBy as number | null) ?? null;
   }
 
   if (userId) {

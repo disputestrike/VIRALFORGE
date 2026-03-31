@@ -145,20 +145,21 @@ async function startServer() {
             throw new Error(`Lead ${job.data.leadId} has no phone number`);
           }
 
+          const l = lead as any;
           const result = await initiateCall({
-            leadId: lead.id,
-            phoneNumber: lead.phone,
+            leadId: l.id as number,
+            phoneNumber: l.phone as string,
             campaignId: job.data.campaignId,
           });
 
-          await dbMod.updateLead(lead.id, { status: "contacted" });
+          await dbMod.updateLead(l.id as number, { status: "contacted" });
           await dbMod.logActivity({
-            userId: lead.createdBy ?? undefined,
+            userId: (l.createdBy as number | undefined) ?? undefined,
             entityType: "call",
-            entityId: lead.id,
+            entityId: l.id as number,
             action: "initiated",
-            description: `Outbound call initiated for ${lead.firstName} ${lead.lastName}`,
-            metadata: { callSid: result.callSid, campaignId: job.data.campaignId },
+            description: `Outbound call initiated for ${l.firstName} ${l.lastName}`,
+            metadata: { callSid: (result as any).callSid, campaignId: job.data.campaignId },
           });
 
           console.log(`[CallWorker] ✅ PROCESSING→COMPLETED | jobId: ${job.id} | callSid: ${result.callSid} | leadId: ${lead.id}`);

@@ -32,13 +32,13 @@ const DEFAULT_VOICES = {
 
 function getProvider(): "elevenlabs" | "cartesia" {
   const env = (process.env.TTS_PROVIDER || "").toLowerCase();
+  // Explicit env var always wins
   if (env === "elevenlabs" && process.env.ELEVENLABS_API_KEY) return "elevenlabs";
   if (env === "cartesia" && process.env.CARTESIA_API_KEY) return "cartesia";
-  // Prefer ElevenLabs when both providers are configured so we don't default to
-  // a dead secondary provider on production calls.
-  if (process.env.ELEVENLABS_API_KEY) return "elevenlabs";
+  // Default to Cartesia — more reliable for real-time telephony, no free-tier 401s
   if (process.env.CARTESIA_API_KEY) return "cartesia";
-  throw new Error("No TTS provider configured - add ELEVENLABS_API_KEY or CARTESIA_API_KEY");
+  if (process.env.ELEVENLABS_API_KEY) return "elevenlabs";
+  throw new Error("No TTS provider configured - add CARTESIA_API_KEY or ELEVENLABS_API_KEY to Railway");
 }
 
 async function synthesizeElevenLabs(

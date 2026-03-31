@@ -102,8 +102,8 @@ const leadsRouter = router({
       await Promise.all(contacts.map(async (c) => {
         try {
           const lead = await db.getLeadById(c.leadId);
-          if (lead?.phone) {
-            await addCallJob({ leadId: lead.id, campaignId: input.campaignId });
+          if ((lead as any)?.phone) {
+            await addCallJob({ leadId: (lead as any).id as number, campaignId: input.campaignId });
             queued++;
           }
         } catch {}
@@ -131,10 +131,11 @@ const leadsRouter = router({
     const lead = await db.getLeadById(input.id);
     if (!lead) throw new TRPCError({ code: "NOT_FOUND" });
     // Simulate verification logic
-    const isValid = lead.email && lead.email.includes("@") && !lead.email.includes("test");
+    const l = lead as any;
+    const isValid = l.email && String(l.email).includes("@") && !String(l.email).includes("test");
     const status = isValid ? "verified" : "unverified";
     const scoreBoost = isValid ? 15 : 0;
-    await db.updateLead(input.id, { verificationStatus: status, score: Math.min(100, (lead.score ?? 0) + scoreBoost) });
+    await db.updateLead(input.id, { verificationStatus: status, score: Math.min(100, ((l.score as number) ?? 0) + scoreBoost) });
     await db.logActivity({ userId: ctx.user.id, entityType: "lead", entityId: input.id, action: "verified", description: `Verification status: ${status}` });
     return { success: true, status };
   }),
@@ -246,7 +247,7 @@ const campaignsRouter = router({
       await Promise.all(contacts.map(async (c) => {
         try {
           const lead = await db.getLeadById(c.leadId);
-          if (lead?.phone) { await addCallJob({ leadId: lead.id, campaignId: input.campaignId }); queued++; }
+          if ((lead as any)?.phone) { await addCallJob({ leadId: (lead as any).id as number, campaignId: input.campaignId }); queued++; }
         } catch {}
       }));
       await db.updateCampaign(input.campaignId, { status: "active" });
@@ -317,10 +318,10 @@ const messagesRouter = router({
       let deliveryStatus = "queued";
 
       // Actually dispatch via Twilio/Resend
-      if (input.channel === "sms" && lead.phone) {
+      if (input.channel === "sms" && (lead as any).phone) {
         try {
           const { sendSMS } = await import("./_core/services/signalwireService");
-          await sendSMS({ to: lead.phone, body: input.body });
+          await sendSMS({ to: (lead as any).phone as string, body: input.body });
           await db.updateMessageStatus(msgId, "sent", { sentAt: new Date(), deliveredAt: new Date() });
           deliveryStatus = "sent";
         } catch (smsErr) {
@@ -334,7 +335,7 @@ const messagesRouter = router({
           const resend = new Resend(process.env.RESEND_API_KEY);
           await resend.emails.send({
             from: `${process.env.RESEND_FROM_NAME || "ApexAI"} <${process.env.RESEND_FROM_EMAIL || "noreply@apexai.com"}>`,
-            to: lead.email,
+            to: (lead as any).email as string,
             subject: input.subject || "Message from ApexAI",
             text: input.body,
           });
@@ -398,14 +399,15 @@ const messagesRouter = router({
       for (const contact of contacts) {
         const lead = await db.getLeadById(contact.leadId);
         if (!lead) continue;
+        const lAny = lead as any;
         // Personalize body with lead data
         const personalizedBody = input.body
-          .replace(/\{\{firstName\}\}/g, lead.firstName ?? "")
-          .replace(/\{\{lastName\}\}/g, lead.lastName ?? "")
-          .replace(/\{\{company\}\}/g, lead.company ?? "")
-          .replace(/\{\{industry\}\}/g, lead.industry ?? "");
+          .replace(/\{\{firstName\}\}/g, lAny.firstName ?? "")
+          .replace(/\{\{lastName\}\}/g, lAny.lastName ?? "")
+          .replace(/\{\{company\}\}/g, lAny.company ?? "")
+          .replace(/\{\{industry\}\}/g, lAny.industry ?? "");
         const personalizedSubject = input.subject
-          ? input.subject.replace(/\{\{firstName\}\}/g, lead.firstName ?? "").replace(/\{\{company\}\}/g, lead.company ?? "")
+          ? input.subject.replace(/\{\{firstName\}\}/g, lAny.firstName ?? "").replace(/\{\{company\}\}/g, lAny.company ?? "")
           : undefined;
         const msgResult = await db.createMessage({
           leadId: contact.leadId,
@@ -418,24 +420,25 @@ const messagesRouter = router({
         createdBy: ctx.user.id });
 
         // Queue real delivery with explicit job ID logging for proof
-        if (input.channel === "sms" && lead.phone) {
+        const bsLead = lead as any;
+        if (input.channel === "sms" && bsLead.phone) {
           const smsJob = await queueService.addSmsJob({
-            leadId: lead.id,
-            phone: lead.phone,
+            leadId: bsLead.id as number,
+            phone: bsLead.phone as string,
             type: "follow_up",
-            leadName: `${lead.firstName} ${lead.lastName}`,
+            leadName: `${bsLead.firstName} ${bsLead.lastName}`,
             msgId: msgResult.insertId,
           });
-          console.log(`[BulkSend] SMS job created → jobId: ${smsJob.jobId} | status: ${smsJob.status} | leadId: ${lead.id} | msgId: ${msgResult.insertId}`);
-        } else if (input.channel === "email" && lead.email) {
+          console.log(`[BulkSend] SMS job created → jobId: ${(smsJob as any).jobId} | leadId: ${bsLead.id} | msgId: ${msgResult.insertId}`);
+        } else if (input.channel === "email" && bsLead.email) {
           const emailJob = await queueService.addEmailJob({
-            leadId: lead.id,
-            email: lead.email,
+            leadId: bsLead.id as number,
+            email: bsLead.email as string,
             type: "follow_up",
-            leadName: `${lead.firstName} ${lead.lastName}`,
+            leadName: `${bsLead.firstName} ${bsLead.lastName}`,
             msgId: msgResult.insertId,
           });
-          console.log(`[BulkSend] Email job created → jobId: ${emailJob.jobId} | status: ${emailJob.status} | leadId: ${lead.id} | msgId: ${msgResult.insertId}`);
+          console.log(`[BulkSend] Email job created → jobId: ${(emailJob as any).jobId} | leadId: ${bsLead.id} | msgId: ${msgResult.insertId}`);
         }
         sent++;
       }
@@ -516,9 +519,9 @@ const voiceAIRouter = router({
         await db.logActivity({
           userId: ctx.user.id,
           entityType: "call",
-          entityId: lead.id,
+          entityId: (lead as any).id as number,
           action: "queued",
-          description: `Call queued for ${lead.firstName} ${lead.lastName} (Job: ${jobId})`,
+          description: `Call queued for ${(lead as any).firstName} ${(lead as any).lastName} (Job: ${jobId})`,
         });
 
         return {
