@@ -148,16 +148,15 @@ export class VoiceRealtimePipeline {
     }
 
     const params = new URLSearchParams({
-      model: "nova-2",
+      model: "nova-2-phonecall",  // phone-optimized model
       encoding: "mulaw",
       sample_rate: "8000",
       channels: "1",
       interim_results: "true",
       punctuate: "true",
       smart_format: "true",
-      endpointing: "300",
-      vad_events: "true",
-      utterance_end_ms: "600",
+      endpointing: "500",
+      utterance_end_ms: "1000",
     });
 
     const session = this.sessionId ? voiceSessionManager.getSession(this.sessionId) : null;
@@ -443,21 +442,23 @@ export class VoiceRealtimePipeline {
     // Whisper/Deepgram will return empty string if no speech detected
 
     this.isProcessing = true;
-    const epoch = ++this.generationEpoch;
 
+    let text = "";
     try {
       // Use batch STT
       const { transcribeAudio } = await import("./sttService");
       const session = this.sessionId ? voiceSessionManager.getSession(this.sessionId) : null;
-      const text = await transcribeAudio(combined, session?.language || "en");
-
-      if (!text.trim() || epoch !== this.generationEpoch) return;
-
-      await this.onFinalTranscript(text);
+      text = await transcribeAudio(combined, session?.language || "en");
     } catch (e) {
       this.logger.error("[PIPE] batch STT error", e);
     } finally {
+      // Release isProcessing BEFORE calling onFinalTranscript
+      // so onFinalTranscript can acquire it for the LLM+TTS phase
       this.isProcessing = false;
+    }
+
+    if (text.trim()) {
+      await this.onFinalTranscript(text);
     }
   }
 
