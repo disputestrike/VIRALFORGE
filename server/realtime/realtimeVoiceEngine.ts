@@ -4,7 +4,7 @@
  * Pipeline: SignalWire → Deepgram STT → Cerebras/Claude → Cartesia TTS → SignalWire
  * 
  * Key principles:
- * 1. PCM16 16kHz internal standard
+ * 1. Telephony: mulaw 8kHz to/from SignalWire; Cartesia outputs pcm_mulaw for outbound TTS
  * 2. Streaming everything — never wait for full response
  * 3. Instant barge-in — user speech kills AI speech immediately
  * 4. Epoch system — stale generations are discarded
@@ -69,35 +69,6 @@ class CerebrasPool {
 }
 
 const cerebrasPool = new CerebrasPool();
-
-// ── mulaw ↔ PCM16 conversion ──────────────────────────────────────────────────
-function mulawToPcm16(mulaw: Buffer): Buffer {
-  const pcm = Buffer.allocUnsafe(mulaw.length * 2);
-  for (let i = 0; i < mulaw.length; i++) {
-    let u = ~mulaw[i] & 0xff;
-    const sign = u & 0x80;
-    const exp = (u >> 4) & 0x07;
-    const mant = u & 0x0f;
-    let sample = ((mant << 4) + 0x08) << exp;
-    sample -= 33;
-    pcm.writeInt16LE(sign ? -sample : sample, i * 2);
-  }
-  return pcm;
-}
-
-function pcm16ToMulaw(pcm: Buffer): Buffer {
-  const out = Buffer.allocUnsafe(Math.floor(pcm.length / 2));
-  for (let i = 0; i < pcm.length - 1; i += 2) {
-    let s = pcm.readInt16LE(i);
-    const sign = s < 0 ? 0x80 : 0;
-    s = Math.min(32767, Math.abs(s) + 33);
-    let exp = 7;
-    for (let mask = 0x4000; (s & mask) === 0 && exp > 0; mask >>= 1) exp--;
-    const mant = (s >> (exp + 3)) & 0x0f;
-    out[Math.floor(i / 2)] = ~(sign | (exp << 4) | mant) & 0xff;
-  }
-  return out;
-}
 
 // ── System prompt builder ─────────────────────────────────────────────────────
 function buildPrompt(
@@ -222,7 +193,7 @@ export function createCallEngine(opts: EngineOptions): void {
   function connectCartesia() {
     if (cartesiaWs && cartesiaWs.readyState === WebSocket.CONNECTING) return;
     const ws = new WebSocket(
-      `wss://api.cartesia.ai/tts/websocket?api_key=${process.env.CARTESIA_API_KEY}&cartesia_version=2024-11-13`
+      `wss://api.cartesia.ai/tts/websocket?api_key=${process.env.CARTESIA_API_KEY}&cartesia_version=2024-06-10`
     );
     cartesiaWs = ws;
 
@@ -231,38 +202,40 @@ export function createCallEngine(opts: EngineOptions): void {
       traceEvent(callId, "cartesia_ready");
     });
 
-    ws.on("message", (data: Buffer | string) => {
-      if (typeof data === "string") {
-        try {
-          const msg = JSON.parse(data);
-          if (msg.type === "chunk" && msg.data) {
-            // Cartesia sends PCM16 s16le at 8kHz — convert to mulaw for SignalWire
-            const pcm16 = Buffer.from(msg.data, "base64");
-            const mulaw = pcm16ToMulaw(pcm16);
-            log(`Cartesia audio chunk: pcm=${pcm16.length}b mulaw=${mulaw.length}b streamSid=${streamSid} wsState=${sigWs.readyState}`);
-            if (streamSid && sigWs.readyState === WebSocket.OPEN) {
-              sigWs.send(JSON.stringify({
-                event: "media",
-                streamSid,
-                media: { payload: mulaw.toString("base64") },
-              }));
-              isSpeaking = true;
-              turnCtl = onAssistantSpeakStart(turnCtl);
-              traceEvent(callId, "tts_first_chunk", { bytes: mulaw.length });
-              log(`Sent audio to SignalWire`);
-            } else {
-              log(`CANNOT SEND: streamSid=${streamSid} wsState=${sigWs.readyState}`);
-            }
-          } else if (msg.type === "error") {
-            log(`Cartesia error: ${JSON.stringify(msg)}`);
-          } else if (msg.type === "done") {
-            isSpeaking = false;
-            if (streamSid && sigWs.readyState === WebSocket.OPEN) {
-              sigWs.send(JSON.stringify({ event: "mark", streamSid, mark: { name: "done" } }));
-            }
+    // Cartesia may send JSON as text frames (string) or UTF-8 in binary frames (Buffer). Only handling
+    // `typeof data === "string"` skips all audio chunks → silence on the phone line.
+    ws.on("message", (data: Buffer | string | ArrayBuffer | Buffer[]) => {
+      let text: string;
+      if (typeof data === "string") text = data;
+      else if (Buffer.isBuffer(data)) text = data.toString("utf8");
+      else if (Array.isArray(data)) text = Buffer.concat(data).toString("utf8");
+      else text = Buffer.from(data as ArrayBuffer).toString("utf8");
+      try {
+        const msg = JSON.parse(text);
+        if (msg.type === "chunk" && msg.data) {
+          // Request pcm_mulaw + 8kHz in cartesiaSend — same as voiceRealtimePipeline; forward base64 mulaw to SignalWire.
+          if (streamSid && sigWs.readyState === WebSocket.OPEN) {
+            sigWs.send(JSON.stringify({
+              event: "media",
+              streamSid,
+              media: { payload: msg.data },
+            }));
+            isSpeaking = true;
+            turnCtl = onAssistantSpeakStart(turnCtl);
+            traceEvent(callId, "tts_first_chunk", { bytes: Buffer.from(msg.data, "base64").length });
+            log(`Sent audio to SignalWire (mulaw)`);
+          } else {
+            log(`CANNOT SEND: streamSid=${streamSid} wsState=${sigWs.readyState}`);
           }
-        } catch {}
-      }
+        } else if (msg.type === "error") {
+          log(`Cartesia error: ${JSON.stringify(msg)}`);
+        } else if (msg.type === "done") {
+          isSpeaking = false;
+          if (streamSid && sigWs.readyState === WebSocket.OPEN) {
+            sigWs.send(JSON.stringify({ event: "mark", streamSid, mark: { name: "done" } }));
+          }
+        }
+      } catch {}
     });
 
     ws.on("close", () => {
@@ -291,7 +264,7 @@ export function createCallEngine(opts: EngineOptions): void {
       transcript: text,
       output_format: {
         container: "raw",
-        encoding: "pcm_s16le",
+        encoding: "pcm_mulaw",
         sample_rate: 8000,
       },
       continue: continueCtx,
