@@ -148,7 +148,7 @@ class CerebrasKeyPool {
 
   /** Call Cerebras with automatic key rotation and retry */
   async call(messages: RouterMessage[], maxTokens = 120): Promise<string> {
-    const model = process.env.CEREBRAS_MODEL || "llama3.1-70b";
+    const model = process.env.CEREBRAS_MODEL || "llama-3.3-70b";
     const maxAttempts = Math.min(this.slots.length, 5);
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -213,7 +213,7 @@ class CerebrasKeyPool {
 
   /** Stream from Cerebras with key rotation */
   async stream(messages: RouterMessage[], maxTokens = 120): Promise<Response> {
-    const model = process.env.CEREBRAS_MODEL || "llama3.1-70b";
+    const model = process.env.CEREBRAS_MODEL || "llama-3.3-70b";
     const maxAttempts = Math.min(this.slots.length, 5);
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
