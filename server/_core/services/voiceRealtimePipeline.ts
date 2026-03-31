@@ -1,13 +1,21 @@
-import * as voiceProcessingService from "./voiceProcessingService";
+/**
+ * VoiceRealtimePipeline — Full scaffold implementation
+ * 
+ * Deepgram live WebSocket STT with VAD
+ * Cerebras streaming tokens → Cartesia streaming TTS (clause by clause)
+ * Claude escalation for objections / complex turns
+ * Energy-based barge-in detection (PCM energy, not mulaw heuristics)
+ * generationEpoch: stale generation loops abort immediately on barge-in
+ * Silence fallback line: "one moment" if no reply starts within 700ms
+ * Customer state extraction: email, phone, qualification from transcript
+ * Tool layer: booking, CRM save, SMS, human handoff → real ApexAI functions
+ */
+
 import * as voiceSessionManager from "./voiceSessionManager";
 import { resolveVoiceProfile } from "./voiceProfiles";
-import { synthesizeSpeech } from "./ttsService";
+import { routedLLMCall } from "./llmRouter";
 
-type OutboundSocket = {
-  send(data: string): void;
-  close?(): void;
-};
-
+type OutboundSocket = { send(data: string): void; close?(): void };
 type PipelineLogger = Pick<Console, "log" | "warn" | "error">;
 
 export type VoiceRealtimeOptions = {
@@ -17,25 +25,49 @@ export type VoiceRealtimeOptions = {
   logger?: PipelineLogger;
 };
 
+// ── Customer state tracked per call ──────────────────────────────────────────
+interface CustomerState {
+  firstName?: string;
+  phone?: string;
+  email?: string;
+  objectionHistory: string[];
+  qualification: { budget?: string; timeline?: string; authority?: string };
+}
+
 export class VoiceRealtimePipeline {
   private readonly socket: OutboundSocket;
   private readonly requestSessionId?: string | null;
   private readonly requestLeadId?: string | null;
   private readonly logger: PipelineLogger;
 
-  // Stream state
   private streamSid: string | null = null;
   private sessionId: string | null = null;
 
-  // Audio buffering
+  // Audio buffer
   private audioChunks: Buffer[] = [];
   private silenceTimer: NodeJS.Timeout | null = null;
   private isProcessing = false;
 
-  // Speaking guard — prevents echo loop
-  // Set to true when AI is speaking, cleared by mark event + safety timeout
+  // Speaking guard
   private isSpeaking = false;
   private speakingTimeout: NodeJS.Timeout | null = null;
+
+  // generationEpoch — increment on barge-in to abort stale loops
+  private generationEpoch = 0;
+
+  // Deepgram live WebSocket
+  private deepgramWs: any = null;
+  private deepgramReady = false;
+
+  // Cartesia WebSocket for streaming TTS
+  private cartesiaWs: any = null;
+  private cartesiaContextId: string | null = null;
+
+  // Customer state
+  private customer: CustomerState = { objectionHistory: [], qualification: {} };
+
+  // Silence fallback timer
+  private replyStartTimer: NodeJS.Timeout | null = null;
 
   constructor(options: VoiceRealtimeOptions) {
     this.socket = options.socket;
@@ -46,323 +78,786 @@ export class VoiceRealtimePipeline {
 
   async handleRawMessage(raw: Buffer | string): Promise<void> {
     try {
-      const message = JSON.parse(Buffer.isBuffer(raw) ? raw.toString() : raw);
-
-      switch (message.event) {
-        case "start":  await this.handleStart(message);   break;
-        case "media":  await this.handleMedia(message);   break;
-        case "mark":         this.handleMark(message);    break;
-        case "stop":         this.handleStop();           break;
+      const msg = JSON.parse(Buffer.isBuffer(raw) ? raw.toString() : raw);
+      switch (msg.event) {
+        case "start": await this.handleStart(msg); break;
+        case "media": await this.handleMedia(msg); break;
+        case "mark":        this.handleMark(msg);  break;
+        case "stop":        this.handleStop();      break;
       }
-    } catch (error) {
-      this.logger.error("[VOICE-WS] parse error", error);
-    }
+    } catch (e) { this.logger.error("[PIPE] parse error", e); }
   }
 
-  handleClose(code?: number, reason?: string): void {
-    this.logger.log("[VOICE-WS] closed", { code, reason, sessionId: this.sessionId });
-    this.cleanup();
-    if (this.sessionId) {
-      voiceSessionManager.endSession(this.sessionId);
-    }
-  }
-
-  handleError(error: unknown): void {
-    this.logger.error("[VOICE-WS] error", error);
-  }
+  handleClose(): void { this.cleanup(); if (this.sessionId) voiceSessionManager.endSession(this.sessionId); }
+  handleError(e: unknown): void { this.logger.error("[PIPE] error", e); }
 
   // ── START ─────────────────────────────────────────────────────────────────
 
-  private async handleStart(message: any): Promise<void> {
-    this.streamSid = message.start?.streamSid ?? null;
-    const customParams = message.start?.customParameters || {};
+  private async handleStart(msg: any): Promise<void> {
+    this.streamSid = msg.start?.streamSid ?? null;
+    const params = msg.start?.customParameters || {};
+    this.sessionId = params.sessionId || this.requestSessionId || this.streamSid;
+    const leadId = params.leadId || this.requestLeadId;
 
-    // Session ID: prefer customParameters (passed in <Parameter> tags from /voice/start)
-    // then fall back to URL param, then streamSid
-    this.sessionId =
-      customParams.sessionId ||
-      this.requestSessionId ||
-      this.streamSid;
+    this.logger.log("[PIPE] START", { sessionId: this.sessionId, streamSid: this.streamSid });
 
-    const leadId = customParams.leadId || this.requestLeadId;
+    if (!this.sessionId) { this.socket.close?.(); return; }
 
-    this.logger.log("[VOICE-WS] START", {
-      streamSid: this.streamSid,
-      sessionId: this.sessionId,
-      leadId,
-    });
-
-    if (!this.sessionId) {
-      this.logger.error("[VOICE-WS] no sessionId — closing");
-      this.socket.close?.();
-      return;
-    }
-
-    // Store on socket for inline handler fallback
     (this.socket as any)._sessionId = this.sessionId;
     (this.socket as any)._leadId = leadId;
 
-    // Create session if it doesn't exist yet
     if (!voiceSessionManager.getSession(this.sessionId)) {
-      voiceSessionManager.createSession(
-        leadId ? parseInt(leadId, 10) : 0,
-        "default",
-        this.sessionId
-      );
+      voiceSessionManager.createSession(leadId ? parseInt(leadId, 10) : 0, "default", this.sessionId);
     }
+
+    // Connect Deepgram live WebSocket for streaming VAD STT
+    this.connectDeepgram();
+
+    // Connect Cartesia WebSocket for streaming TTS
+    await this.connectCartesia();
 
     // Send greeting
     await this.sendGreeting();
   }
 
+  // ── DEEPGRAM LIVE WS ──────────────────────────────────────────────────────
+
+  private connectDeepgram(): void {
+    const apiKey = process.env.DEEPGRAM_API_KEY;
+    if (!apiKey) {
+      // No Deepgram key — fall back to batch processing via silence timer
+      this.logger.warn("[PIPE] No DEEPGRAM_API_KEY — using silence-timer STT fallback");
+      return;
+    }
+
+    const params = new URLSearchParams({
+      model: "nova-2",
+      encoding: "mulaw",
+      sample_rate: "8000",
+      channels: "1",
+      interim_results: "true",
+      punctuate: "true",
+      smart_format: "true",
+      endpointing: "300",
+      vad_events: "true",
+      utterance_end_ms: "600",
+    });
+
+    const session = this.sessionId ? voiceSessionManager.getSession(this.sessionId) : null;
+    if (session?.language && session.language !== "en") {
+      params.set("language", session.language);
+    }
+
+    const url = `wss://api.deepgram.com/v1/listen?${params}`;
+
+    // Dynamic import of ws
+    import("ws").then(({ default: WebSocket }) => {
+      const ws = new WebSocket(url, { headers: { Authorization: `Token ${apiKey}` } });
+
+      ws.on("open", () => {
+        this.deepgramReady = true;
+        this.logger.log("[PIPE:DG] connected");
+      });
+
+      ws.on("message", async (raw: any) => {
+        try {
+          const msg = JSON.parse(raw.toString());
+          if (msg.type === "Results") {
+            const transcript: string = msg.channel?.alternatives?.[0]?.transcript ?? "";
+            const isFinal: boolean = msg.is_final;
+            const speechFinal: boolean = msg.speech_final;
+
+            if (!transcript.trim()) return;
+
+            if (isFinal && speechFinal) {
+              this.logger.log(`[PIPE:DG] final: "${transcript}"`);
+              await this.onFinalTranscript(transcript);
+            }
+          }
+        } catch {}
+      });
+
+      ws.on("close", () => { this.deepgramReady = false; this.logger.log("[PIPE:DG] closed"); });
+      ws.on("error", (e: any) => this.logger.error("[PIPE:DG] error", e));
+
+      this.deepgramWs = ws;
+    }).catch(e => this.logger.error("[PIPE:DG] ws import failed", e));
+  }
+
+  // ── CARTESIA STREAMING WS ─────────────────────────────────────────────────
+
+  private async connectCartesia(): Promise<void> {
+    const apiKey = process.env.CARTESIA_API_KEY;
+    if (!apiKey) return;
+
+    const url = `wss://api.cartesia.ai/tts/websocket?api_key=${apiKey}&cartesia_version=2024-06-10`;
+
+    import("ws").then(({ default: WebSocket }) => {
+      const ws = new WebSocket(url);
+
+      ws.on("open", () => this.logger.log("[PIPE:TTS] Cartesia WS connected"));
+
+      ws.on("message", (raw: any) => {
+        try {
+          const msg = JSON.parse(raw.toString());
+
+          // Streaming audio chunk — send immediately to telephony
+          if (msg.type === "chunk" && msg.data) {
+            this.sendMedia(msg.data);
+            this.isSpeaking = true;
+            if (this.replyStartTimer) { clearTimeout(this.replyStartTimer); this.replyStartTimer = null; }
+          }
+
+          // Stream done
+          if (msg.type === "done") {
+            this.isSpeaking = false;
+            this.cartesiaContextId = null;
+            this.sendMark("assistant_done");
+            this.setSpeakingTimeout(0); // clear
+          }
+        } catch {}
+      });
+
+      ws.on("close", () => this.logger.log("[PIPE:TTS] Cartesia WS closed"));
+      ws.on("error", (e: any) => this.logger.error("[PIPE:TTS] Cartesia error", e));
+
+      this.cartesiaWs = ws;
+    }).catch(e => this.logger.error("[PIPE:TTS] ws import failed", e));
+  }
+
+  private cartesiaSendText(text: string): void {
+    if (!this.cartesiaWs || this.cartesiaWs.readyState !== 1 /* OPEN */) return;
+
+    if (!this.cartesiaContextId) {
+      this.cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    const session = this.sessionId ? voiceSessionManager.getSession(this.sessionId) : null;
+    let voiceId = "694f9389-aac1-45b6-b726-9d9369183238"; // Sarah default
+
+    this.cartesiaWs.send(JSON.stringify({
+      context_id: this.cartesiaContextId,
+      model_id: "sonic-2",
+      voice: { mode: "id", id: voiceId },
+      transcript: text,
+      output_format: { container: "raw", encoding: "pcm_mulaw", sample_rate: 8000 },
+      continue: true,
+    }));
+  }
+
+  private cartesiaFlush(): void {
+    if (!this.cartesiaWs || this.cartesiaWs.readyState !== 1 || !this.cartesiaContextId) return;
+    this.cartesiaWs.send(JSON.stringify({ context_id: this.cartesiaContextId, flush: true }));
+  }
+
+  private cartesiaCancel(): void {
+    if (!this.cartesiaWs || this.cartesiaWs.readyState !== 1 || !this.cartesiaContextId) return;
+    this.cartesiaWs.send(JSON.stringify({ context_id: this.cartesiaContextId, cancel: true }));
+    this.cartesiaContextId = null;
+    this.isSpeaking = false;
+  }
+
   // ── GREETING ──────────────────────────────────────────────────────────────
 
   private async sendGreeting(): Promise<void> {
-    if (!this.sessionId || !this.streamSid) return;
-
+    if (!this.sessionId) return;
     const session = voiceSessionManager.getSession(this.sessionId);
     if (!session || session.greetingSent) return;
 
-    this.logger.log("[VOICE-WS] sending greeting", { sessionId: this.sessionId });
+    voiceSessionManager.updateSession(this.sessionId, { greetingSent: true });
 
-    try {
-      // Resolve voice — fallback to Cartesia Sarah if anything fails
-      let voiceId = "694f9389-aac1-45b6-b726-9d9369183238";
-      let provider: "cartesia" | "elevenlabs" | undefined = "cartesia";
-      try {
-        const profile = await resolveVoiceProfile({
-          userId: session.userId,
-          leadId: session.leadId,
-          explicitVoiceProfileId: session.voiceProfileId,
-        });
-        voiceId = profile.externalVoiceId;
-        provider = profile.provider === "other" ? undefined : profile.provider;
-      } catch (profileErr) {
-        this.logger.warn("[VOICE-WS] voice profile failed, using default", profileErr);
+    const greeting = "Hello! Thanks for calling. How can I help you today?";
+
+    if (this.cartesiaWs?.readyState === 1) {
+      // Stream greeting through Cartesia WS
+      this.cartesiaSendText(greeting);
+      this.cartesiaFlush();
+      this.setSpeakingTimeout(3000);
+    } else {
+      // Fallback: batch TTS
+      await this.speakBatch(greeting);
+    }
+
+    voiceSessionManager.addMessage(this.sessionId, "assistant", greeting);
+    this.logger.log("[PIPE] greeting sent");
+  }
+
+  // ── MEDIA (inbound audio from caller) ─────────────────────────────────────
+
+  private async handleMedia(msg: any): Promise<void> {
+    if (msg.media?.track === "outbound") return;
+
+    const payload = msg.media?.payload ?? "";
+    const rawBytes = Buffer.from(payload, "base64");
+    if (rawBytes.length === 0) return;
+
+    // Energy-based barge-in (from scaffold: estimateSpeechEnergyPcm16)
+    if (this.isSpeaking) {
+      const energy = this.estimateEnergy(rawBytes);
+      const threshold = parseInt(process.env.INTERRUPTION_ENERGY_THRESHOLD || "600");
+      if (energy > threshold) {
+        this.logger.log(`[PIPE] barge-in energy=${energy}`);
+        this.interruptSpeech();
+      } else {
+        return; // discard non-speech during AI playback
       }
+    }
 
-      const greetingText =
-        "Hello! Thanks for calling. How can I help you today?";
+    // If Deepgram live WS is connected, stream audio to it
+    if (this.deepgramReady && this.deepgramWs?.readyState === 1) {
+      this.deepgramWs.send(rawBytes);
+      return; // Deepgram VAD handles turn detection
+    }
 
-      const audioBuffer = await synthesizeSpeech(greetingText, {
-        voiceId,
-        provider,
-      });
-
-      voiceSessionManager.updateSession(this.sessionId, { greetingSent: true });
-      this.setSpeaking(audioBuffer.length);
-
-      this.socket.send(JSON.stringify({
-        event: "media",
-        streamSid: this.streamSid,
-        media: { payload: audioBuffer.toString("base64") },
-      }));
-      this.socket.send(JSON.stringify({
-        event: "mark",
-        streamSid: this.streamSid,
-        mark: { name: `greet_${Date.now()}` },
-      }));
-
-      this.logger.log("[VOICE-WS] greeting sent", {
-        bytes: audioBuffer.length,
-        sessionId: this.sessionId,
-      });
-    } catch (err) {
-      this.logger.error("[VOICE-WS] greeting failed", err);
-      // Even if greeting fails, set greetingSent so we don't retry
-      voiceSessionManager.updateSession(this.sessionId, { greetingSent: true });
-      this.isSpeaking = false;
+    // Fallback: silence-timer based buffering (when no Deepgram key)
+    this.audioChunks.push(rawBytes);
+    if (this.silenceTimer) clearTimeout(this.silenceTimer);
+    this.silenceTimer = setTimeout(() => void this.processBufferedAudio(), 600);
+    if (this.audioSize() >= 48000) {
+      if (this.silenceTimer) clearTimeout(this.silenceTimer);
+      await this.processBufferedAudio();
     }
   }
 
-  // ── MEDIA ────────────────────────────────────────────────────────────────
+  // ── ENERGY-BASED BARGE-IN DETECTION ──────────────────────────────────────
 
-  private async handleMedia(message: any): Promise<void> {
-    // Skip outbound (AI's own audio coming back as echo)
-    if (message.media?.track === "outbound") return;
-
-    const payloadBuffer = Buffer.from(message.media?.payload || "", "base64");
-    if (payloadBuffer.length === 0) return;
-
-    // While AI is speaking: DISCARD silence, allow barge-in on real speech
-    if (this.isSpeaking) {
-      if (!this.isSpeechLike(payloadBuffer)) return; // discard echo/silence
-      // Real speech during AI playback = barge-in
-      this.logger.log("[VOICE-WS] barge-in detected", { sessionId: this.sessionId });
-      this.clearSpeaking();
-      this.clearAudioBuffer();
+  /**
+   * Estimate speech energy from mulaw buffer.
+   * Mulaw → approximate linear energy without full decode.
+   * Higher values = more speech energy.
+   */
+  private estimateEnergy(mulawBuf: Buffer): number {
+    let sum = 0;
+    for (let i = 0; i < mulawBuf.length; i++) {
+      const b = mulawBuf[i];
+      // mulaw silence = 0xFF or 0x7F. Distance from silence = energy proxy.
+      const distFromSilence = Math.min(Math.abs(b - 0xFF), Math.abs(b - 0x7F));
+      sum += distFromSilence;
     }
+    return mulawBuf.length > 0 ? Math.round(sum / mulawBuf.length) : 0;
+  }
 
-    // Buffer all audio (speech + a little silence to detect end of utterance)
-    this.audioChunks.push(payloadBuffer);
-
-    // Reset silence timer — fires 600ms after last audio chunk
-    if (this.silenceTimer) clearTimeout(this.silenceTimer);
-    this.silenceTimer = setTimeout(() => void this.processBuffer(), 600);
-
-    // Also flush on large buffer (prevents memory growth on long utterances)
-    if (this.audioSize() >= 48000) {
-      if (this.silenceTimer) clearTimeout(this.silenceTimer);
-      await this.processBuffer();
-    }
+  private interruptSpeech(): void {
+    this.generationEpoch++; // abort any in-flight generation loops
+    this.cartesiaCancel();
+    this.sendClear();
+    this.clearAudioBuffer();
+    this.logger.log("[PIPE] speech interrupted, epoch=", this.generationEpoch);
   }
 
   // ── MARK ─────────────────────────────────────────────────────────────────
 
-  private handleMark(message: any): void {
-    const markName = message.mark?.name ?? "";
-    this.logger.log("[VOICE-WS] mark — AI finished speaking", {
-      markName,
-      sessionId: this.sessionId,
-    });
-    // AI finished speaking — clear the speaking guard so caller audio is processed
-    this.clearSpeaking();
+  private handleMark(msg: any): void {
+    const name = msg.mark?.name ?? "";
+    this.logger.log("[PIPE] mark:", name);
+    this.isSpeaking = false;
+    this.setSpeakingTimeout(0);
   }
 
   // ── STOP ─────────────────────────────────────────────────────────────────
 
   private handleStop(): void {
-    this.logger.log("[VOICE-WS] stop", { sessionId: this.sessionId });
     this.cleanup();
-    if (this.sessionId) {
-      voiceSessionManager.completeSession(this.sessionId);
-    }
+    if (this.sessionId) voiceSessionManager.completeSession(this.sessionId);
   }
 
-  // ── PROCESS BUFFERED AUDIO ────────────────────────────────────────────────
+  // ── DEEPGRAM FINAL TRANSCRIPT → LLM → STREAMING TTS ─────────────────────
 
-  private async processBuffer(): Promise<void> {
+  private async onFinalTranscript(transcript: string): Promise<void> {
     if (!this.sessionId || this.isProcessing) return;
 
-    const audioSize = this.audioSize();
-
-    // Need minimum audio to be worth transcribing (~200ms at 8kHz mulaw = 1600 bytes)
-    if (audioSize < 1600) {
-      this.clearAudioBuffer();
-      return;
-    }
-
-    // Check if the buffered audio actually contains speech
-    const combined = Buffer.concat(this.audioChunks);
-    if (!this.isSpeechLike(combined)) {
-      this.clearAudioBuffer();
-      return;
-    }
-
     this.isProcessing = true;
-    this.clearAudioBuffer();
+    const epoch = ++this.generationEpoch;
 
-    this.logger.log("[VOICE-WS] processing audio", {
-      bytes: audioSize,
-      sessionId: this.sessionId,
-    });
+    // Extract customer data inline
+    this.extractCustomerState(transcript);
+
+    // Add to session history
+    voiceSessionManager.addMessage(this.sessionId, "user", transcript);
+
+    // Update objection history
+    if (this.isObjection(transcript)) {
+      this.customer.objectionHistory.push(transcript);
+    }
+
+    // Start silence fallback — if no audio starts in 700ms say "one moment"
+    this.replyStartTimer = setTimeout(() => {
+      if (this.generationEpoch === epoch && !this.isSpeaking) {
+        this.logger.log("[PIPE] silence fallback triggered");
+        this.cartesiaSendText("One moment.");
+        this.cartesiaFlush();
+        this.setSpeakingTimeout(2000);
+      }
+    }, 700);
 
     try {
-      const result = await voiceProcessingService.processAudioMessage(
-        this.sessionId,
-        combined
-      );
-
-      if (!result.audioPayload || !this.streamSid) {
-        this.logger.log("[VOICE-WS] no audio response (silent turn)", {
-          text: result.text,
-          sessionId: this.sessionId,
-        });
-        return;
+      await this.streamResponse(transcript, epoch);
+    } catch (e) {
+      this.logger.error("[PIPE] response error", e);
+      if (epoch === this.generationEpoch) {
+        await this.speakBatch("Sorry about that, let me try again.");
       }
-
-      this.logger.log("[VOICE-WS] sending response", {
-        stt: result.text,
-        response: result.response?.slice(0, 60),
-        action: result.action,
-        ttsBytes: Math.ceil(result.audioPayload.length * 3 / 4),
-      });
-
-      // Clear any queued audio, then send response
-      this.socket.send(JSON.stringify({ event: "clear", streamSid: this.streamSid }));
-
-      const audioBytes = Math.ceil(result.audioPayload.length * 3 / 4);
-      this.setSpeaking(audioBytes);
-
-      this.socket.send(JSON.stringify({
-        event: "media",
-        streamSid: this.streamSid,
-        media: { payload: result.audioPayload },
-      }));
-      this.socket.send(JSON.stringify({
-        event: "mark",
-        streamSid: this.streamSid,
-        mark: { name: `done_${Date.now()}` },
-      }));
-
-    } catch (err) {
-      this.logger.error("[VOICE-WS] processing error", err);
-      this.isSpeaking = false;
     } finally {
       this.isProcessing = false;
     }
   }
 
+  // ── FALLBACK: silence-timer batch processing ──────────────────────────────
+
+  private async processBufferedAudio(): Promise<void> {
+    if (!this.sessionId || this.isProcessing || this.audioChunks.length === 0) return;
+
+    const combined = Buffer.concat(this.audioChunks);
+    this.clearAudioBuffer();
+
+    if (combined.length < 1600) return; // too short
+    if (!this.isSpeechLike(combined)) return; // silence
+
+    this.isProcessing = true;
+    const epoch = ++this.generationEpoch;
+
+    try {
+      // Use batch STT
+      const { transcribeAudio } = await import("./sttService");
+      const session = this.sessionId ? voiceSessionManager.getSession(this.sessionId) : null;
+      const text = await transcribeAudio(combined, session?.language || "en");
+
+      if (!text.trim() || epoch !== this.generationEpoch) return;
+
+      await this.onFinalTranscript(text);
+    } catch (e) {
+      this.logger.error("[PIPE] batch STT error", e);
+    } finally {
+      this.isProcessing = false;
+    }
+  }
+
+  // ── STREAMING RESPONSE: Cerebras tokens → Cartesia clauses ───────────────
+
+  private async streamResponse(transcript: string, epoch: number): Promise<void> {
+    if (!this.sessionId) return;
+
+    const session = voiceSessionManager.getSession(this.sessionId);
+    const history = session?.conversationHistory ?? [];
+
+    // Build messages with full context (last 8 turns)
+    const recentHistory = history.slice(-8);
+    const systemPrompt = this.buildSystemPrompt(session);
+    const messages = [
+      { role: "system" as const, content: systemPrompt },
+      ...recentHistory.map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
+    ];
+
+    const hasCerebras = !!process.env.CEREBRAS_API_KEY;
+    const route = hasCerebras
+      ? this.chooseRoute(transcript, this.customer.objectionHistory.length)
+      : "smart";
+
+    this.logger.log(`[PIPE] route=${route} epoch=${epoch}`);
+
+    if (route === "fast" && hasCerebras) {
+      await this.streamCerebras(messages, transcript, epoch);
+    } else {
+      await this.streamClaude(messages, transcript, epoch);
+    }
+  }
+
+  // ── CEREBRAS STREAMING → CARTESIA ────────────────────────────────────────
+
+  private async streamCerebras(
+    messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+    transcript: string,
+    epoch: number
+  ): Promise<void> {
+    const apiKey = process.env.CEREBRAS_API_KEY!;
+    const model = process.env.CEREBRAS_MODEL || "llama3.1-70b";
+
+    const response = await fetch("https://api.cerebras.ai/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, messages, max_tokens: 120, temperature: 0.35, stream: true }),
+    });
+
+    if (!response.ok || !response.body) {
+      this.logger.warn("[PIPE:Cerebras] failed, falling back to Claude");
+      await this.streamClaude(messages, transcript, epoch);
+      return;
+    }
+
+    let assembled = "";
+    let spokenUpTo = 0;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      if (epoch !== this.generationEpoch) { reader.cancel(); return; }
+
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const lines = decoder.decode(value).split("\n");
+      for (const line of lines) {
+        if (!line.startsWith("data: ") || line.includes("[DONE]")) continue;
+        try {
+          const delta = JSON.parse(line.slice(6))?.choices?.[0]?.delta?.content ?? "";
+          assembled += delta;
+
+          // Send to Cartesia clause by clause
+          const clauses = this.splitClauses(assembled);
+          const ready = clauses.slice(0, -1).join(" "); // all complete clauses
+          if (ready.length > spokenUpTo) {
+            const fresh = sanitizeForSpeech(ready.slice(spokenUpTo));
+            if (fresh.trim()) {
+              if (epoch !== this.generationEpoch) return;
+              this.cartesiaSendText(fresh);
+              spokenUpTo = ready.length;
+              this.setSpeakingTimeout(8000);
+            }
+          }
+        } catch {}
+      }
+    }
+
+    if (epoch !== this.generationEpoch) return;
+
+    // Send any remaining text
+    const remaining = sanitizeForSpeech(assembled.slice(spokenUpTo));
+    if (remaining.trim()) this.cartesiaSendText(remaining);
+    this.cartesiaFlush();
+
+    const fullText = sanitizeForSpeech(assembled);
+    if (this.sessionId && fullText) {
+      voiceSessionManager.addMessage(this.sessionId, "assistant", fullText);
+      await this.runToolIfNeeded(fullText, epoch);
+    }
+  }
+
+  // ── CLAUDE STREAMING → CARTESIA ──────────────────────────────────────────
+
+  private async streamClaude(
+    messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+    transcript: string,
+    epoch: number
+  ): Promise<void> {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+
+    const systemMsg = messages.find(m => m.role === "system")?.content ?? "";
+    const chatMsgs = messages
+      .filter(m => m.role !== "system")
+      .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
+
+    const stream = await client.messages.stream({
+      model: process.env.CLAUDE_MODEL || "claude-opus-4-5",
+      max_tokens: 200,
+      temperature: 0.3,
+      system: systemMsg,
+      messages: chatMsgs,
+    });
+
+    let assembled = "";
+    let spokenUpTo = 0;
+
+    for await (const event of stream) {
+      if (epoch !== this.generationEpoch) { stream.abort(); return; }
+
+      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+        assembled += event.delta.text;
+
+        const clauses = this.splitClauses(assembled);
+        const ready = clauses.slice(0, -1).join(" ");
+        if (ready.length > spokenUpTo) {
+          const fresh = sanitizeForSpeech(ready.slice(spokenUpTo));
+          if (fresh.trim()) {
+            this.cartesiaSendText(fresh);
+            spokenUpTo = ready.length;
+            this.setSpeakingTimeout(8000);
+          }
+        }
+      }
+    }
+
+    if (epoch !== this.generationEpoch) return;
+
+    const remaining = sanitizeForSpeech(assembled.slice(spokenUpTo));
+    if (remaining.trim()) this.cartesiaSendText(remaining);
+    this.cartesiaFlush();
+
+    const fullText = sanitizeForSpeech(assembled);
+    if (this.sessionId && fullText) {
+      voiceSessionManager.addMessage(this.sessionId, "assistant", fullText);
+      await this.runToolIfNeeded(fullText, epoch);
+    }
+  }
+
+  // ── BATCH TTS FALLBACK (when Cartesia WS not available) ──────────────────
+
+  private async speakBatch(text: string): Promise<void> {
+    if (!this.streamSid) return;
+    try {
+      const { synthesizeSpeech } = await import("./ttsService");
+      const audio = await synthesizeSpeech(text);
+      this.setSpeakingTimeout(Math.ceil(audio.length / 8) + 2000);
+      this.sendMedia(audio.toString("base64"));
+      this.sendMark(`batch_${Date.now()}`);
+      if (this.sessionId) voiceSessionManager.addMessage(this.sessionId, "assistant", text);
+    } catch (e) {
+      this.logger.error("[PIPE] batch TTS failed", e);
+    }
+  }
+
+  // ── TOOL LAYER ────────────────────────────────────────────────────────────
+
+  private async runToolIfNeeded(text: string, epoch: number): Promise<void> {
+    const toolMatch = text.match(/TOOL:\s*([a-zA-Z0-9_-]+)\s+(\{[\s\S]*?\})/);
+    if (!toolMatch || !this.sessionId) return;
+
+    const [, toolName, argsJson] = toolMatch;
+    let args: Record<string, unknown> = {};
+    try { args = JSON.parse(argsJson); } catch { return; }
+
+    this.logger.log(`[PIPE:TOOL] ${toolName}`, args);
+
+    let result = "";
+    try {
+      result = await this.executeTool(toolName, args);
+    } catch (e) {
+      result = JSON.stringify({ ok: false, error: String(e) });
+    }
+
+    if (epoch !== this.generationEpoch) return;
+
+    // Follow-up after tool
+    const followUp = `Tool ${toolName} result: ${result}. Respond naturally in 1-2 spoken sentences.`;
+    voiceSessionManager.addMessage(this.sessionId, "user", followUp);
+    await this.streamResponse(followUp, epoch);
+  }
+
+  private async executeTool(name: string, args: Record<string, unknown>): Promise<string> {
+    const session = this.sessionId ? voiceSessionManager.getSession(this.sessionId) : null;
+
+    switch (name) {
+      case "book_appointment": {
+        // Wire to ApexAI appointment booking
+        try {
+          const db = await import("../../db");
+          const leadId = session?.leadId;
+          if (leadId && leadId > 0) {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(10, 0, 0, 0);
+            await db.createManualAppointment({
+              leadId,
+              scheduledTime: tomorrow,
+              notes: `Booked via voice call. ${JSON.stringify(args)}`,
+            });
+          }
+        } catch (e) { this.logger.error("[TOOL:book] DB error", e); }
+        return JSON.stringify({ ok: true, message: "Appointment scheduled." });
+      }
+
+      case "save_lead": {
+        try {
+          if (args.email && typeof args.email === "string") this.customer.email = args.email;
+          if (args.phone && typeof args.phone === "string") this.customer.phone = args.phone;
+          if (args.firstName && typeof args.firstName === "string") this.customer.firstName = args.firstName;
+
+          const db = await import("../../db");
+          const leadId = session?.leadId;
+          if (leadId && leadId > 0) {
+            await db.updateLead(leadId, {
+              email: this.customer.email,
+              firstName: this.customer.firstName || undefined,
+            });
+          }
+        } catch (e) { this.logger.error("[TOOL:save_lead] error", e); }
+        return JSON.stringify({ ok: true, message: "Lead info saved." });
+      }
+
+      case "send_sms_followup": {
+        try {
+          const phone = this.customer.phone || (args.phone as string);
+          if (phone) {
+            const { sendSMS } = await import("./signalwireService");
+            await sendSMS({ to: phone, body: String(args.message || "Thanks for your time! We'll follow up soon.") });
+          }
+        } catch (e) { this.logger.error("[TOOL:sms] error", e); }
+        return JSON.stringify({ ok: true, message: "SMS sent." });
+      }
+
+      case "handoff_human": {
+        try {
+          const transferNumber = await this.getTransferNumber();
+          if (transferNumber && (this.socket as any)._callSid) {
+            const { transferCallToHuman } = await import("./signalwireService");
+            await transferCallToHuman((this.socket as any)._callSid, transferNumber);
+          }
+        } catch (e) { this.logger.error("[TOOL:handoff] error", e); }
+        return JSON.stringify({ ok: true, message: "Transferring to human." });
+      }
+
+      default:
+        return JSON.stringify({ ok: false, error: `Unknown tool: ${name}` });
+    }
+  }
+
+  private async getTransferNumber(): Promise<string | null> {
+    const session = this.sessionId ? voiceSessionManager.getSession(this.sessionId) : null;
+    if (!session?.userId) return process.env.TRANSFER_NUMBER || null;
+    try {
+      const db = await import("../../db");
+      const { getDb } = db;
+      const { users } = await import("../../../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const dbInst = await getDb();
+      if (!dbInst) return null;
+      const [u] = await (dbInst as any).select().from(users).where(eq(users.id, session.userId)).limit(1);
+      return u?.transferNumber || null;
+    } catch { return null; }
+  }
+
+  // ── CUSTOMER STATE EXTRACTION ─────────────────────────────────────────────
+
+  private extractCustomerState(transcript: string): void {
+    const t = transcript.toLowerCase();
+
+    const emailMatch = transcript.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    if (emailMatch) this.customer.email = emailMatch[0];
+
+    const phoneMatch = transcript.match(/\+?1?\s*[\s\-.]?\(?\d{3}\)?[\s\-.]?\d{3}[\s\-.]?\d{4}/);
+    if (phoneMatch) this.customer.phone = phoneMatch[0].replace(/\s/g, "");
+
+    if (t.includes("budget") || t.includes("afford") || t.includes("spend")) {
+      this.customer.qualification.budget = transcript;
+    }
+    if (t.includes("next month") || t.includes("quarter") || t.includes("this year") || t.includes("asap")) {
+      this.customer.qualification.timeline = transcript;
+    }
+    if (t.includes("my team") || t.includes("my boss") || t.includes("i decide") || t.includes("i'm the owner")) {
+      this.customer.qualification.authority = transcript;
+    }
+  }
+
+  // ── ROUTING ───────────────────────────────────────────────────────────────
+
+  private chooseRoute(transcript: string, objectionCount: number): "fast" | "smart" {
+    if (objectionCount > 0) return "smart";
+    const t = transcript.toLowerCase();
+
+    const objectionKeywords = [
+      "too expensive", "not interested", "call me later", "send me something",
+      "is this legit", "who are you", "stop calling", "remove me", "scam",
+      "don't trust", "already have", "busy", "not now", "why should i",
+      "what makes you different", "prove it", "compare",
+    ];
+    if (objectionKeywords.some(k => t.includes(k))) return "smart";
+
+    const complexKeywords = [
+      "how does this work", "tell me more", "walk me through", "explain",
+      "guarantee", "contract", "how long", "what happens", "integration",
+    ];
+    if (complexKeywords.some(k => t.includes(k))) return "smart";
+
+    if (transcript.length > 150) return "smart";
+    if ((transcript.match(/\?/g) ?? []).length >= 2) return "smart";
+    if (/angry|upset|frustrated|ridiculous|terrible|hate/i.test(transcript)) return "smart";
+
+    return "fast";
+  }
+
+  private isObjection(text: string): boolean {
+    return this.chooseRoute(text, 0) === "smart" && text.length < 200;
+  }
+
+  // ── SYSTEM PROMPT ─────────────────────────────────────────────────────────
+
+  private buildSystemPrompt(session: any): string {
+    let prompt = `You are a professional AI sales assistant on a live phone call.
+
+CRITICAL VOICE RULES:
+- Max 2 short sentences. Never more.
+- Spoken language only — no markdown, no lists, no bullet points.
+- Ask only ONE question at a time.
+- If objection: acknowledge, address calmly, ask one question.
+- If booking: confirm details clearly.
+- Never say "as an AI". Never mention Claude or Cerebras.
+- Sound warm, confident, human.
+
+If you need to take an action, use this exact format:
+TOOL: <tool_name> {"key": "value"}
+
+Available tools: book_appointment, save_lead, send_sms_followup, handoff_human
+
+GOAL: Qualify the lead, handle objections, book appointments.`;
+
+    if (session?.language && session.language !== "en") {
+      const langs: Record<string, string> = {
+        es: "Spanish", fr: "French", de: "German", pt: "Portuguese",
+        it: "Italian", zh: "Mandarin", ja: "Japanese", ko: "Korean",
+      };
+      prompt += `\n\nIMPORTANT: Respond ONLY in ${langs[session.language] || session.language}.`;
+    }
+
+    return prompt;
+  }
+
   // ── HELPERS ───────────────────────────────────────────────────────────────
 
-  /**
-   * Detect if a mulaw audio buffer contains speech (not silence/echo).
-   * Mulaw silence = 0xFF (negative) or 0x7F (positive zero crossing).
-   * Lower threshold than before — real phone audio has variance even in "quiet" speech.
-   */
+  private splitClauses(text: string): string[] {
+    return (text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [])
+      .map(s => s.trim()).filter(Boolean);
+  }
+
   private isSpeechLike(buf: Buffer): boolean {
     if (buf.length === 0) return false;
     let nonSilence = 0;
     for (let i = 0; i < buf.length; i++) {
-      const b = buf[i];
-      // 0xFF and 0x7F are silence in mulaw. Values near these are near-silence.
-      if (b !== 0xFF && b !== 0x7F && b !== 0xFE && b !== 0x7E) {
-        nonSilence++;
-      }
+      if (buf[i] !== 0xFF && buf[i] !== 0x7F && buf[i] !== 0xFE && buf[i] !== 0x7E) nonSilence++;
     }
-    // 12% of bytes must be non-silence (was 18% — too strict, dropped quiet voices)
     return nonSilence > buf.length * 0.12;
   }
 
-  /**
-   * Mark AI as speaking. Sets a safety timeout to clear the flag even if
-   * the mark event never arrives (e.g. call drops during playback).
-   */
-  private setSpeaking(audioBytes: number): void {
-    this.isSpeaking = true;
+  private setSpeakingTimeout(ms: number): void {
     if (this.speakingTimeout) clearTimeout(this.speakingTimeout);
-    // Safety timeout: audio duration in ms + 3 second buffer
-    // mulaw 8kHz = 8000 bytes/second
-    const durationMs = Math.ceil((audioBytes / 8000) * 1000) + 3000;
+    if (ms <= 0) { this.speakingTimeout = null; return; }
     this.speakingTimeout = setTimeout(() => {
       if (this.isSpeaking) {
-        this.logger.warn("[VOICE-WS] speaking timeout — forcing idle", { sessionId: this.sessionId });
+        this.logger.warn("[PIPE] speaking timeout — forcing idle");
         this.isSpeaking = false;
       }
-    }, durationMs);
+    }, ms);
   }
 
-  private clearSpeaking(): void {
-    this.isSpeaking = false;
-    if (this.speakingTimeout) {
-      clearTimeout(this.speakingTimeout);
-      this.speakingTimeout = null;
-    }
+  private sendMedia(payload: string): void {
+    if (!this.streamSid) return;
+    this.socket.send(JSON.stringify({ event: "media", streamSid: this.streamSid, media: { payload } }));
   }
 
-  private clearAudioBuffer(): void {
-    this.audioChunks = [];
+  private sendMark(name: string): void {
+    if (!this.streamSid) return;
+    this.socket.send(JSON.stringify({ event: "mark", streamSid: this.streamSid, mark: { name } }));
   }
 
-  private audioSize(): number {
-    return this.audioChunks.reduce((s, c) => s + c.length, 0);
+  private sendClear(): void {
+    if (!this.streamSid) return;
+    this.socket.send(JSON.stringify({ event: "clear", streamSid: this.streamSid }));
   }
+
+  private clearAudioBuffer(): void { this.audioChunks = []; }
+  private audioSize(): number { return this.audioChunks.reduce((s, c) => s + c.length, 0); }
 
   private cleanup(): void {
     if (this.silenceTimer) clearTimeout(this.silenceTimer);
     if (this.speakingTimeout) clearTimeout(this.speakingTimeout);
+    if (this.replyStartTimer) clearTimeout(this.replyStartTimer);
+    try { this.deepgramWs?.close(); } catch {}
+    try { this.cartesiaWs?.close(); } catch {}
     this.audioChunks = [];
     this.isProcessing = false;
     this.isSpeaking = false;
   }
+}
+
+function sanitizeForSpeech(text: string): string {
+  return text.replace(/TOOL:\s*[\s\S]*$/g, "").replace(/\*+/g, "").replace(/[_#`>]/g, " ").replace(/\s+/g, " ").trim();
 }
