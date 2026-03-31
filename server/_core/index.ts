@@ -506,14 +506,16 @@ async function startServer() {
     console.log("[Voice] Session ID:", sid);
     // <Connect><Stream> is required for bidirectional audio (per SignalWire official example)
     // <Start><Stream> is unidirectional only — cannot send AI audio back to caller
+    const statusCallback = `https://${wsHost}/api/voice/status`;
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Connect>
-    <Stream url="${streamUrl}">
+  <Connect action="${statusCallback}" method="POST">
+    <Stream url="${streamUrl}" track="inbound_track">
       <Parameter name="sessionId" value="${sid}" />
       <Parameter name="leadId" value="${leadId}" />
     </Stream>
   </Connect>
+  <Pause length="300" />
 </Response>`);
   });
 

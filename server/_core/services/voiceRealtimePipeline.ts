@@ -69,6 +69,8 @@ export class VoiceRealtimePipeline {
   // Silence fallback timer
   private replyStartTimer: NodeJS.Timeout | null = null;
   private silenceFallbackFired = false;
+  // Keepalive to prevent WS timeout
+  private keepaliveTimer: NodeJS.Timeout | null = null;
 
   constructor(options: VoiceRealtimeOptions) {
     this.socket = options.socket;
@@ -383,6 +385,22 @@ export class VoiceRealtimePipeline {
   }
 
   // ── STOP ─────────────────────────────────────────────────────────────────
+
+  private startKeepalive(): void {
+    if (this.keepaliveTimer) clearInterval(this.keepaliveTimer);
+    // Send a mark event every 25s — keeps SignalWire WS alive
+    this.keepaliveTimer = setInterval(() => {
+      if (this.streamSid && !this.isProcessing) {
+        try {
+          this.socket.send(JSON.stringify({
+            event: "mark",
+            streamSid: this.streamSid,
+            mark: { name: `keepalive_${Date.now()}` }
+          }));
+        } catch {}
+      }
+    }, 25000);
+  }
 
   private handleStop(): void {
     this.cleanup();
@@ -967,6 +985,7 @@ TOOL: handoff_human {"reason": "..."}`;
     if (this.silenceTimer) clearTimeout(this.silenceTimer);
     if (this.speakingTimeout) clearTimeout(this.speakingTimeout);
     if (this.replyStartTimer) clearTimeout(this.replyStartTimer);
+    if (this.keepaliveTimer) { clearInterval(this.keepaliveTimer); this.keepaliveTimer = null; }
     try { this.deepgramWs?.close(); } catch {}
     try { this.cartesiaWs?.close(); } catch {}
     this.audioChunks = [];
