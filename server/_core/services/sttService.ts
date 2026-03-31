@@ -1,15 +1,71 @@
 /**
- * Speech-to-Text Service (OpenAI Whisper)
- * Receives mulaw 8000Hz audio from SignalWire Media Streams
- * Wraps in WAV header before sending to Whisper
+ * Speech-to-Text Service
+ * Primary: Deepgram streaming (when DEEPGRAM_API_KEY is set) — ~100ms latency
+ * Fallback: OpenAI Whisper batch — ~500ms latency
  */
 
-/**
- * Convert mulaw (G.711) to PCM16 then wrap in WAV
- * Whisper expects PCM WAV (format 1), not mulaw WAV (format 7)
- */
+// ── Deepgram Streaming STT ────────────────────────────────────────────────────
+
+export async function transcribeAudio(
+  audioBuffer: Buffer,
+  language = "en"
+): Promise<string> {
+  if (process.env.DEEPGRAM_API_KEY) {
+    return transcribeDeepgram(audioBuffer, language);
+  }
+  return transcribeWhisper(audioBuffer, language);
+}
+
+async function transcribeDeepgram(audioBuffer: Buffer, language: string): Promise<string> {
+  const apiKey = process.env.DEEPGRAM_API_KEY!;
+
+  // Deepgram REST pre-recorded endpoint — fastest path for buffered audio
+  // Returns transcript in ~100-200ms
+  const params = new URLSearchParams({
+    model: "nova-2",
+    language: language || "en",
+    punctuate: "true",
+    smart_format: "true",
+    filler_words: "false",
+    encoding: "mulaw",
+    sample_rate: "8000",
+    channels: "1",
+  });
+
+  const response = await fetch(
+    `https://api.deepgram.com/v1/listen?${params.toString()}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Token ${apiKey}`,
+        "Content-Type": "audio/mulaw",
+      },
+      body: audioBuffer as unknown as BodyInit,
+    }
+  );
+
+  if (!response.ok) {
+    const err = await response.text();
+    console.error(`[STT:Deepgram] Error ${response.status}: ${err}`);
+    // Fallback to Whisper if Deepgram fails
+    if (process.env.OPENAI_API_KEY) {
+      console.warn("[STT] Falling back to Whisper");
+      return transcribeWhisper(audioBuffer, language);
+    }
+    throw new Error(`Deepgram STT failed: ${response.status}`);
+  }
+
+  const data = await response.json() as any;
+  const transcript = data?.results?.channels?.[0]?.alternatives?.[0]?.transcript ?? "";
+  const confidence = data?.results?.channels?.[0]?.alternatives?.[0]?.confidence ?? 0;
+
+  console.log(`[STT:Deepgram] "${transcript}" (confidence: ${confidence.toFixed(2)})`);
+  return transcript.trim();
+}
+
+// ── Whisper Fallback ──────────────────────────────────────────────────────────
+
 function mulawToPcm16(mulawData: Buffer): Buffer {
-  // mulaw to linear PCM16 decode table
   const MULAW_DECODE_TABLE = new Int16Array(256);
   for (let i = 0; i < 256; i++) {
     let ulaw = ~i & 0xFF;
@@ -20,82 +76,64 @@ function mulawToPcm16(mulawData: Buffer): Buffer {
     sample -= 0x84;
     MULAW_DECODE_TABLE[i] = sign * sample;
   }
-
   const pcm = Buffer.alloc(mulawData.length * 2);
   for (let i = 0; i < mulawData.length; i++) {
-    const sample = MULAW_DECODE_TABLE[mulawData[i]];
-    pcm.writeInt16LE(sample, i * 2);
+    pcm.writeInt16LE(MULAW_DECODE_TABLE[mulawData[i]], i * 2);
   }
   return pcm;
 }
 
 function buildWavBuffer(mulawData: Buffer): Buffer {
-  // Convert mulaw → PCM16 (Whisper needs PCM, not mulaw)
   const pcmData = mulawToPcm16(mulawData);
-
   const sampleRate = 8000;
-  const numChannels = 1;
-  const bitsPerSample = 16; // PCM16
-  const audioFormat = 1;   // PCM = 1
+  const bitsPerSample = 16;
   const dataSize = pcmData.length;
-  const headerSize = 44;
-  const totalSize = headerSize + dataSize;
-
-  const header = Buffer.alloc(headerSize);
-  let offset = 0;
-
-  header.write("RIFF", offset); offset += 4;
-  header.writeUInt32LE(totalSize - 8, offset); offset += 4;
-  header.write("WAVE", offset); offset += 4;
-  header.write("fmt ", offset); offset += 4;
-  header.writeUInt32LE(16, offset); offset += 4;
-  header.writeUInt16LE(audioFormat, offset); offset += 2;
-  header.writeUInt16LE(numChannels, offset); offset += 2;
-  header.writeUInt32LE(sampleRate, offset); offset += 4;
-  header.writeUInt32LE(sampleRate * numChannels * bitsPerSample / 8, offset); offset += 4;
-  header.writeUInt16LE(numChannels * bitsPerSample / 8, offset); offset += 2;
-  header.writeUInt16LE(bitsPerSample, offset); offset += 2;
-  header.write("data", offset); offset += 4;
-  header.writeUInt32LE(dataSize, offset);
-
+  const header = Buffer.alloc(44);
+  let o = 0;
+  header.write("RIFF", o); o += 4;
+  header.writeUInt32LE(36 + dataSize, o); o += 4;
+  header.write("WAVE", o); o += 4;
+  header.write("fmt ", o); o += 4;
+  header.writeUInt32LE(16, o); o += 4;
+  header.writeUInt16LE(1, o); o += 2;   // PCM
+  header.writeUInt16LE(1, o); o += 2;   // mono
+  header.writeUInt32LE(sampleRate, o); o += 4;
+  header.writeUInt32LE(sampleRate * bitsPerSample / 8, o); o += 4;
+  header.writeUInt16LE(bitsPerSample / 8, o); o += 2;
+  header.writeUInt16LE(bitsPerSample, o); o += 2;
+  header.write("data", o); o += 4;
+  header.writeUInt32LE(dataSize, o);
   return Buffer.concat([header, pcmData]);
 }
 
-export async function transcribeAudio(
-  audioBuffer: Buffer,
-  language?: string
-): Promise<string> {
-  console.log(`[STT] Transcribing ${audioBuffer.length} bytes (mulaw 8000Hz)`);
-
+async function transcribeWhisper(audioBuffer: Buffer, language: string): Promise<string> {
   if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY not configured");
+    throw new Error("No STT provider configured — add DEEPGRAM_API_KEY or OPENAI_API_KEY");
   }
 
-  // Wrap mulaw bytes in proper WAV container
+  console.log(`[STT:Whisper] Transcribing ${audioBuffer.length} bytes`);
   const wavBuffer = buildWavBuffer(audioBuffer);
-  console.log(`[STT] WAV buffer: ${wavBuffer.length} bytes`);
-
   const boundary = "----ApexAIBoundary" + Date.now().toString(36);
   const CRLF = "\r\n";
-
   const headerParts = [
     `--${boundary}${CRLF}`,
     `Content-Disposition: form-data; name="file"; filename="audio.wav"${CRLF}`,
     `Content-Type: audio/wav${CRLF}${CRLF}`,
   ].join("");
-
   const modelPart = [
     `${CRLF}--${boundary}${CRLF}`,
     `Content-Disposition: form-data; name="model"${CRLF}${CRLF}`,
     `whisper-1`,
-    language ? `${CRLF}--${boundary}${CRLF}Content-Disposition: form-data; name="language"${CRLF}${CRLF}${language}` : "",
+    language !== "en"
+      ? `${CRLF}--${boundary}${CRLF}Content-Disposition: form-data; name="language"${CRLF}${CRLF}${language}`
+      : "",
     `${CRLF}--${boundary}--${CRLF}`,
   ].join("");
 
   const body = Buffer.concat([
-    Buffer.from(headerParts, "utf-8"),
+    Buffer.from(headerParts),
     wavBuffer,
-    Buffer.from(modelPart, "utf-8"),
+    Buffer.from(modelPart),
   ]);
 
   const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
@@ -108,21 +146,18 @@ export async function transcribeAudio(
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    console.error(`[STT] Error ${response.status}: ${error}`);
     throw new Error(`Whisper failed: ${response.status}`);
   }
 
-  const result = (await response.json()) as { text: string };
-  console.log(`[STT] Transcribed: "${result.text.substring(0, 80)}"`);
+  const result = await response.json() as { text: string };
+  console.log(`[STT:Whisper] "${result.text.slice(0, 80)}"`);
   return result.text;
 }
 
 export function getLanguageCode(language: string): string {
   const map: Record<string, string> = {
-    english: "en", spanish: "es", french: "fr",
-    german: "de", chinese: "zh", japanese: "ja",
-    portuguese: "pt", russian: "ru", korean: "ko",
+    english: "en", spanish: "es", french: "fr", german: "de",
+    chinese: "zh", japanese: "ja", portuguese: "pt", russian: "ru", korean: "ko",
   };
   return map[language.toLowerCase()] || "en";
 }

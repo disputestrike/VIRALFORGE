@@ -1,18 +1,35 @@
 /**
- * VOICE PROCESSING SERVICE
- * Full pipeline: Audio Buffer → STT → LLM → TTS → Audio Buffer
+ * Voice Processing Service — Full pipeline per turn
+ * Audio → STT → LLM Router (Cerebras fast / Claude smart) → TTS → Audio
+ * 
+ * Context fix: conversation history is loaded from voiceSessionManager
+ * and passed fully to the LLM on every turn.
  */
 
 import * as voiceSessionManager from "./voiceSessionManager";
-import * as conversationEngine from "./conversationEngine";
 import { transcribeAudio } from "./sttService";
 import { synthesizeSpeech } from "./ttsService";
 import { resolveVoiceProfile } from "./voiceProfiles";
+import { routedLLMCall } from "./llmRouter";
 
-/**
- * Process raw audio from a SignalWire media stream.
- * Returns audio buffer to send back over WebSocket.
- */
+// ── Voice-optimized system prompt ─────────────────────────────────────────────
+const VOICE_SYSTEM_PROMPT = `You are a professional AI sales assistant on a live phone call.
+
+CRITICAL VOICE RULES:
+- Max 2 short sentences per response. Never more.
+- Spoken language only — no markdown, no lists, no bullet points.
+- Start with a brief acknowledgment when the caller says something emotional or complex.
+- Ask only ONE question at a time.
+- If caller gives objection, handle it calmly and confidently, then ask one question.
+- If caller wants to book, confirm the appointment clearly.
+- If caller is angry or frustrated, slow down and acknowledge first.
+- Never say "as an AI" or mention Claude or Cerebras.
+- Sound warm, human, and direct.
+
+GOAL: Qualify the lead, handle objections, book appointments.`;
+
+// ── Main processing function ──────────────────────────────────────────────────
+
 export async function processAudioMessage(
   sessionId: string,
   audioBuffer: Buffer
@@ -23,135 +40,163 @@ export async function processAudioMessage(
   action: string;
   timings: { sttMs: number; classificationMs: number; llmMs: number; ttsMs: number };
 }> {
+  const timings = { sttMs: 0, classificationMs: 0, llmMs: 0, ttsMs: 0 };
   const session = voiceSessionManager.getSession(sessionId);
-  const timings = {
-    sttMs: 0,
-    classificationMs: 0,
-    llmMs: 0,
-    ttsMs: 0,
-  };
 
-  // ── Step 1: STT (Speech to Text) ─────────────────────────────────────────
+  // ── Step 1: STT ───────────────────────────────────────────────────────────
   let userText = "";
   try {
-    const sttStartedAt = Date.now();
-    userText = await transcribeAudio(audioBuffer);
-    timings.sttMs = Date.now() - sttStartedAt;
-    console.log(`[VoiceProcessing] STT: "${userText}"`);
-  } catch (sttError) {
-    console.error("[VoiceProcessing] STT failed:", sttError);
-    // Fallback: keep conversation going
-    userText = "";
+    const t0 = Date.now();
+    const language = session?.language || "en";
+    userText = await transcribeAudio(audioBuffer, language);
+    timings.sttMs = Date.now() - t0;
+    console.log(`[Voice] STT (${timings.sttMs}ms): "${userText}"`);
+  } catch (err) {
+    console.error("[Voice] STT failed:", err);
+    return { audioPayload: "", text: "", response: "", action: "continue", timings };
   }
 
   if (!userText.trim()) {
-    // No speech detected — send silence or brief acknowledgment
-    return {
-      audioPayload: "",
-      text: "",
-      response: "",
-      action: "continue",
-      timings,
-    };
+    return { audioPayload: "", text: "", response: "", action: "continue", timings };
   }
 
-  // ── Step 2: Add to session history ───────────────────────────────────────
+  // ── Step 2: Add to session history ────────────────────────────────────────
   if (session) {
     voiceSessionManager.addMessage(sessionId, "user", userText);
   }
 
-  // ── Step 3: LLM (Generate Response via Universal Engine) ────────────────
+  // ── Step 3: Build conversation context ───────────────────────────────────
+  // CONTEXT FIX: load full conversation history from session, not callStateManager
+  const conversationHistory = session?.conversationHistory ?? [];
+  const objectionCount = conversationHistory
+    .filter(m => m.role === "user" && isObjection(m.content))
+    .length;
+
+  // Build messages for LLM — last 8 turns max for speed
+  const recentHistory = conversationHistory.slice(-8);
+  const messages = [
+    { role: "system" as const, content: buildSystemPrompt(session) },
+    ...recentHistory.map(m => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    })),
+  ];
+
+  // ── Step 4: LLM (Cerebras fast or Claude smart) ───────────────────────────
   let aiResponse = "How can I help you today?";
-  let action: string = "follow_up";
+  let action = "follow_up";
+  const t1 = Date.now();
 
   try {
-    const { getCallState, createCallState, updateCallState, generateResponse } = await Promise.all([
-      import("./callStateManager"),
-      import("./conversationEngine"),
-    ]).then(([csm, ce]) => ({ ...csm, generateResponse: ce.generateResponse }));
+    const result = await routedLLMCall(
+      messages,
+      userText,
+      recentHistory,
+      objectionCount
+    );
+    aiResponse = sanitizeForSpeech(result.text);
+    timings.llmMs = result.latencyMs;
+    timings.classificationMs = Date.now() - t1 - result.latencyMs;
 
-    // Get or create universal call state — use lead's industry if known
-    let industry = "solar";
-    if (session?.leadId) {
-      try {
-        const { getLeadById } = await import("../../db");
-        const lead = await getLeadById(session.leadId);
-        if ((lead as any)?.industry) industry = (lead as any).industry;
-      } catch {}
-    }
-    let callState = getCallState(sessionId) || createCallState(sessionId, session?.leadId ?? null, industry);
+    // Extract action if present in response
+    action = extractAction(aiResponse, userText);
 
-    const tLLM = Date.now();
-    const result = await generateResponse(userText, callState);
-    aiResponse = result.response;
-    action = result.action ?? "follow_up";
-    timings.classificationMs = result.timings?.classificationMs ?? 0;
-    timings.llmMs = result.timings?.llmMs ?? (Date.now() - tLLM);
-
-    // Persist updated state
-    updateCallState(sessionId, result.updatedState);
-
-    console.log(`[VoiceProcessing] LLM: "${aiResponse}" (${timings.llmMs}ms, stage: ${result.updatedState.stage}, mode: ${result.updatedState.responseMode})`);
-  } catch (llmError) {
-    console.error("[VoiceProcessing] LLM failed:", llmError);
-    aiResponse = "Let me transfer you to one of our team members. Please hold.";
+    console.log(`[Voice] LLM:${result.route} (${result.latencyMs}ms): "${aiResponse.slice(0, 80)}"`);
+  } catch (err) {
+    console.error("[Voice] LLM failed:", err);
+    aiResponse = "Let me connect you with someone who can help. Please hold.";
     action = "transfer";
   }
 
-  // ── Step 4: Add AI response to session ───────────────────────────────────
+  // ── Step 5: Add AI response to history ───────────────────────────────────
   if (session) {
     voiceSessionManager.addMessage(sessionId, "assistant", aiResponse);
 
-    // Handle appointment booking action
-    if (action === "book_appointment" || action === "propose_times") {
-      const times = await conversationEngine.proposeAppointmentTimes(session.leadId);
-      if (times.times.length > 0) {
-        voiceSessionManager.updateSession(sessionId, { proposedSlots: times.times });
-        const slotLabels = times.times.map(t => t.label).join(", or ");
-        aiResponse = `I have these times available: ${slotLabels}. Which works best for you?`;
-        voiceSessionManager.addMessage(sessionId, "assistant", aiResponse);
-      }
-    }
-
     if (action === "end_call" || action === "transfer") {
-      voiceSessionManager.completeSession(
-        sessionId,
-        action === "transfer" ? "callback" : "not_interested"
-      );
+      voiceSessionManager.completeSession(sessionId, action === "transfer" ? "callback" : "not_interested");
       await voiceSessionManager.persistSessionToDatabase(sessionId);
     }
   }
 
-  // ── Step 5: TTS (Text to Speech) ─────────────────────────────────────────
+  // ── Step 6: TTS ───────────────────────────────────────────────────────────
   let audioPayload = "";
   try {
-    const tTTS = Date.now();
+    const t2 = Date.now();
     const voiceProfile = await resolveVoiceProfile({
       userId: session?.userId,
       leadId: session?.leadId,
       explicitVoiceProfileId: session?.voiceProfileId,
-    });
-    const audioBuffer = await synthesizeSpeech(aiResponse, {
+    }).catch(() => ({
+      externalVoiceId: "694f9389-aac1-45b6-b726-9d9369183238",
+      provider: "cartesia" as const,
+      speed: undefined,
+      stability: undefined,
+    }));
+
+    const audio = await synthesizeSpeech(aiResponse, {
       voiceId: voiceProfile.externalVoiceId,
-      provider: voiceProfile.provider === "other" ? undefined : voiceProfile.provider,
-      speed: voiceProfile.speed,
-      stability: voiceProfile.stability,
+      provider: (voiceProfile as any).provider === "other" ? undefined : (voiceProfile as any).provider,
+      speed: (voiceProfile as any).speed,
+      stability: (voiceProfile as any).stability,
     });
-    audioPayload = audioBuffer.toString("base64");
-    timings.ttsMs = Date.now() - tTTS;
-    console.log(`[VoiceProcessing] TTS: ${audioBuffer.length} bytes (${timings.ttsMs}ms)`);
-  } catch (ttsError) {
-    console.error("[VoiceProcessing] TTS failed:", ttsError);
-    // No audio to send back — call will be silent on this turn
+    audioPayload = audio.toString("base64");
+    timings.ttsMs = Date.now() - t2;
+    console.log(`[Voice] TTS (${timings.ttsMs}ms): ${audio.length} bytes`);
+  } catch (err) {
+    console.error("[Voice] TTS failed:", err);
   }
 
-  return {
-    audioPayload,
-    text: userText,
-    response: aiResponse,
-    action,
-    timings,
-  };
+  return { audioPayload, text: userText, response: aiResponse, action, timings };
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function buildSystemPrompt(session: any): string {
+  const parts = [VOICE_SYSTEM_PROMPT];
+
+  if (session?.leadId) {
+    parts.push(`\nThis is an outbound call to a lead.`);
+  } else {
+    parts.push(`\nThis is an inbound call.`);
+  }
+
+  if (session?.language && session.language !== "en") {
+    const LANG: Record<string, string> = {
+      es: "Spanish", fr: "French", de: "German", pt: "Portuguese",
+      it: "Italian", nl: "Dutch", zh: "Mandarin Chinese", ja: "Japanese", ko: "Korean",
+    };
+    const lang = LANG[session.language] || session.language;
+    parts.push(`\nIMPORTANT: Respond ONLY in ${lang}.`);
+  }
+
+  return parts.join("");
+}
+
+function isObjection(text: string): boolean {
+  const t = text.toLowerCase();
+  return [
+    "too expensive", "not interested", "call me later", "send me",
+    "is this legit", "stop calling", "remove me", "not now", "scam",
+    "don't trust", "already have", "busy",
+  ].some(k => t.includes(k));
+}
+
+function extractAction(response: string, userText: string): string {
+  const r = response.toLowerCase();
+  const u = userText.toLowerCase();
+  if (u.includes("transfer") || u.includes("speak to") || u.includes("real person")) return "transfer";
+  if (r.includes("transfer you") || r.includes("connect you with")) return "transfer";
+  if (r.includes("goodbye") || r.includes("take care") || r.includes("have a good")) return "end_call";
+  if (r.includes("book") || r.includes("schedule") || r.includes("appointment")) return "book_appointment";
+  return "follow_up";
+}
+
+function sanitizeForSpeech(text: string): string {
+  return text
+    .replace(/\*+/g, "")
+    .replace(/[_#`>]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export async function completeVoiceCall(
