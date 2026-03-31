@@ -14,6 +14,8 @@ import { apiRateLimiter, aiRateLimiter, authRateLimiter, webhookRateLimiter } fr
 import * as voiceProcessingService from "./services/voiceProcessingService";
 import { startSessionPersistenceInterval } from "./services/voiceSessionManager";
 import { VoiceRealtimePipeline } from "./services/voiceRealtimePipeline";
+// NEW: Deepgram Voice Agent — unified STT+LLM+TTS in one WebSocket
+import { handleSignalWireSocket } from "../realtime/deepgramVoiceAgent";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -1048,16 +1050,43 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
       const leadId = url.searchParams.get("leadId");
       const isInbound = url.searchParams.get("inbound") === "true";
 
-      wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.handleUpgrade(request, socket, head, async (ws) => {
         console.log("[WS-UPGRADE] handleUpgrade success — WebSocket connected", { sessionId });
         console.log(`[Voice] WebSocket connected: ${sessionId}`);
         console.log("[VOICE-WS] connected", { sessionId, leadId, isInbound });
-        (ws as any)._voicePipeline = new VoiceRealtimePipeline({
-          socket: ws as any,
-          requestSessionId: sessionId,
-          requestLeadId: leadId,
-          logger: console,
+
+        // ── NEW: Use Deepgram Voice Agent (unified STT+LLM+TTS) ──────────────
+        // This replaces the old fragmented pipeline completely
+        // Deepgram handles: streaming STT + LLM + TTS + barge-in + turn-taking
+        // We just bridge SignalWire ↔ Deepgram
+        let resolvedUserId: number | undefined;
+        let resolvedLeadId: number | undefined;
+        let businessName: string | undefined;
+
+        if (sessionId) {
+          try {
+            const session = voiceSessionManager.getSession(sessionId);
+            if (session) {
+              resolvedUserId = session.userId ?? undefined;
+              resolvedLeadId = session.leadId ?? undefined;
+            }
+          } catch {}
+        }
+
+        if (leadId) {
+          resolvedLeadId = leadId ? parseInt(leadId, 10) : undefined;
+        }
+
+        handleSignalWireSocket(ws as unknown as import("ws").WebSocket, {
+          userId: resolvedUserId,
+          leadId: resolvedLeadId,
+          sessionId: sessionId || undefined,
+          businessName,
+          industry: undefined,
         });
+
+        // Legacy pipeline kept for fallback reference — not active
+        // (ws as any)._voicePipeline = new VoiceRealtimePipeline({...})
 
         let streamSid: string | null = null;
         const audioChunks: Buffer[] = [];
