@@ -70,8 +70,16 @@ export async function processAudioMessage(
       import("./conversationEngine"),
     ]).then(([csm, ce]) => ({ ...csm, generateResponse: ce.generateResponse }));
 
-    // Get or create universal call state
-    let callState = getCallState(sessionId) || createCallState(sessionId, session?.leadId ?? null, "solar");
+    // Get or create universal call state — use lead's industry if known
+    let industry = "solar";
+    if (session?.leadId) {
+      try {
+        const { getLeadById } = await import("../../db");
+        const lead = await getLeadById(session.leadId);
+        if ((lead as any)?.industry) industry = (lead as any).industry;
+      } catch {}
+    }
+    let callState = getCallState(sessionId) || createCallState(sessionId, session?.leadId ?? null, industry);
 
     const tLLM = Date.now();
     const result = await generateResponse(userText, callState);

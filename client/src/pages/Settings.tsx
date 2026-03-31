@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Phone, Globe, Building2, CheckCircle2, Save } from "lucide-react";
+import { Phone, Globe, Building2, Mic, CheckCircle2, Save, Play, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 const LANGUAGES = [
@@ -17,35 +17,41 @@ const LANGUAGES = [
   { code: "ja", name: "Japanese (日本語)" }, { code: "ko", name: "Korean (한국어)" },
 ];
 
-export default function Settings() {
-  const { data: user } = trpc.settings.get.useQuery();
-  const { data: voiceProfiles } = trpc.settings.voiceProfiles.useQuery();
-  const utils = trpc.useUtils();
+const STYLE_COLORS: Record<string, string> = {
+  warm: "#34d399", professional: "#60a5fa", neutral: "#94a3b8",
+  confident: "#f59e0b", friendly: "#c084fc", authoritative: "#f87171",
+  premium: "#fbbf24", direct: "#fb923c",
+};
 
-  const [transferNumber, setTransferNumber] = useState((user as any)?.transferNumber || "");
-  const [language, setLanguage] = useState((user as any)?.language || "en");
-  const [agencyName, setAgencyName] = useState((user as any)?.agencyName || "");
-  const [voiceProfileId, setVoiceProfileId] = useState((user as any)?.voiceProfileId || "cartesia-sarah-sales");
+export default function Settings() {
+  const utils = trpc.useUtils();
+  const { data: userSettings } = trpc.settings.get.useQuery();
+  const { data: voiceProfiles } = trpc.settings.voiceProfiles.useQuery();
+
+  const [transferNumber, setTransferNumber] = useState("");
+  const [language, setLanguage] = useState("en");
+  const [agencyName, setAgencyName] = useState("");
+  const [selectedVoice, setSelectedVoice] = useState("cartesia-sarah-sales");
   const [saving, setSaving] = useState(false);
+  const [savingVoice, setSavingVoice] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
-    setTransferNumber((user as any)?.transferNumber || "");
-    setLanguage((user as any)?.language || "en");
-    setAgencyName((user as any)?.agencyName || "");
-    setVoiceProfileId((user as any)?.voiceProfileId || "cartesia-sarah-sales");
-  }, [user]);
+    if (userSettings) {
+      setTransferNumber((userSettings as any).transferNumber || "");
+      setLanguage((userSettings as any).language || "en");
+      setAgencyName((userSettings as any).agencyName || "");
+      setSelectedVoice((userSettings as any).voiceProfileId || "cartesia-sarah-sales");
+    }
+  }, [userSettings]);
 
   const updateMutation = trpc.settings.update.useMutation({
-    onSuccess: () => {
-      utils.auth.me.invalidate();
-      toast.success("Settings saved successfully");
-      setSaving(false);
-    },
-    onError: (e) => {
-      toast.error(e.message);
-      setSaving(false);
-    },
+    onSuccess: () => { utils.settings.get.invalidate(); toast.success("Settings saved"); setSaving(false); },
+    onError: (e: any) => { toast.error(e.message); setSaving(false); },
+  });
+
+  const voiceMutation = trpc.settings.update.useMutation({
+    onSuccess: () => { utils.settings.get.invalidate(); toast.success('Voice saved'); setSavingVoice(false); },
+    onError: (e: any) => { toast.error(e.message); setSavingVoice(false); },
   });
 
   const handleSave = () => {
@@ -54,8 +60,12 @@ export default function Settings() {
       transferNumber: transferNumber || undefined,
       language: language as any,
       agencyName: agencyName || undefined,
-      voiceProfileId,
     });
+  };
+
+  const handleVoiceSave = () => {
+    setSavingVoice(true);
+    voiceMutation.mutate({ voiceProfileId: selectedVoice });
   };
 
   return (
@@ -65,7 +75,66 @@ export default function Settings() {
         <p className="text-muted-foreground text-sm mt-1">Configure your AI assistant behavior</p>
       </div>
 
-      {/* Live Transfer Number */}
+      {/* ── VOICE SELECTOR ──────────────────────────────────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Mic className="w-4 h-4 text-primary" />
+            AI Voice
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Choose the voice your AI uses on every call. Cartesia voices are faster and better for live calls. ElevenLabs voices are higher quality but slightly slower.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(voiceProfiles || []).map((v: any) => {
+              const isSelected = selectedVoice === v.id;
+              const styleColor = STYLE_COLORS[v.style] || "#94a3b8";
+              return (
+                <button key={v.id}
+                  onClick={() => setSelectedVoice(v.id)}
+                  className="p-3 rounded-xl text-left transition-all border"
+                  style={{
+                    backgroundColor: isSelected ? "rgba(29,111,244,0.1)" : "hsl(var(--secondary))",
+                    borderColor: isSelected ? "#1d6ff4" : "hsl(var(--border))",
+                  }}>
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <span className="font-semibold text-sm text-white">{v.label}</span>
+                    {isSelected && <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs px-1.5 py-0.5 rounded capitalize"
+                      style={{ backgroundColor: `${styleColor}20`, color: styleColor }}>
+                      {v.style}
+                    </span>
+                    <span className="text-xs text-muted-foreground capitalize">{v.presentation}</span>
+                    <span className="text-xs text-muted-foreground">·</span>
+                    <span className={`text-xs font-medium ${v.provider === "cartesia" ? "text-green-400" : "text-yellow-400"}`}>
+                      {v.provider === "cartesia" ? "⚡ Fast" : "✦ Premium"}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-3 pt-1">
+            <Button onClick={handleVoiceSave} disabled={savingVoice || selectedVoice === (userSettings as any)?.voiceProfileId}
+              style={{ backgroundColor: "#1d6ff4" }} size="sm">
+              {savingVoice ? <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Saving...</> : <><Save className="w-3 h-3 mr-1.5" />Save Voice</>}
+            </Button>
+            {selectedVoice === (userSettings as any)?.voiceProfileId && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-green-400" /> Currently active
+              </span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── TRANSFER NUMBER ──────────────────────────────────────────── */}
       <Card className="bg-card border-border">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -75,132 +144,66 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            When a caller asks to speak with a human, the AI will say "Let me transfer you now" and route the call to this number. Leave blank to disable live transfers.
+            When a caller asks to speak with a human, the AI says "Let me transfer you now" and routes the call here.
           </p>
           <div className="space-y-1.5">
             <Label className="text-xs">Your transfer phone number</Label>
-            <Input
-              type="tel"
-              placeholder="+1 (555) 000-0000"
-              value={transferNumber}
+            <Input type="tel" placeholder="+1 (555) 000-0000" value={transferNumber}
               onChange={e => setTransferNumber(e.target.value)}
-              className="bg-secondary border-border"
-            />
+              className="bg-secondary border-border" />
           </div>
-          <div className="flex flex-wrap gap-2">
-            {["Your cell phone", "Sales manager line", "Team hotline"].map(hint => (
-              <span key={hint} className="text-xs px-2 py-1 rounded-full bg-secondary text-muted-foreground">
-                {hint}
-              </span>
-            ))}
-          </div>
-          <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 text-xs text-muted-foreground">
-            <strong className="text-foreground">How it works:</strong> When the AI detects "can I speak to someone" or caller frustration (3 failed attempts), it announces the transfer and routes via SignalWire warm transfer.
-          </div>
+          <p className="text-xs text-muted-foreground">
+            Leave blank to disable live transfers. Triggered automatically when caller asks for a human or AI detects frustration.
+          </p>
         </CardContent>
       </Card>
 
-      {/* Language */}
+      {/* ── LANGUAGE ──────────────────────────────────────────────────── */}
       <Card className="bg-card border-border">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Globe className="w-4 h-4 text-primary" />
-            AI Conversation Language
+            Conversation Language
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            The AI will conduct all conversations in this language. Your AI phone number will answer calls in the selected language.
+            The AI will conduct all conversations in this language.
           </p>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Select language</Label>
-            <select
-              value={language}
-              onChange={e => setLanguage(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg text-sm bg-secondary border border-border"
-            >
-              {LANGUAGES.map(lang => (
-                <option key={lang.code} value={lang.code}>{lang.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {LANGUAGES.slice(0, 6).map(lang => (
-              <button key={lang.code}
-                onClick={() => setLanguage(lang.code)}
-                className={`text-xs px-2 py-1.5 rounded-lg border transition-all ${language === lang.code ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40"}`}>
-                {lang.name.split(" ")[0]}
-              </button>
-            ))}
-          </div>
+          <select value={language} onChange={e => setLanguage(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg text-sm bg-secondary border border-border">
+            {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}
+          </select>
         </CardContent>
       </Card>
 
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-primary" />
-            Voice Profile
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Choose the default telephony voice for your live AI calls. Campaign-level overrides can use a different profile later.
-          </p>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Default voice</Label>
-            <select
-              value={voiceProfileId}
-              onChange={e => setVoiceProfileId(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg text-sm bg-secondary border border-border"
-            >
-              {(voiceProfiles ?? []).map((profile) => (
-                <option key={profile.id} value={profile.id}>
-                  {profile.label} · {profile.provider} · {profile.useCase}
-                </option>
-              ))}
-            </select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Agency Settings */}
+      {/* ── AGENCY ──────────────────────────────────────────────────── */}
       <Card className="bg-card border-border">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Building2 className="w-4 h-4 text-primary" />
             Agency Settings
-            <Badge variant="outline" className="text-xs ml-auto">Coming Soon</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Running an agency? Set your agency name to appear on client-facing dashboards. White label and sub-account features launching soon.
-          </p>
           <div className="space-y-1.5">
             <Label className="text-xs">Agency name</Label>
-            <Input
-              placeholder="Your Agency LLC"
-              value={agencyName}
+            <Input placeholder="Your Agency LLC" value={agencyName}
               onChange={e => setAgencyName(e.target.value)}
-              className="bg-secondary border-border"
-            />
+              className="bg-secondary border-border" />
           </div>
         </CardContent>
       </Card>
 
-      {/* Account Info */}
+      {/* ── ACCOUNT INFO ──────────────────────────────────────────────── */}
       <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Account</CardTitle>
-        </CardHeader>
+        <CardHeader className="pb-3"><CardTitle className="text-base">Account</CardTitle></CardHeader>
         <CardContent>
           <div className="space-y-2 text-sm">
             {[
-              { label: "Name", value: user?.name || "—" },
-              { label: "Email", value: user?.email || "—" },
-              { label: "Plan", value: (user as any)?.plan || "Trial" },
-              { label: "Role", value: user?.role || "user" },
+              { label: "Name", value: (userSettings as any)?.name || "—" },
+              { label: "Email", value: (userSettings as any)?.email || "—" },
+              { label: "Plan", value: (userSettings as any)?.plan || "Trial" },
             ].map(({ label, value }) => (
               <div key={label} className="flex justify-between py-1.5 border-b border-border/50">
                 <span className="text-muted-foreground">{label}</span>
@@ -211,7 +214,7 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto" style={{ backgroundColor: "#1d6ff4" }}>
+      <Button onClick={handleSave} disabled={saving} style={{ backgroundColor: "#1d6ff4" }}>
         <Save className="w-4 h-4 mr-2" />
         {saving ? "Saving..." : "Save Settings"}
       </Button>

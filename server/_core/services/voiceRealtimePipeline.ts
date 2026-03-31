@@ -202,20 +202,37 @@ export class VoiceRealtimePipeline {
   }
 
   private async handleMedia(message: any): Promise<void> {
+    // Only process inbound audio (from caller). Outbound is AI speaking — discard.
     if (message.media?.track === "outbound") return;
 
     const payloadBuffer = Buffer.from(message.media.payload || "", "base64");
     const sessionId = this.getActiveSessionId();
     const now = Date.now();
+
+    // ── BARGE-IN GUARD ──────────────────────────────────────────────────────
+    // While AI is speaking, DISCARD all audio UNLESS it looks like the caller
+    // is actually talking (barge-in). This prevents AI echo from triggering
+    // a response loop. Use a HIGH threshold here — only real speech barges in.
+    const session = sessionId ? voiceSessionManager.getSession(sessionId) : null;
     const isSpeechLike = this.isSpeechLike(payloadBuffer);
+
+    if (session?.turnState === "assistant_speaking") {
+      if (!isSpeechLike) {
+        // Pure silence/echo — discard completely, don't buffer
+        return;
+      }
+      // Real speech detected while AI is talking — barge-in: stop AI, start listening
+      this.socket.send(JSON.stringify({ event: "clear", streamSid: this.streamSid }));
+      voiceSessionManager.setTurnState(sessionId!, "user_speaking", { interrupt: true });
+      voiceSessionManager.traceEvent(sessionId!, "interrupt_tts");
+      this.logger.log("[TURN] barge-in detected — stopping AI playback", { sessionId });
+      // Reset buffer for the new turn
+      this.resetAudioBuffer();
+    }
+    // ── END BARGE-IN GUARD ─────────────────────────────────────────────────
 
     if (!this.firstChunkAt) {
       this.firstChunkAt = now;
-      this.logger.log("[VOICE-WS] media chunk received", {
-        chunk: message.media?.chunk,
-        payloadBytes: payloadBuffer.length,
-        track: message.media?.track,
-      });
       if (sessionId) {
         voiceSessionManager.traceEvent(sessionId, "first_media_chunk_received", {
           chunk: message.media?.chunk,
@@ -231,31 +248,22 @@ export class VoiceRealtimePipeline {
         chunk: message.media?.chunk,
         payloadBytes: payloadBuffer.length,
       });
-      this.logger.log("[TURN] user_speaking", {
-        sessionId,
-        chunk: message.media?.chunk,
-        payloadBytes: payloadBuffer.length,
-      });
     }
 
-    const session = sessionId ? voiceSessionManager.getSession(sessionId) : null;
-    if (session?.turnState === "assistant_speaking" && isSpeechLike) {
-      this.socket.send(JSON.stringify({ event: "clear", streamSid: this.streamSid }));
-      voiceSessionManager.setTurnState(sessionId!, "user_speaking", {
-        interrupt: true,
-      });
-      voiceSessionManager.traceEvent(sessionId!, "interrupt_tts");
-      this.logger.log("[TURN] interrupt_tts", { sessionId });
+    // Only buffer speech-like audio — discard silence padding
+    if (!isSpeechLike && this.audioChunks.length === 0) {
+      // Leading silence before caller speaks — don't buffer
+      return;
     }
 
     this.audioChunks.push(payloadBuffer);
     this.chunkCount += 1;
 
     if (this.silenceTimer) clearTimeout(this.silenceTimer);
-    const delayMs = isSpeechLike ? 350 : 250;
+    // 500ms silence = end of utterance (was 350ms — too aggressive, caused mid-sentence cuts)
     this.silenceTimer = setTimeout(() => {
       void this.processBufferedAudio();
-    }, delayMs);
+    }, 500);
 
     if (this.audioSize() >= 32000) {
       if (this.silenceTimer) clearTimeout(this.silenceTimer);
