@@ -161,6 +161,8 @@ export function createCallEngine(opts: EngineOptions): void {
   let generationEpoch = 0;
   let isSpeaking = false;
   let isEnded = false;
+  let greetingDone = false;  // prevent barge-in during greeting
+  let dgReady = false;       // don't send audio to Deepgram until connected
   let callState = createCallState();
   let keepaliveTimer: NodeJS.Timeout | null = null;
   const voiceProfile = getVoiceProfile(voiceProfileId || "professional-female");
@@ -250,15 +252,14 @@ export function createCallEngine(opts: EngineOptions): void {
   // ── Deepgram STT ────────────────────────────────────────────────────────────
   function connectDeepgram() {
     const params = new URLSearchParams({
-      model: "nova-2-phonecall",
+      model: "nova-2-phonecall",  // optimized for phone mulaw audio
       encoding: "mulaw",
       sample_rate: "8000",
       channels: "1",
       punctuate: "true",
-      interim_results: "true",
-      endpointing: "300",
+      interim_results: "false",  // only final results to reduce noise
+      endpointing: "500",         // 500ms silence = end of speech
       utterance_end_ms: "1000",
-      vad_events: "true",
       smart_format: "true",
     });
 
@@ -270,6 +271,7 @@ export function createCallEngine(opts: EngineOptions): void {
     ws.on("open", () => {
       log("Deepgram STT connected");
       dgWs = ws;
+      dgReady = true;
     });
 
     ws.on("message", async (raw: Buffer | string) => {
@@ -283,14 +285,14 @@ export function createCallEngine(opts: EngineOptions): void {
 
           if (!transcript.trim()) return;
 
-          // Barge-in: stop AI if user is speaking
-          if (isSpeaking && transcript.length > 2) {
+          // Barge-in: only after greeting is done to prevent echo loop
+          if (isSpeaking && greetingDone && transcript.length > 3) {
             log(`[BARGE-IN] User spoke: "${transcript}"`);
             stopSpeaking();
             generationEpoch++;
           }
 
-          if (isFinal && speechFinal) {
+          if (isFinal && speechFinal && greetingDone) {
             log(`[STT] Final: "${transcript}"`);
             await handleUserTurn(transcript);
           }
@@ -584,18 +586,20 @@ export function createCallEngine(opts: EngineOptions): void {
           const greeting = "Hi, thanks for calling. How can I help you today?";
           await speak(greeting, generationEpoch);
           log("[GREETING] Sent");
+          // Allow barge-in 2 seconds after greeting starts
+          setTimeout(() => { greetingDone = true; }, 2000);
         }
-      }, 200);
+      }, 300);
     }
 
     else if (event === "media") {
       const payload = msg.media?.payload;
       if (!payload) return;
 
-      // SignalWire sends mulaw 8kHz — send directly to Deepgram (configured for mulaw)
-      if (dgWs && dgWs.readyState === WebSocket.OPEN) {
+        // SignalWire sends mulaw 8kHz base64 — decode to binary and send to Deepgram
+      if (dgReady && dgWs && dgWs.readyState === WebSocket.OPEN) {
         const audio = Buffer.from(payload, "base64");
-        dgWs.send(audio);
+        dgWs.send(audio);  // Send raw binary mulaw to Deepgram
       }
     }
 

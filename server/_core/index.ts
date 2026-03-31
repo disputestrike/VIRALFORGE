@@ -66,6 +66,38 @@ async function runMigrations() {
     await ensureCriticalVoiceSchema(connection);
     await connection.end();
     console.log("[Migration] Migrations completed successfully");
+
+    // ── Add missing columns (safe ALTER TABLE IF NOT EXISTS workaround) ──────
+    try {
+      const { default: mysql2 } = await import("mysql2/promise");
+      const conn2 = await mysql2.createConnection({ uri: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+      if (conn2) {
+        const alterStatements = [
+          "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `transferNumber` varchar(50) NULL",
+          "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `language` varchar(10) DEFAULT 'en'",
+          "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `plan` varchar(50) DEFAULT 'trial'",
+          "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `isAgency` tinyint(1) DEFAULT 0",
+          "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `agencyName` varchar(255) NULL",
+          "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `whiteLabel` tinyint(1) DEFAULT 0",
+          "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `picture` varchar(512) NULL",
+          "ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `voiceProfileId` varchar(100) NULL",
+        ];
+        for (const sql of alterStatements) {
+          try {
+            await conn2.execute(sql);
+          } catch (e: any) {
+            // Ignore "duplicate column" errors — column already exists
+            if (!e.message?.includes("Duplicate column")) {
+              console.log(`[Migration] ALTER note: ${e.message?.slice(0, 80)}`);
+            }
+          }
+        }
+        console.log("[Migration] Column checks complete");
+        await conn2.end();
+      }
+    } catch (e: any) {
+      console.log("[Migration] Column check skipped:", e.message?.slice(0, 80));
+    }
   } catch (error) {
     console.error("[Migration] Migration failed:", error);
     // Don't crash the server — let it start even if migrations fail
@@ -1090,245 +1122,6 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
           voiceProfileId: undefined,
         });
 
-        let streamSid: string | null = null;
-        const audioChunks: Buffer[] = [];
-        let silenceTimer: NodeJS.Timeout | null = null;
-        let isProcessing = false;
-        let isSpeaking = false; // true while AI is playing audio
-        let lastResponseTime = 0; // debounce LLM calls
-
-        const processAudio = async () => {
-          if (isProcessing || audioChunks.length === 0) return;
-          if (isSpeaking) {
-            // AI still speaking — skip processing but KEEP the buffer
-            // Caller may be speaking — we'll process it when AI finishes
-            return;
-          }
-          // Debounce — don't respond faster than 1 second after AI finishes
-          if (Date.now() - lastResponseTime < 1000) return;
-
-          const totalLength = audioChunks.reduce((sum, c) => sum + c.length, 0);
-          if (totalLength < 4800) return; // need at least 600ms of audio
-
-          isProcessing = true;
-          const completeAudio = Buffer.concat(audioChunks);
-          audioChunks.length = 0;
-
-          // Use resolved session ID from Parameter tags or fallback to URL param
-          const activeSessionId = (ws as any)._sessionId || sessionId || "";
-          const activeLeadId = (ws as any)._leadId || leadId;
-
-          console.log(`[Voice] Processing ${completeAudio.length} bytes | session: ${activeSessionId}`);
-
-          // Ensure session exists
-          if (activeSessionId && !voiceSessionManager.getSession(activeSessionId)) {
-            voiceSessionManager.createSession(
-              activeLeadId ? parseInt(activeLeadId) : 0,
-              "default",
-              activeSessionId
-            );
-          }
-
-          try {
-            const audioResult = await voiceProcessingService.processAudioMessage(
-              activeSessionId, completeAudio
-            );
-            const responsePayload = (audioResult as any)?.audioPayload || "";
-            const sttText = (audioResult as any)?.text || "";
-            const aiText = (audioResult as any)?.response || "";
-            console.log(`[Voice] STT: "${sttText}" → AI: "${aiText}"`);
-
-            if (responsePayload && streamSid) {
-              // Clear queued audio, mark AI as speaking, send response
-              ws.send(JSON.stringify({ event: "clear", streamSid }));
-              isSpeaking = true;
-              lastResponseTime = Date.now();
-              ws.send(JSON.stringify({
-                event: "media",
-                streamSid: streamSid,
-                media: { payload: responsePayload },
-              }));
-              // Send mark — SignalWire sends back "mark" event when audio finishes playing
-              // This is the CORRECT way to know when AI finished speaking
-              const markName = `done_${Date.now()}`;
-              ws.send(JSON.stringify({ event: "mark", streamSid, mark: { name: markName } }));
-              // Safety fallback timer in case mark event doesn't arrive
-              const audioBytes = Math.ceil(responsePayload.length * 3 / 4);
-              const speakDurationMs = Math.ceil(audioBytes / 8) + 2000; // generous buffer
-              setTimeout(() => {
-                if (isSpeaking) {
-                  isSpeaking = false;
-                  audioChunks.length = 0;
-                  console.log(`[Voice] Speaking fallback timeout fired`);
-                }
-              }, speakDurationMs);
-              console.log(`[Voice] ✅ Sent AI audio (~${Math.ceil(audioBytes/8000)}s speech)`);
-            } else if (!responsePayload) {
-              console.log(`[Voice] ⚠️ No audio — STT empty or TTS failed`);
-            }
-          } catch (err) {
-            console.error("[Voice] Processing error:", err);
-          }
-          isProcessing = false;
-        };
-
-        ws.on("message", async (data: Buffer) => {
-          if ((ws as any)._voicePipeline) {
-            await (ws as any)._voicePipeline.handleRawMessage(data);
-            return;
-          }
-          try {
-            const message = JSON.parse(data.toString());
-
-            if (message.event === "start") {
-              streamSid = message.start.streamSid;
-              const customParams = message.start.customParameters || {};
-              const resolvedSessionId = customParams.sessionId || sessionId || streamSid;
-              const resolvedLeadId = customParams.leadId || leadId;
-
-              // Detailed start event logging per reviewer recommendations
-              console.log("[VOICE-WS] start event received", {
-                streamSid,
-                callSid: message.start?.callSid,
-                customParameters: customParams,
-                resolvedSessionId,
-                resolvedLeadId,
-              });
-
-              if (!resolvedSessionId) {
-                console.error("[VOICE-WS] CRITICAL: missing sessionId in start event — closing");
-                ws.close();
-                return;
-              }
-
-              if (!voiceSessionManager.getSession(resolvedSessionId)) {
-                voiceSessionManager.createSession(
-                  resolvedLeadId ? parseInt(resolvedLeadId) : 0,
-                  "default",
-                  resolvedSessionId
-                );
-              }
-              (ws as any)._sessionId = resolvedSessionId;
-              (ws as any)._leadId = resolvedLeadId;
-              console.log(`[Voice] Stream started: ${streamSid} | session: ${resolvedSessionId}`);
-
-              // Send AI greeting through the stream
-              try {
-                const { synthesizeSpeech } = await import("./services/ttsService");
-                const greetingAudio = await synthesizeSpeech(
-                  "Hello, thank you for calling ApexAI. How can I help you today?"
-                );
-                const greetPayload = greetingAudio.toString("base64");
-                isSpeaking = true;
-                lastResponseTime = Date.now();
-                ws.send(JSON.stringify({
-                  event: "media",
-                  streamSid,
-                  media: { payload: greetPayload },
-                }));
-                const greetAudioBytes = Math.ceil(greetPayload.length * 3 / 4);
-                const greetDuration = Math.ceil(greetAudioBytes / 8) + 1500;
-                ws.send(JSON.stringify({ event: "mark", streamSid, mark: { name: `greet_${Date.now()}` } }));
-                setTimeout(() => { if (isSpeaking) { isSpeaking = false; } }, greetDuration);
-                console.log("[Voice] ✅ Sent greeting audio");
-              } catch (e) {
-                console.error("[Voice] Greeting error:", e);
-              }
-              return;
-            }
-
-            if (message.event === "media") {
-              // Log first media packet for diagnostics
-              if (audioChunks.length === 0) {
-                const payloadBytes = message.media?.payload
-                  ? Buffer.from(message.media.payload, "base64").length : 0;
-                console.log("[VOICE-WS] first media packet", {
-                  track: message.media?.track,
-                  chunk: message.media?.chunk,
-                  timestamp: message.media?.timestamp,
-                  payloadBytes,
-                });
-              }
-
-              // Only process inbound audio (caller's voice)
-              if (message.media.track === "outbound") return;
-
-              // BARGE-IN: if AI is speaking and caller speaks, stop AI
-              // But only after AI has been speaking for at least 1.5 seconds
-              // This prevents background noise from cutting off the AI mid-sentence
-              if (isSpeaking && (Date.now() - lastResponseTime > 1500)) {
-                const audioBuffer = Buffer.from(message.media.payload, "base64");
-                const nonSilenceBytes = Array.from(audioBuffer).filter(b => b !== 0xFF && b !== 0x7F).length;
-                if (nonSilenceBytes > audioBuffer.length * 0.6) {
-                  console.log("[Voice] BARGE-IN detected — stopping AI audio");
-                  ws.send(JSON.stringify({ event: "clear", streamSid }));
-                  isSpeaking = false;
-                  audioChunks.length = 0; // clear any buffered audio
-                }
-              }
-
-              const audioBuffer = Buffer.from(message.media.payload, "base64");
-              audioChunks.push(audioBuffer);
-
-              // Reset silence timer — process after 800ms of no new audio
-              if (silenceTimer) clearTimeout(silenceTimer);
-              silenceTimer = setTimeout(processAudio, 600); // 600ms silence = end of speech
-
-              // Also process if we have 3+ seconds of audio
-              const totalLength = audioChunks.reduce((sum, c) => sum + c.length, 0);
-              if (totalLength > 24000) {
-                if (silenceTimer) clearTimeout(silenceTimer);
-                await processAudio();
-              }
-            }
-
-            // Handle mark event — SignalWire confirms audio playback finished
-            if (message.event === "mark") {
-              console.log(`[Voice] Playback complete: ${message.mark?.name}`);
-              isSpeaking = false; // Now safe to listen and respond
-              // Don't clear buffer — caller may have spoken during AI playback
-              // If they did, process it now
-              if (audioChunks.length > 0) {
-                const total = audioChunks.reduce((s, c) => s + c.length, 0);
-                if (total > 4800) {
-                  console.log(`[Voice] Processing buffered caller speech (${total} bytes)`);
-                  processAudio();
-                } else {
-                  audioChunks.length = 0; // too short, just noise
-                }
-              }
-            }
-
-            // Handle call stop
-            if (message.event === "stop") {
-              console.log(`[Voice] Stream stopped: ${streamSid}`);
-              voiceSessionManager.completeSession(sessionId || "");
-            }
-          } catch (error) {
-            console.error("[Voice] Error processing WebSocket message:", error);
-          }
-        });
-
-        ws.on("error", (error) => {
-          if ((ws as any)._voicePipeline) {
-            (ws as any)._voicePipeline.handleError(error);
-            return;
-          }
-          console.error("[VOICE-WS] error", error);
-        });
-
-        ws.on("close", (code, reason) => {
-          if ((ws as any)._voicePipeline) {
-            (ws as any)._voicePipeline.handleClose(code, reason?.toString());
-            return;
-          }
-          console.log("[VOICE-WS] closed", {
-            code,
-            reason: reason?.toString(),
-            sessionId: (ws as any)._sessionId || sessionId,
-          });
-          voiceSessionManager.endSession((ws as any)._sessionId || sessionId || "");
-        });
       });
     } else {
       socket.destroy();

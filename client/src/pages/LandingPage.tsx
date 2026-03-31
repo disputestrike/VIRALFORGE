@@ -358,15 +358,15 @@ export default function LandingPage() {
               Streaming end-to-end. No dead air.
             </h2>
             <p style={{color:"rgba(10,12,18,0.55)",fontSize:17,maxWidth:500,margin:"0 auto"}}>
-              Every component streams in real time — Deepgram hears the caller, Cerebras responds in milliseconds, Cartesia speaks before the full answer is even generated.
+              Every component streams in real time — AI hears the caller, AI responds in milliseconds, AI speaks before the full answer is even generated.
             </p>
           </div>
           <div className="grid-4" style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:0,alignItems:"center"}}>
             {[
-              {icon:"📞",label:"Caller Speaks",sub:"SignalWire streams mulaw audio instantly",color:C.blue},
-              {icon:"🎤",label:"Deepgram STT",sub:"nova-2-phonecall detects end of speech in 300ms",color:C.blue2},
-              {icon:"🧠",label:"Cerebras / Claude",sub:"Cerebras for speed. Claude for objections.",color:"#8b5cf6"},
-              {icon:"🔊",label:"Cartesia TTS",sub:"Speaks on first clause. No waiting.",color:C.green},
+              {icon:"📞",label:"Caller Speaks",sub:"Call audio streams instantly",color:C.blue},
+              {icon:"🎤",label:"AI Voice Recognition",sub:"Advanced voice model detects end of speech in 300ms",color:C.blue2},
+              {icon:"🧠",label:"Fast AI / Claude",sub:"Fast AI for speed. Claude for objections.",color:"#8b5cf6"},
+              {icon:"🔊",label:"AI Voice TTS",sub:"Speaks on first sentence. Zero dead air.",color:C.green},
               {icon:"✅",label:"Action Taken",sub:"Booking, CRM, SMS — real tools, real results",color:"#f59e0b"},
             ].map(({icon,label,sub,color},i) => (
               <div key={label} style={{display:"flex",alignItems:"center"}}>
@@ -383,7 +383,7 @@ export default function LandingPage() {
             {[
               {value:"< 1s",label:"Total perceived latency"},
               {value:"300ms",label:"End-of-speech detect"},
-              {value:"~30ms",label:"Cerebras inference"},
+              {value:"~30ms",label:"Fast AI inference"},
               {value:"ZERO",label:"Filler words — ever"},
             ].map(({value,label}) => (
               <div key={label} style={{backgroundColor:C.white,border:`1px solid ${C.borderL}`,borderRadius:12,padding:"18px 16px",textAlign:"center"}}>
