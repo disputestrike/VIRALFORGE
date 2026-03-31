@@ -612,58 +612,60 @@ async function startServer() {
 
   // ─── INBOUND CALL ROUTES ──────────────────────────────────────────────────────
 
+  // /api/voice/inbound — DIRECT AI CONNECTION (no IVR menu)
+  // SignalWire should point the phone number webhook HERE
+  // This connects caller directly to the AI agent immediately
   app.post("/api/voice/inbound", validateTwilioSignature, async (req, res) => {
     const { CallSid, From, To } = req.body;
-    console.log(`[Inbound] Call received from ${From}`);
+    console.log(`[Inbound] Direct AI call from ${From}`);
 
-    // FIX 6: Create or find lead from incoming phone number
+    // Spam filter
+    if (From) {
+      const spamPrefixes = ["+1800","+1888","+1877","+1866","+1855","+1844","+1833"];
+      const isSpam = spamPrefixes.some(p => From.replace(/\D/g,"").startsWith(p.replace(/\D/g,"")));
+      if (isSpam) {
+        console.log(`[Inbound] Spam blocked: ${From}`);
+        res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?><Response><Reject reason="busy"/></Response>`);
+        return;
+      }
+    }
+
+    // Create lead and session
+    const sid = CallSid || `session_${Date.now()}`;
     try {
       const db = await import("../db");
       let lead = await db.getLeadByPhone(From);
-
       if (!lead) {
-        // Create new inbound lead
         const newLead = await db.createLead({
-          firstName: "Inbound",
-          lastName: From.slice(-4), // Last 4 digits of phone
-          phone: From,
-          source: "inbound_call",
-          status: "new",
-          score: 60, // Inbound = warm lead
-          segment: "warm",
-          createdBy: 1, // System: assigned to account owner of this number
+          firstName: "Inbound", lastName: From.slice(-4),
+          phone: From, source: "inbound_call",
+          status: "new", score: 60, segment: "warm", createdBy: 1,
         });
         lead = newLead as any;
-        console.log(`[Inbound] Created new lead ${(lead as any).id} from ${From}`);
       }
-
-      // Create voice session bound to CallSid
-      const session = voiceSessionManager.createSession((lead as any).id ?? 0, "default", CallSid);
-      console.log(`[Inbound] Created session ${CallSid} for lead ${(lead as any)?.id}`);
-      
-      // Start persistence interval
-      voiceSessionManager.startSessionPersistenceInterval(CallSid);
+      voiceSessionManager.createSession((lead as any).id ?? 0, "default", sid);
+      voiceSessionManager.startSessionPersistenceInterval(sid);
+      console.log(`[Inbound] Session ${sid} created for lead ${(lead as any)?.id}`);
     } catch (error) {
-      console.error("[Inbound] Error setting up inbound call:", error);
+      console.error("[Inbound] Session setup error:", error);
     }
 
-    res.type("text/xml");
+    // DIRECT AI — no IVR, no menu, connect immediately
+    const wsHost = process.env.RAILWAY_PUBLIC_DOMAIN || req.get("host");
+    const streamUrl = `wss://${wsHost}/api/voice-stream`;
+    const statusCallback = `https://${wsHost}/api/voice/status`;
 
-    // Play IVR menu
-    const ivrMenu = `Thank you for calling ApexAI. Press 1 for sales, 2 for support, or 3 to leave a voicemail.`;
-    res.send(`
-      <Response>
-        <Say>${ivrMenu}</Say>
-        <Gather 
-          numDigits="1"
-          action="/api/voice/inbound-dtmf"
-          method="POST"
-          timeout="10">
-          <Say>Please make a selection.</Say>
-        </Gather>
-        <Redirect method="POST">/api/voice/inbound</Redirect>
-      </Response>
-    `);
+    res.type("text/xml");
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Connect action="${statusCallback}" method="POST">
+    <Stream url="${streamUrl}" track="inbound_track">
+      <Parameter name="sessionId" value="${sid}" />
+      <Parameter name="leadId" value="" />
+    </Stream>
+  </Connect>
+  <Pause length="300" />
+</Response>`);
   });
 
   app.post("/api/voice/inbound-dtmf", validateTwilioSignature, async (req, res) => {
