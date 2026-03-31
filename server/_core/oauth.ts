@@ -4,7 +4,7 @@ import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
 import { ENV } from "./env";
 import { OAuth2Client } from "google-auth-library";
-import jwt from "jsonwebtoken";
+import { sdk } from "./sdk";
 
 let googleClient: OAuth2Client | null = null;
 
@@ -41,11 +41,8 @@ async function handleGoogleUser(
     lastSignedIn: new Date(),
   });
 
-  const sessionToken = jwt.sign(
-    { googleId, email, name, picture },
-    ENV.cookieSecret,
-    { expiresIn: "1y" }
-  );
+  // Use sdk.createSessionToken so jose signs it — compatible with sdk.authenticateRequest
+  const sessionToken = await sdk.createSessionToken({ googleId, email, name: name || "", picture: picture || undefined });
 
   const cookieOptions = getSessionCookieOptions(req);
   res.cookie(COOKIE_NAME, sessionToken, {

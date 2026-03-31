@@ -65,9 +65,16 @@ export default function LandingPageFull() {
           </Link>
 
           <nav className="hidden md:flex items-center gap-8 text-sm" style={{ color: DIM2 }}>
-            {["#features", "#inbound", "#demos", "#pricing", "#case-studies", "#about"].map((href) => (
-              <a key={href} href={href} className="hover:text-white transition-colors capitalize">
-                {href.replace("#", "").replace("-", " ")}
+            {[
+              { href: "#inbound",      label: "Inbound AI" },
+              { href: "#features",     label: "Outbound AI" },
+              { href: "#demos",        label: "Demos" },
+              { href: "#pricing",      label: "Pricing" },
+              { href: "#case-studies", label: "Case Studies" },
+              { href: "#about",        label: "About" },
+            ].map(({ href, label }) => (
+              <a key={href} href={href} className="hover:text-white transition-colors">
+                {label}
               </a>
             ))}
           </nav>
@@ -80,9 +87,16 @@ export default function LandingPageFull() {
                 </Button>
               </Link>
             ) : (
-              <Button size="sm" onClick={handleGetStarted} style={{ backgroundColor: BLUE, borderColor: BLUE }}>
-                Get Started <ArrowRight className="w-4 h-4 ml-1" />
-              </Button>
+              <>
+                <Link href="/login">
+                  <Button size="sm" variant="ghost" className="hidden sm:flex text-white hover:text-white hover:bg-white/10">
+                    Sign In
+                  </Button>
+                </Link>
+                <Button size="sm" onClick={handleGetStarted} style={{ backgroundColor: BLUE, borderColor: BLUE }}>
+                  Get Started <ArrowRight className="w-4 h-4 ml-1" />
+                </Button>
+              </>
             )}
             <button className="md:hidden p-2 text-white" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
               {mobileMenuOpen ? <X /> : <Menu />}
@@ -92,10 +106,17 @@ export default function LandingPageFull() {
 
         {mobileMenuOpen && (
           <div className="md:hidden border-t p-4 space-y-3" style={{ backgroundColor: D2, borderColor: DIM3 }}>
-            {["#features", "#inbound", "#demos", "#pricing", "#case-studies", "#about"].map((href) => (
-              <a key={href} href={href} className="block text-sm py-1 capitalize" style={{ color: DIM2 }}
+            {[
+              { href: "#inbound",      label: "Inbound AI" },
+              { href: "#features",     label: "Outbound AI" },
+              { href: "#demos",        label: "Demos" },
+              { href: "#pricing",      label: "Pricing" },
+              { href: "#case-studies", label: "Case Studies" },
+              { href: "#about",        label: "About" },
+            ].map(({ href, label }) => (
+              <a key={href} href={href} className="block text-sm py-1" style={{ color: DIM2 }}
                 onClick={() => setMobileMenuOpen(false)}>
-                {href.replace("#", "").replace("-", " ")}
+                {label}
               </a>
             ))}
           </div>
