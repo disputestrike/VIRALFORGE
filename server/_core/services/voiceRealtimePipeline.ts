@@ -98,23 +98,37 @@ export class VoiceRealtimePipeline {
     const params = msg.start?.customParameters || {};
     this.sessionId = params.sessionId || this.requestSessionId || this.streamSid;
     const leadId = params.leadId || this.requestLeadId;
+    // Store callSid for live transfer handoff
+    const callSid = msg.start?.callSid || params.callSid || this.sessionId;
 
-    this.logger.log("[PIPE] START", { sessionId: this.sessionId, streamSid: this.streamSid });
+    this.logger.log("[PIPE] START", { sessionId: this.sessionId, streamSid: this.streamSid, callSid });
 
     if (!this.sessionId) { this.socket.close?.(); return; }
 
     (this.socket as any)._sessionId = this.sessionId;
     (this.socket as any)._leadId = leadId;
+    (this.socket as any)._callSid = callSid;
 
     if (!voiceSessionManager.getSession(this.sessionId)) {
       voiceSessionManager.createSession(leadId ? parseInt(leadId, 10) : 0, "default", this.sessionId);
     }
+    // Store callSid in session so transfer tool can use it
+    voiceSessionManager.updateSession(this.sessionId, { callSid } as any);
 
     // Connect Deepgram live WebSocket for streaming VAD STT
     this.connectDeepgram();
 
     // Connect Cartesia WebSocket for streaming TTS
     await this.connectCartesia();
+
+    // Wait up to 2s for Cartesia WS to open before greeting
+    await new Promise<void>(resolve => {
+      if (this.cartesiaWs?.readyState === 1) { resolve(); return; }
+      const check = setInterval(() => {
+        if (this.cartesiaWs?.readyState === 1) { clearInterval(check); resolve(); }
+      }, 50);
+      setTimeout(() => { clearInterval(check); resolve(); }, 2000);
+    });
 
     // Send greeting
     await this.sendGreeting();
@@ -225,7 +239,7 @@ export class VoiceRealtimePipeline {
     }).catch(e => this.logger.error("[PIPE:TTS] ws import failed", e));
   }
 
-  private cartesiaSendText(text: string): void {
+  private async cartesiaSendText(text: string): Promise<void> {
     if (!this.cartesiaWs || this.cartesiaWs.readyState !== 1 /* OPEN */) return;
 
     if (!this.cartesiaContextId) {
@@ -233,7 +247,18 @@ export class VoiceRealtimePipeline {
     }
 
     const session = this.sessionId ? voiceSessionManager.getSession(this.sessionId) : null;
-    let voiceId = "694f9389-aac1-45b6-b726-9d9369183238"; // Sarah default
+    // Use user's selected voice profile if available
+    let voiceId = "694f9389-aac1-45b6-b726-9d9369183238"; // Sarah default (Cartesia)
+    try {
+      if (session?.voiceProfileId || session?.userId) {
+        const { resolveVoiceProfile } = await import("./voiceProfiles");
+        const profile = await resolveVoiceProfile({
+          userId: session?.userId,
+          explicitVoiceProfileId: session?.voiceProfileId,
+        });
+        if (profile.provider === "cartesia") voiceId = profile.externalVoiceId;
+      }
+    } catch {}
 
     this.cartesiaWs.send(JSON.stringify({
       context_id: this.cartesiaContextId,
@@ -270,7 +295,7 @@ export class VoiceRealtimePipeline {
 
     if (this.cartesiaWs?.readyState === 1) {
       // Stream greeting through Cartesia WS
-      this.cartesiaSendText(greeting);
+      await this.cartesiaSendText(greeting);
       this.cartesiaFlush();
       this.setSpeakingTimeout(3000);
     } else {
@@ -384,7 +409,7 @@ export class VoiceRealtimePipeline {
     this.replyStartTimer = setTimeout(() => {
       if (this.generationEpoch === epoch && !this.isSpeaking) {
         this.logger.log("[PIPE] silence fallback triggered");
-        this.cartesiaSendText("One moment.");
+        void this.cartesiaSendText("One moment.");
         this.cartesiaFlush();
         this.setSpeakingTimeout(2000);
       }
@@ -509,7 +534,7 @@ export class VoiceRealtimePipeline {
             const fresh = sanitizeForSpeech(ready.slice(spokenUpTo));
             if (fresh.trim()) {
               if (epoch !== this.generationEpoch) return;
-              this.cartesiaSendText(fresh);
+              await this.cartesiaSendText(fresh);
               spokenUpTo = ready.length;
               this.setSpeakingTimeout(8000);
             }
@@ -522,13 +547,15 @@ export class VoiceRealtimePipeline {
 
     // Send any remaining text
     const remaining = sanitizeForSpeech(assembled.slice(spokenUpTo));
-    if (remaining.trim()) this.cartesiaSendText(remaining);
+    if (remaining.trim()) await this.cartesiaSendText(remaining);
     this.cartesiaFlush();
 
-    const fullText = sanitizeForSpeech(assembled);
+    const rawText = assembled.trim();
+    const fullText = sanitizeForSpeech(rawText);
     if (this.sessionId && fullText) {
       voiceSessionManager.addMessage(this.sessionId, "assistant", fullText);
-      await this.runToolIfNeeded(fullText, epoch);
+      // Run tools on RAW text (before TOOL: is stripped by sanitize)
+      await this.runToolIfNeeded(rawText, epoch);
     }
   }
 
@@ -569,7 +596,7 @@ export class VoiceRealtimePipeline {
         if (ready.length > spokenUpTo) {
           const fresh = sanitizeForSpeech(ready.slice(spokenUpTo));
           if (fresh.trim()) {
-            this.cartesiaSendText(fresh);
+            await this.cartesiaSendText(fresh);
             spokenUpTo = ready.length;
             this.setSpeakingTimeout(8000);
           }
@@ -580,13 +607,15 @@ export class VoiceRealtimePipeline {
     if (epoch !== this.generationEpoch) return;
 
     const remaining = sanitizeForSpeech(assembled.slice(spokenUpTo));
-    if (remaining.trim()) this.cartesiaSendText(remaining);
+    if (remaining.trim()) await this.cartesiaSendText(remaining);
     this.cartesiaFlush();
 
-    const fullText = sanitizeForSpeech(assembled);
+    const rawText = assembled.trim();
+    const fullText = sanitizeForSpeech(rawText);
     if (this.sessionId && fullText) {
       voiceSessionManager.addMessage(this.sessionId, "assistant", fullText);
-      await this.runToolIfNeeded(fullText, epoch);
+      // Run tools on RAW text (before TOOL: is stripped by sanitize)
+      await this.runToolIfNeeded(rawText, epoch);
     }
   }
 
@@ -688,12 +717,16 @@ export class VoiceRealtimePipeline {
       case "handoff_human": {
         try {
           const transferNumber = await this.getTransferNumber();
-          if (transferNumber && (this.socket as any)._callSid) {
+          const callSid = (this.socket as any)._callSid || this.sessionId;
+          if (transferNumber && callSid) {
             const { transferCallToHuman } = await import("./signalwireService");
-            await transferCallToHuman((this.socket as any)._callSid, transferNumber);
+            await transferCallToHuman(callSid, transferNumber);
+            this.logger.log(`[TOOL:handoff] Transferred ${callSid} → ${transferNumber}`);
+          } else {
+            this.logger.warn("[TOOL:handoff] No transfer number configured — set in /settings");
           }
         } catch (e) { this.logger.error("[TOOL:handoff] error", e); }
-        return JSON.stringify({ ok: true, message: "Transferring to human." });
+        return JSON.stringify({ ok: true, message: "Transferring you now. Please hold." });
       }
 
       default:
