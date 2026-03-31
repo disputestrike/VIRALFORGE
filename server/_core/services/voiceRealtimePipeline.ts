@@ -3,7 +3,7 @@
  * 
  * Deepgram live WebSocket STT with VAD
  * Cerebras streaming tokens → Cartesia streaming TTS (clause by clause)
- * Claude escalation for objections / complex turns
+ * Claude only if LLM_ALLOW_ANTHROPIC_FALLBACK=true (A/B revert path)
  * Energy-based barge-in detection (PCM energy, not mulaw heuristics)
  * generationEpoch: stale generation loops abort immediately on barge-in
  * Silence fallback line: "one moment" if no reply starts within 700ms
@@ -548,20 +548,30 @@ export class VoiceRealtimePipeline {
       ...recentHistory.map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
     ];
 
-    // Check if ANY Cerebras key is configured (pool uses _1 through _5)
-    const hasCerebras = !!(process.env.CEREBRAS_API_KEY ||
-      process.env.CEREBRAS_API_KEY_1 ||
-      process.env.CEREBRAS_API_KEY_2);
-    const route = hasCerebras
-      ? this.chooseRoute(transcript, this.customer.objectionHistory.length)
-      : "smart";
+    const { cerebrasPool } = await import("./llmRouter");
+    const allowAnthropic =
+      process.env.LLM_ALLOW_ANTHROPIC_FALLBACK === "true" &&
+      !!(process.env.ANTHROPIC_API_KEY ?? "").trim();
+    const semantic = this.chooseRoute(transcript, this.customer.objectionHistory.length);
 
-    this.logger.log(`[PIPE] route=${route} epoch=${epoch}`);
+    this.logger.log(`[PIPE] llm=cerebras semantic=${semantic} epoch=${epoch}`);
 
-    if (route === "fast" && hasCerebras) {
+    if (!cerebrasPool.hasKeys()) {
+      if (allowAnthropic) {
+        await this.streamClaude(messages, transcript, epoch);
+      } else {
+        this.logger.error("[PIPE] No Cerebras keys and Anthropic fallback disabled");
+      }
+      return;
+    }
+
+    try {
       await this.streamCerebras(messages, transcript, epoch);
-    } else {
-      await this.streamClaude(messages, transcript, epoch);
+    } catch (e) {
+      this.logger.warn("[PIPE:Cerebras] stream failed:", e);
+      if (allowAnthropic) {
+        await this.streamClaude(messages, transcript, epoch);
+      }
     }
   }
 
@@ -577,15 +587,13 @@ export class VoiceRealtimePipeline {
     try {
       response = await cerebrasPool.stream(messages, 120);
     } catch (poolErr) {
-      this.logger.warn("[PIPE:Cerebras] pool exhausted, falling back to Claude:", poolErr);
-      await this.streamClaude(messages, transcript, epoch);
-      return;
+      this.logger.warn("[PIPE:Cerebras] pool exhausted:", poolErr);
+      throw poolErr;
     }
 
     if (!response.ok || !response.body) {
-      this.logger.warn("[PIPE:Cerebras] bad response, falling back to Claude");
-      await this.streamClaude(messages, transcript, epoch);
-      return;
+      const errText = await response.text().catch(() => "");
+      throw new Error(`Cerebras stream HTTP ${response.status}: ${errText.slice(0, 200)}`);
     }
 
     let assembled = "";

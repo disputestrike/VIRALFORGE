@@ -158,7 +158,7 @@ async function startServer() {
   console.log(`  Email:       ${ENV.emailEnabled ? "✅ Resend ready" : "⚠️  disabled (set RESEND_API_KEY)"}`);
   console.log(`  STT:         ${ENV.sttEnabled ? "✅ Whisper ready" : "⚠️  disabled (set OPENAI_API_KEY)"}`);
   console.log(`  TTS:         ${ENV.ttsEnabled ? "✅ ElevenLabs ready" : "⚠️  disabled (set ELEVENLABS_API_KEY)"}`);
-  console.log(`  AI/LLM:      ${ENV.aiEnabled ? "✅ ready" : "⚠️  disabled (set BUILT_IN_FORGE_API_KEY)"}`);
+  console.log(`  AI/LLM:      ${ENV.aiEnabled ? "✅ ready (Cerebras and/or Anthropic)" : "⚠️  disabled (CEREBRAS_API_KEY_* or ANTHROPIC_API_KEY)"}`);
   console.log("");
 
   // INTEGRATION: Initialize job queue and workers
@@ -455,12 +455,12 @@ async function startServer() {
         voice:    ENV.voiceEnabled  ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         voiceRealtime: ENV.voiceRealtimeReady
           ? "ready (deepgram+cartesia+llm)"
-          : "incomplete — set DEEPGRAM_API_KEY, CARTESIA_API_KEY, CEREBRAS_API_KEY or ANTHROPIC_API_KEY",
+          : "incomplete — set DEEPGRAM_API_KEY, CARTESIA_API_KEY, and CEREBRAS_API_KEY_* (or LLM_ALLOW_ANTHROPIC_FALLBACK=true + ANTHROPIC_API_KEY)",
         sms:      ENV.smsEnabled    ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         email:    ENV.emailEnabled  ? "ready"  : "disabled — add RESEND_API_KEY",
         stt:      ENV.sttEnabled    ? "ready"  : "disabled — add OPENAI_API_KEY or DEEPGRAM_API_KEY",
         tts:      ENV.ttsEnabled    ? "ready"  : "disabled — add ELEVENLABS_API_KEY or CARTESIA_API_KEY",
-        ai:       ENV.aiEnabled     ? "ready"  : "disabled — add ANTHROPIC_API_KEY",
+        ai:       ENV.aiEnabled     ? "ready"  : "disabled — add CEREBRAS_API_KEY_* or ANTHROPIC_API_KEY",
       },
     });
   });

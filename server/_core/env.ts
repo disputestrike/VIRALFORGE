@@ -2,6 +2,15 @@
  * Central environment configuration for ApexAI
  * All process.env reads go through here — never access process.env directly in app code
  */
+
+function hasAnyCerebrasKey(): boolean {
+  if ((process.env.CEREBRAS_API_KEY ?? "").trim()) return true;
+  for (let i = 1; i <= 10; i++) {
+    if ((process.env[`CEREBRAS_API_KEY_${i}`] ?? "").trim()) return true;
+  }
+  return false;
+}
+
 export const ENV = {
   // ── Core ──────────────────────────────────────────────────
   nodeEnv:      process.env.NODE_ENV ?? "development",
@@ -49,6 +58,8 @@ export const ENV = {
   deepgramApiKey:  process.env.DEEPGRAM_API_KEY ?? "",
   cartesiaApiKey:  process.env.CARTESIA_API_KEY ?? "",
   cerebrasApiKey:  process.env.CEREBRAS_API_KEY ?? "",
+  /** A/B test: default is Cerebras-only. Set to "true" to allow Claude when Cerebras fails or is unset. */
+  llmAllowAnthropicFallback: process.env.LLM_ALLOW_ANTHROPIC_FALLBACK === "true",
 
   // ── Public URL (SignalWire webhook callbacks) ─────────────
   publicDomain: process.env.RAILWAY_PUBLIC_DOMAIN ?? "",
@@ -79,11 +90,22 @@ export const ENV = {
   get emailEnabled()  { return this.resendApiKey !== ""; },
   get ttsEnabled()    { return this.elevenLabsApiKey !== "" || (process.env.CARTESIA_API_KEY ?? "") !== ""; },
   get sttEnabled()    { return this.openAiApiKey !== "" || this.deepgramApiKey !== ""; },
-  /** Streaming phone pipeline: Deepgram + Cartesia + (Cerebras or Claude) */
+  /** Streaming phone pipeline: Deepgram + Cartesia + LLM (Cerebras primary; Anthropic optional via LLM_ALLOW_ANTHROPIC_FALLBACK) */
+  get cerebrasConfigured() {
+    return hasAnyCerebrasKey();
+  },
   get voiceRealtimeReady() {
-    const llm = this.cerebrasApiKey !== "" || this.anthropicApiKey !== "";
+    const llm =
+      this.cerebrasConfigured ||
+      (this.llmAllowAnthropicFallback && this.anthropicApiKey !== "");
     return this.deepgramApiKey !== "" && this.cartesiaApiKey !== "" && llm;
   },
   get queueEnabled()  { return this.redisUrl !== ""; },
-  get aiEnabled()     { return this.anthropicApiKey !== ""; },
+  /** TRPC / templates / SMS-email AI text — Cerebras when keys exist; else Anthropic if set (or fallback flag). */
+  get aiEnabled() {
+    return (
+      this.cerebrasConfigured ||
+      this.anthropicApiKey !== ""
+    );
+  },
 };

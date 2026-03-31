@@ -1,7 +1,8 @@
 /**
  * realtimeVoiceEngine.ts — THE CORE ORCHESTRATOR
  * 
- * Pipeline: SignalWire → Deepgram STT → Cerebras/Claude → Cartesia TTS → SignalWire
+ * Pipeline: SignalWire → Deepgram STT → Cerebras → Cartesia TTS → SignalWire
+ * (Claude only if LLM_ALLOW_ANTHROPIC_FALLBACK=true)
  * 
  * Key principles:
  * 1. Telephony: mulaw 8kHz to/from SignalWire; Cartesia outputs pcm_mulaw for outbound TTS
@@ -12,14 +13,11 @@
  */
 
 import WebSocket from "ws";
-import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import {
   createCallState,
   updateCallState,
   markQuestionAnswered,
-  isObjection,
-  isComplexTurn,
   canOfferBooking,
   type CallState,
 } from "./callPolicy";
@@ -86,21 +84,18 @@ function drainSpeakableToTts(
 }
 
 // ── Clients ───────────────────────────────────────────────────────────────────
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-
-// Cerebras key pool — round robin across 5 keys
+// Cerebras key pool — round robin across up to 10 keys (+ legacy CEREBRAS_API_KEY)
 class CerebrasPool {
   private keys: string[] = [];
   private idx = 0;
 
   constructor() {
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= 10; i++) {
       const key = process.env[`CEREBRAS_API_KEY_${i}`];
-      if (key) this.keys.push(key);
+      if (key?.trim()) this.keys.push(key.trim());
     }
-    // fallback to single key
-    if (this.keys.length === 0 && process.env.CEREBRAS_API_KEY) {
-      this.keys.push(process.env.CEREBRAS_API_KEY);
+    if (this.keys.length === 0 && process.env.CEREBRAS_API_KEY?.trim()) {
+      this.keys.push(process.env.CEREBRAS_API_KEY.trim());
     }
     console.log(`[Cerebras] Pool: ${this.keys.length} key(s)`);
   }
@@ -447,26 +442,41 @@ export function createCallEngine(opts: EngineOptions): void {
 
     conversationHistory.push({ role: "user", content: transcript });
 
-    const useClause = isObjection(transcript) || isComplexTurn(transcript) || callState.objectionCount > 0;
-    traceEvent(callId, "llm_route", { path: useClause ? "claude" : "cerebras" });
-    log(`[ROUTE] ${useClause ? "Claude (smart)" : "Cerebras (fast)"}`);
+    traceEvent(callId, "llm_route", { path: "cerebras" });
+    log("[ROUTE] Cerebras (A/B — set LLM_ALLOW_ANTHROPIC_FALLBACK for Claude)");
+
+    const allowAnthropic =
+      process.env.LLM_ALLOW_ANTHROPIC_FALLBACK === "true" &&
+      !!(process.env.ANTHROPIC_API_KEY ?? "").trim();
+
+    const sorry =
+      "Sorry, I'm having a brief connection issue. Could you repeat that?";
 
     try {
-      if (useClause) {
-        await respondClaude(epoch);
-      } else {
-        await respondCerebras(epoch);
-      }
-      traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+      await respondCerebras(epoch);
     } catch (e: any) {
-      log(`[ERROR] LLM failed: ${e.message}`);
-      if (!useClause) {
-        try {
-          await respondClaude(epoch);
-          traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
-        } catch {}
+      log(`[ERROR] Cerebras LLM failed: ${e.message}`);
+      try {
+        await respondCerebras(epoch);
+      } catch (e2: any) {
+        log(`[ERROR] Cerebras retry failed: ${e2.message}`);
+        if (allowAnthropic) {
+          try {
+            await respondAnthropicFallback(epoch);
+          } catch (e3: any) {
+            log(`[ERROR] Anthropic fallback failed: ${e3.message}`);
+            try {
+              await speak(sorry, epoch);
+            } catch {}
+          }
+        } else {
+          try {
+            await speak(sorry, epoch);
+          } catch {}
+        }
       }
     }
+    traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
   }
 
   async function respondCerebras(epoch: number): Promise<void> {
@@ -488,14 +498,16 @@ export function createCallEngine(opts: EngineOptions): void {
     await streamToCartesia(stream as any, epoch, "cerebras");
   }
 
-  async function respondClaude(epoch: number): Promise<void> {
+  async function respondAnthropicFallback(epoch: number): Promise<void> {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
     const prompt = buildPrompt(callState, businessName, industry, clientConfig);
     const messages = conversationHistory.slice(-8).map(m => ({
-      role: m.role,
+      role: m.role as "user" | "assistant",
       content: m.content,
     }));
 
-    const stream = await anthropic.messages.stream({
+    const stream = await client.messages.stream({
       model: process.env.CLAUDE_MODEL || "claude-opus-4-5",
       max_tokens: 200,
       system: prompt,

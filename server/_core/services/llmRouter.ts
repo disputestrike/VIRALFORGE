@@ -1,11 +1,10 @@
 /**
- * LLM Router — tiered inference for real-time voice
- * Fast path:  Cerebras (Llama 3.1 70B) — ~30-50ms for short replies
- * Smart path: Claude — objections, complex sales, emotional turns
- * 
- * Routing logic from the validated scaffold:
- * - Fast: greeting, yes/no, qualification, confirmations, FAQs
- * - Smart: objections, multi-question, sentiment negative, long turns, off-script
+ * LLM Router — Cerebras-first for voice/SMS-style routing helpers
+ * Default: all traffic uses the Cerebras key pool (rotation + cooldown).
+ * Revert: set LLM_ALLOW_ANTHROPIC_FALLBACK=true and ANTHROPIC_API_KEY.
+ *
+ * chooseRoute() remains for analytics / future tuning; routedLLMCall does not
+ * send traffic to Claude unless fallback is enabled.
  */
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -335,30 +334,35 @@ export async function routedLLMCall(
   turnHistory: Array<{ role: string; content: string }>,
   objectionCount = 0
 ): Promise<LLMResponse> {
-  // Check if ANY Cerebras key is configured (pool uses _1 through _5)
-  const hasCerebras = !!(process.env.CEREBRAS_API_KEY ||
-    process.env.CEREBRAS_API_KEY_1 ||
-    process.env.CEREBRAS_API_KEY_2);
-  const route = hasCerebras
-    ? chooseRoute(transcript, turnHistory, objectionCount)
-    : "smart"; // No Cerebras = always use Claude
-
+  const semanticRoute = chooseRoute(transcript, turnHistory, objectionCount);
   const t0 = Date.now();
+  const allowAnthropic =
+    process.env.LLM_ALLOW_ANTHROPIC_FALLBACK === "true" &&
+    !!(process.env.ANTHROPIC_API_KEY ?? "").trim();
 
-  if (route === "fast") {
+  if (cerebrasPool.hasKeys()) {
     try {
       const text = await callCerebras(messages);
-      console.log(`[LLM:Cerebras] "${text.slice(0, 60)}" (${Date.now()-t0}ms)`);
+      console.log(
+        `[LLM:Cerebras] route=${semanticRoute} "${text.slice(0, 60)}" (${Date.now() - t0}ms)`
+      );
       return { text, route: "fast", latencyMs: Date.now() - t0 };
     } catch (err) {
-      console.warn("[LLM:Cerebras] failed, falling back to Claude:", err);
-      // Fall through to Claude
+      console.warn("[LLM:Cerebras] failed:", err);
+      if (!allowAnthropic) throw err;
     }
   }
 
-  const text = await callClaude(messages);
-  console.log(`[LLM:Claude] "${text.slice(0, 60)}" (${Date.now()-t0}ms)`);
-  return { text, route: "smart", latencyMs: Date.now() - t0 };
+  if (allowAnthropic) {
+    const text = await callClaude(messages);
+    console.log(`[LLM:Claude:fallback] "${text.slice(0, 60)}" (${Date.now() - t0}ms)`);
+    return { text, route: "smart", latencyMs: Date.now() - t0 };
+  }
+
+  throw new Error(
+    "No Cerebras keys (CEREBRAS_API_KEY_1.. or CEREBRAS_API_KEY). " +
+      "Set LLM_ALLOW_ANTHROPIC_FALLBACK=true with ANTHROPIC_API_KEY to use Claude."
+  );
 }
 
 export default { routedLLMCall, chooseRoute };
