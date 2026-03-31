@@ -24,6 +24,22 @@ export interface LLMResponse {
   latencyMs: number;
 }
 
+/**
+ * Cerebras model IDs to try in order. Railway often sets CEREBRAS_MODEL=llama-3.3-70b (removed → 404).
+ * We try env first, then known public IDs so production self-heals without variable changes.
+ */
+export function cerebrasModelCandidates(): string[] {
+  const env = (process.env.CEREBRAS_MODEL ?? "").trim();
+  const fallbacks = ["gpt-oss-120b", "llama3.1-8b"];
+  const out: string[] = [];
+  const add = (m: string) => {
+    if (m && !out.includes(m)) out.push(m);
+  };
+  if (env) add(env);
+  for (const m of fallbacks) add(m);
+  return env ? out : fallbacks;
+}
+
 // ── Routing Logic ─────────────────────────────────────────────────────────────
 
 const OBJECTION_KEYWORDS = [
@@ -147,7 +163,7 @@ class CerebrasKeyPool {
 
   /** Call Cerebras with automatic key rotation and retry */
   async call(messages: RouterMessage[], maxTokens = 120): Promise<string> {
-    const model = process.env.CEREBRAS_MODEL || "gpt-oss-120b";
+    const models = cerebrasModelCandidates();
     const maxAttempts = Math.min(this.slots.length, 5);
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -158,52 +174,64 @@ class CerebrasKeyPool {
       const wait = Math.max(0, slot.cooldownUntil - Date.now());
       if (wait > 0 && wait < 5000) await new Promise(r => setTimeout(r, wait));
 
-      try {
-        const t0 = Date.now();
-        const response = await fetch("https://api.cerebras.ai/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${slot.key}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.35, stream: false }),
-          signal: AbortSignal.timeout(8000), // 8s timeout
-        });
+      let saw404ForAllModels = true;
+      for (const model of models) {
+        try {
+          const t0 = Date.now();
+          const response = await fetch("https://api.cerebras.ai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${slot.key}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.35, stream: false }),
+            signal: AbortSignal.timeout(8000), // 8s timeout
+          });
 
-        if (response.status === 429) {
-          // Rate limited — cool this key and try next
-          const retryAfter = parseInt(response.headers.get("retry-after") || "60");
-          this.coolDown(slot, retryAfter);
-          console.warn(`[Cerebras] Key #${slot.index + 1} rate limited (429) — trying next key`);
-          continue;
+          if (response.status === 404) {
+            console.warn(`[Cerebras] model "${model}" -> 404 — trying next model`);
+            continue;
+          }
+          if (response.status === 429) {
+            saw404ForAllModels = false;
+            const retryAfter = parseInt(response.headers.get("retry-after") || "60");
+            this.coolDown(slot, retryAfter);
+            console.warn(`[Cerebras] Key #${slot.index + 1} rate limited (429) — trying next key`);
+            break;
+          }
+
+          if (response.status === 401 || response.status === 403) {
+            saw404ForAllModels = false;
+            this.coolDown(slot, 600);
+            console.error(`[Cerebras] Key #${slot.index + 1} auth failed (${response.status})`);
+            break;
+          }
+
+          saw404ForAllModels = false;
+
+          if (!response.ok) {
+            const err = await response.text();
+            throw new Error(`Cerebras ${response.status}: ${err}`);
+          }
+
+          const data = await response.json() as any;
+          const text = data.choices?.[0]?.message?.content ?? "";
+          slot.requestCount++;
+          console.log(`[Cerebras] Key #${slot.index + 1} model=${model} ${Date.now() - t0}ms (requests: ${slot.requestCount})`);
+          return text;
+        } catch (err: any) {
+          if (err?.name === "TimeoutError" || err?.code === "UND_ERR_CONNECT_TIMEOUT") {
+            this.coolDown(slot, 30);
+            console.warn(`[Cerebras] Key #${slot.index + 1} timed out — trying next key`);
+            saw404ForAllModels = false;
+            break;
+          }
+          throw err;
         }
+      }
 
-        if (response.status === 401 || response.status === 403) {
-          // Bad key — cool for 10 minutes
-          this.coolDown(slot, 600);
-          console.error(`[Cerebras] Key #${slot.index + 1} auth failed (${response.status})`);
-          continue;
-        }
-
-        if (!response.ok) {
-          const err = await response.text();
-          throw new Error(`Cerebras ${response.status}: ${err}`);
-        }
-
-        const data = await response.json() as any;
-        const text = data.choices?.[0]?.message?.content ?? "";
-        slot.requestCount++;
-        console.log(`[Cerebras] Key #${slot.index + 1} responded in ${Date.now()-t0}ms (requests: ${slot.requestCount})`);
-        return text;
-
-      } catch (err: any) {
-        // Timeout or network error — brief cooldown, try next key
-        if (err?.name === "TimeoutError" || err?.code === "UND_ERR_CONNECT_TIMEOUT") {
-          this.coolDown(slot, 30);
-          console.warn(`[Cerebras] Key #${slot.index + 1} timed out — trying next key`);
-          continue;
-        }
-        throw err;
+      if (saw404ForAllModels && models.length > 0) {
+        throw new Error(`Cerebras 404 for all models: ${models.join(", ")} — update CEREBRAS_MODEL or keys`);
       }
     }
 
@@ -212,7 +240,7 @@ class CerebrasKeyPool {
 
   /** Stream from Cerebras with key rotation */
   async stream(messages: RouterMessage[], maxTokens = 120): Promise<Response> {
-    const model = process.env.CEREBRAS_MODEL || "gpt-oss-120b";
+    const models = cerebrasModelCandidates();
     const maxAttempts = Math.min(this.slots.length, 5);
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -222,44 +250,59 @@ class CerebrasKeyPool {
       const wait = Math.max(0, slot.cooldownUntil - Date.now());
       if (wait > 0 && wait < 5000) await new Promise(r => setTimeout(r, wait));
 
-      try {
-        const response = await fetch("https://api.cerebras.ai/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${slot.key}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.35, stream: true }),
-          signal: AbortSignal.timeout(10000),
-        });
+      let saw404ForAllModels = true;
+      for (const model of models) {
+        try {
+          const response = await fetch("https://api.cerebras.ai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${slot.key}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.35, stream: true }),
+            signal: AbortSignal.timeout(10000),
+          });
 
-        if (response.status === 429) {
-          const retryAfter = parseInt(response.headers.get("retry-after") || "60");
-          this.coolDown(slot, retryAfter);
-          console.warn(`[Cerebras] Key #${slot.index + 1} rate limited (stream) — trying next`);
-          continue;
+          if (response.status === 404) {
+            console.warn(`[Cerebras] stream model "${model}" -> 404 — trying next model`);
+            continue;
+          }
+          if (response.status === 429) {
+            saw404ForAllModels = false;
+            const retryAfter = parseInt(response.headers.get("retry-after") || "60");
+            this.coolDown(slot, retryAfter);
+            console.warn(`[Cerebras] Key #${slot.index + 1} rate limited (stream) — trying next`);
+            break;
+          }
+
+          if (response.status === 401 || response.status === 403) {
+            saw404ForAllModels = false;
+            this.coolDown(slot, 600);
+            break;
+          }
+
+          saw404ForAllModels = false;
+
+          if (!response.ok) {
+            const err = await response.text();
+            throw new Error(`Cerebras stream ${response.status}: ${err}`);
+          }
+
+          slot.requestCount++;
+          console.log(`[Cerebras] Key #${slot.index + 1} streaming model=${model} (requests: ${slot.requestCount})`);
+          return response;
+        } catch (err: any) {
+          if (err?.name === "TimeoutError") {
+            this.coolDown(slot, 30);
+            saw404ForAllModels = false;
+            break;
+          }
+          throw err;
         }
+      }
 
-        if (response.status === 401 || response.status === 403) {
-          this.coolDown(slot, 600);
-          continue;
-        }
-
-        if (!response.ok) {
-          const err = await response.text();
-          throw new Error(`Cerebras stream ${response.status}: ${err}`);
-        }
-
-        slot.requestCount++;
-        console.log(`[Cerebras] Key #${slot.index + 1} streaming (requests: ${slot.requestCount})`);
-        return response;
-
-      } catch (err: any) {
-        if (err?.name === "TimeoutError") {
-          this.coolDown(slot, 30);
-          continue;
-        }
-        throw err;
+      if (saw404ForAllModels && models.length > 0) {
+        throw new Error(`Cerebras stream 404 for all models: ${models.join(", ")}`);
       }
     }
 

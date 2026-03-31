@@ -38,6 +38,7 @@ import {
   lookupServiceAreaSpoken,
 } from "./toolLayer";
 import { ENV } from "../_core/env";
+import { cerebrasModelCandidates } from "../_core/services/llmRouter";
 
 /**
  * Push LLM text to TTS as soon as it's speakable — not only on full sentence end.
@@ -490,16 +491,32 @@ export function createCallEngine(opts: EngineOptions): void {
       ...conversationHistory.slice(-8),
     ];
 
-    const stream = await client.chat.completions.create({
-      // llama-3.3-70b removed from public API (404) — use gpt-oss-120b or llama3.1-8b; override via CEREBRAS_MODEL
-      model: process.env.CEREBRAS_MODEL || "gpt-oss-120b",
-      messages,
-      stream: true,
-      max_tokens: 110,
-      temperature: 0.45,
-    });
-
-    await streamToCartesia(stream as any, epoch, "cerebras");
+    const models = cerebrasModelCandidates();
+    let lastErr: unknown;
+    for (let i = 0; i < models.length; i++) {
+      const model = models[i]!;
+      try {
+        log(`[Cerebras] streaming model=${model}`);
+        const stream = await client.chat.completions.create({
+          model,
+          messages,
+          stream: true,
+          max_tokens: 110,
+          temperature: 0.45,
+        });
+        await streamToCartesia(stream as any, epoch, "cerebras");
+        return;
+      } catch (e: unknown) {
+        lastErr = e;
+        const msg = e instanceof Error ? e.message : String(e);
+        const is404 =
+          (e as { status?: number })?.status === 404 || /\b404\b/.test(msg);
+        log(`[Cerebras] model ${model} failed: ${msg}`);
+        if (is404 && i < models.length - 1) continue;
+        throw e;
+      }
+    }
+    throw lastErr;
   }
 
   async function respondAnthropicFallback(epoch: number): Promise<void> {
@@ -595,6 +612,9 @@ export function createCallEngine(opts: EngineOptions): void {
   async function speak(text: string, epoch: number): Promise<void> {
     if (epoch !== generationEpoch || isEnded) return;
     log(`speak() called: "${text.slice(0,50)}" cartesiaWs=${cartesiaWs?.readyState}`);
+    // Always start a new Cartesia context — reusing ctx after greeting without a timely
+    // `done` causes 400 "unable to infer voice mode" and loops the sorry line.
+    cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     cartesiaSend(text, false);
     cartesiaFlush();
     conversationHistory.push({ role: "assistant", content: text });
