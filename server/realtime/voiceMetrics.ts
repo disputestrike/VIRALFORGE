@@ -9,7 +9,6 @@ export type VoiceTracePhase =
   | "first_media_in"
   | "deepgram_ready"
   | "cartesia_ready"
-  | "greeting_wait"
   | "greeting_sent"
   | "stt_final"
   | "llm_route"

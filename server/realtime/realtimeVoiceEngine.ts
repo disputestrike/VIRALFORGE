@@ -704,12 +704,7 @@ export function createCallEngine(opts: EngineOptions): void {
         } catch (e) {
           log(`Session bind: ${e}`);
         }
-        const greetDelay = ENV.voiceGreetingDelayMs;
-        if (greetDelay > 0) {
-          traceEvent(callId, "greeting_wait", { ms: greetDelay });
-          log(`[GREETING] Waiting ${greetDelay}ms before speaking (natural pickup)`);
-          await new Promise((r) => setTimeout(r, greetDelay));
-        }
+        await new Promise((r) => setTimeout(r, 200));
         if (!isEnded) {
           const greeting = `Hi, thanks for calling ${clientConfig.businessName}. How can I help you today?`;
           await speak(greeting, generationEpoch);
@@ -718,7 +713,7 @@ export function createCallEngine(opts: EngineOptions): void {
           setTimeout(() => {
             greetingDone = true;
             log("[GREETING] Barge-in enabled");
-          }, 2800);
+          }, 2500);
         }
       };
       waitForCartesia();

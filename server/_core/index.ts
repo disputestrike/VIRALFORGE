@@ -15,6 +15,7 @@ import * as voiceProcessingService from "./services/voiceProcessingService";
 import { startSessionPersistenceInterval } from "./services/voiceSessionManager";
 // Live calls: realtimeVoiceEngine — Deepgram STT → Cerebras (fast) / Claude (smart) → Cartesia TTS (NOT Deepgram for TTS).
 import { createCallEngine } from "../realtime/realtimeVoiceEngine";
+import { getUsRingtoneWav } from "./telephony/usRingtoneWav";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -435,6 +436,13 @@ async function startServer() {
     next();
   });
 
+  // US ring WAV for TwiML <Play> — real audio, not silence (hear ring → then AI stream)
+  app.get("/api/voice/ring-tone.wav", (_req, res) => {
+    res.setHeader("Content-Type", "audio/wav");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.send(getUsRingtoneWav());
+  });
+
   // Health check endpoint — must respond immediately, before any DB or auth checks
   app.get("/api/health", (_req, res) => {
     res.status(200).json({
@@ -565,13 +573,14 @@ async function startServer() {
     // <Connect><Stream> is required for bidirectional audio (per SignalWire official example)
     // <Start><Stream> is unidirectional only — cannot send AI audio back to caller
     const statusCallback = `https://${wsHost}/api/voice/status`;
-    const preStreamPause =
-      ENV.voicePreConnectPauseSec > 0
-        ? `  <Pause length="${ENV.voicePreConnectPauseSec}"/>\n`
+    const baseHttps = ENV.publicUrl.replace(/\/$/, "");
+    const ringXml =
+      ENV.voicePlayRingBeforeStream
+        ? `  <Play>${baseHttps}/api/voice/ring-tone.wav</Play>\n`
         : "";
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-${preStreamPause}  <Connect action="${statusCallback}" method="POST">
+${ringXml}  <Connect action="${statusCallback}" method="POST">
     <Stream url="${streamUrl}" track="inbound_track">
       <Parameter name="sessionId" value="${sid}" />
       <Parameter name="leadId" value="${leadId}" />
@@ -716,15 +725,16 @@ ${preStreamPause}  <Connect action="${statusCallback}" method="POST">
     const wsHost = process.env.RAILWAY_PUBLIC_DOMAIN || req.get("host");
     const streamUrl = `wss://${wsHost}/api/voice-stream`;
     const statusCallback = `https://${wsHost}/api/voice/status`;
-    const preStreamPause =
-      ENV.voicePreConnectPauseSec > 0
-        ? `  <Pause length="${ENV.voicePreConnectPauseSec}"/>\n`
+    const baseHttps = ENV.publicUrl.replace(/\/$/, "");
+    const ringXml =
+      ENV.voicePlayRingBeforeStream
+        ? `  <Play>${baseHttps}/api/voice/ring-tone.wav</Play>\n`
         : "";
 
     res.type("text/xml");
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-${preStreamPause}  <Connect action="${statusCallback}" method="POST">
+${ringXml}  <Connect action="${statusCallback}" method="POST">
     <Stream url="${streamUrl}" track="inbound_track">
       <Parameter name="sessionId" value="${sid}" />
       <Parameter name="leadId" value="" />
