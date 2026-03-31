@@ -68,6 +68,7 @@ export class VoiceRealtimePipeline {
 
   // Silence fallback timer
   private replyStartTimer: NodeJS.Timeout | null = null;
+  private silenceFallbackFired = false;
 
   constructor(options: VoiceRealtimeOptions) {
     this.socket = options.socket;
@@ -385,7 +386,62 @@ export class VoiceRealtimePipeline {
 
   private handleStop(): void {
     this.cleanup();
-    if (this.sessionId) voiceSessionManager.completeSession(this.sessionId);
+    if (this.sessionId) {
+      voiceSessionManager.completeSession(this.sessionId);
+      void this.sendCallSummaryToOwner();
+    }
+  }
+
+  private async sendCallSummaryToOwner(): Promise<void> {
+    if (!this.sessionId) return;
+    try {
+      const session = voiceSessionManager.getSession(this.sessionId);
+      if (!session?.userId) return;
+
+      // Build summary from conversation history
+      const history = session.conversationHistory ?? [];
+      if (history.length === 0) return;
+
+      const callerLines = history.filter(m => m.role === "user").map(m => m.content);
+      const name = this.customer.firstName || "Unknown caller";
+      const phone = this.customer.phone || "No phone captured";
+      const email = this.customer.email || "";
+      const turns = history.length;
+
+      // Build a brief summary of what they wanted
+      const firstUserMsg = callerLines[0] || "";
+      const lastUserMsg = callerLines[callerLines.length - 1] || "";
+
+      const summaryLines = [
+        `📞 New call summary`,
+        `Caller: ${name}`,
+        `Phone: ${phone}`,
+        email ? `Email: ${email}` : null,
+        `Turns: ${turns} exchanges`,
+        `First said: "${firstUserMsg.slice(0, 80)}${firstUserMsg.length > 80 ? '...' : ''}"`,
+        this.customer.objectionHistory.length > 0 ? `⚠️ Had objections` : null,
+        this.customer.qualification.budget ? `Budget: ${this.customer.qualification.budget.slice(0, 50)}` : null,
+      ].filter(Boolean).join("\n");
+
+      // Get owner's phone number and transfer number (use as notification number)
+      const { getDb } = await import("../../db");
+      const { users } = await import("../../../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const db = await getDb();
+      if (!db) return;
+
+      const [owner] = await (db as any).select().from(users)
+        .where(eq(users.id, session.userId)).limit(1);
+
+      const notifyPhone = owner?.transferNumber;
+      if (!notifyPhone) return;
+
+      const { sendSMS } = await import("./signalwireService");
+      await sendSMS({ to: notifyPhone, body: summaryLines });
+      this.logger.log(`[PIPE] Call summary sent to ${notifyPhone}`);
+    } catch (e) {
+      this.logger.error("[PIPE] Call summary SMS failed:", e);
+    }
   }
 
   // ── DEEPGRAM FINAL TRANSCRIPT → LLM → STREAMING TTS ─────────────────────
@@ -407,15 +463,19 @@ export class VoiceRealtimePipeline {
       this.customer.objectionHistory.push(transcript);
     }
 
-    // Start silence fallback — if no audio starts in 700ms say "one moment"
+    // Silence fallback — fires ONCE per turn if no audio within 1200ms
+    // Longer timeout so Cerebras/Claude has time to respond first
+    // Once fired, never fires again for this turn (silenceFallbackFired flag)
+    this.silenceFallbackFired = false;
     this.replyStartTimer = setTimeout(() => {
-      if (this.generationEpoch === epoch && !this.isSpeaking) {
-        this.logger.log("[PIPE] silence fallback triggered");
-        void this.cartesiaSendText("One moment.");
+      if (this.generationEpoch === epoch && !this.isSpeaking && !this.silenceFallbackFired) {
+        this.silenceFallbackFired = true;
+        this.logger.log("[PIPE] silence fallback triggered (once only)");
+        void this.cartesiaSendText("Mmhm, one moment.");
         this.cartesiaFlush();
-        this.setSpeakingTimeout(2000);
+        this.setSpeakingTimeout(3000);
       }
-    }, 700);
+    }, 1200);
 
     try {
       await this.streamResponse(transcript, epoch);
@@ -814,23 +874,38 @@ export class VoiceRealtimePipeline {
   // ── SYSTEM PROMPT ─────────────────────────────────────────────────────────
 
   private buildSystemPrompt(session: any): string {
-    let prompt = `You are a professional AI sales assistant on a live phone call.
+    let prompt = `You are a friendly, warm receptionist and sales assistant taking a live phone call.
 
-CRITICAL VOICE RULES:
-- Max 2 short sentences. Never more.
-- Spoken language only — no markdown, no lists, no bullet points.
-- Ask only ONE question at a time.
-- If objection: acknowledge, address calmly, ask one question.
-- If booking: confirm details clearly.
-- Never say "as an AI". Never mention Claude or Cerebras.
-- Sound warm, confident, human.
+YOUR VOICE PERSONALITY:
+- Sound like a real human — warm, natural, conversational
+- Use natural speech: "Absolutely!", "Of course!", "Sure!", "Got it!", "Perfect!"
+- Vary your acknowledgments — never repeat the same phrase twice in a row
+- Speak in short, natural sentences like you're having a real conversation
+- Never sound like you're reading from a script
+- If someone says their name, use it naturally in conversation
 
-If you need to take an action, use this exact format:
-TOOL: <tool_name> {"key": "value"}
+STRICT RULES:
+- 1-2 sentences MAX per response. Short and natural.
+- Never say "One moment" more than once per call
+- Never repeat yourself — if you already said something, don't say it again
+- No markdown, no lists, no bullet points — spoken words only
+- Never say "as an AI", "as an assistant", "I'm an AI"
+- Never mention Claude, Cerebras, or any AI technology
+- Ask only ONE question at a time
+- If you don't know something, say "Let me make sure I get the right person to help you with that"
 
-Available tools: book_appointment, save_lead, send_sms_followup, handoff_human
+HANDLING CALLS:
+- Greet warmly and find out what they need
+- Listen, acknowledge what they said, then respond naturally
+- For appointments: get their name, phone, preferred time — then confirm clearly
+- For objections: acknowledge with empathy, answer simply, move forward
+- For transfers: "Let me get someone on the line for you right away"
 
-GOAL: Qualify the lead, handle objections, book appointments.`;
+TOOLS — use this exact format when needed:
+TOOL: book_appointment {"name": "...", "phone": "...", "date": "...", "time": "..."}
+TOOL: save_lead {"firstName": "...", "phone": "...", "email": "..."}
+TOOL: send_sms_followup {"phone": "...", "message": "..."}
+TOOL: handoff_human {"reason": "..."}`;
 
     if (session?.language && session.language !== "en") {
       const langs: Record<string, string> = {
@@ -897,6 +972,7 @@ GOAL: Qualify the lead, handle objections, book appointments.`;
     this.audioChunks = [];
     this.isProcessing = false;
     this.isSpeaking = false;
+    this.silenceFallbackFired = false;
   }
 }
 

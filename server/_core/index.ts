@@ -419,6 +419,22 @@ async function startServer() {
 
     console.log(`[Voice] Call started: ${CallSid} from ${From}`);
 
+    // ── Spam / robocall filtering ────────────────────────────────────────────
+    // Block known spam prefixes and toll-free robocall patterns
+    if (From) {
+      const spamPrefixes = [
+        "+1800", "+1888", "+1877", "+1866", "+1855", "+1844", "+1833", "+1822",
+        "800", "888", "877", "866", "855", "844", "833",
+      ];
+      const isSpam = spamPrefixes.some(p => From.replace(/\D/g, "").startsWith(p.replace(/\D/g, "")));
+      if (isSpam) {
+        console.log(`[Voice] Spam blocked: ${From}`);
+        res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response><Reject reason="busy"/></Response>`);
+        return;
+      }
+    }
+
     // Create session and lead if inbound
     try {
       if (From) {
