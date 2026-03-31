@@ -71,39 +71,229 @@ export function chooseRoute(
   return "fast";
 }
 
-// ── Cerebras Fast Path ────────────────────────────────────────────────────────
+// ── Cerebras Key Pool — round-robin + cooldown on rate limit ─────────────────
 
-async function callCerebras(
-  messages: RouterMessage[],
-  maxTokens = 120
-): Promise<string> {
-  const apiKey = process.env.CEREBRAS_API_KEY;
-  if (!apiKey) throw new Error("CEREBRAS_API_KEY not set");
+interface KeySlot {
+  key: string;
+  index: number;
+  cooldownUntil: number; // epoch ms, 0 = available
+  requestCount: number;
+  errorCount: number;
+}
 
-  const model = process.env.CEREBRAS_MODEL || "llama3.1-70b";
+class CerebrasKeyPool {
+  private slots: KeySlot[] = [];
+  private cursor = 0; // round-robin pointer
 
-  const response = await fetch("https://api.cerebras.ai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      max_tokens: maxTokens,
-      temperature: 0.35,
-      stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Cerebras error ${response.status}: ${err}`);
+  constructor() {
+    this.loadKeys();
   }
 
-  const data = await response.json() as any;
-  return data.choices?.[0]?.message?.content ?? "";
+  private loadKeys(): void {
+    // Load up to 10 keys: CEREBRAS_API_KEY_1 ... CEREBRAS_API_KEY_10
+    // Also accept legacy CEREBRAS_API_KEY as key #1 fallback
+    const keys: string[] = [];
+
+    for (let i = 1; i <= 10; i++) {
+      const k = process.env[`CEREBRAS_API_KEY_${i}`];
+      if (k?.trim()) keys.push(k.trim());
+    }
+
+    // Fallback: single key
+    if (keys.length === 0 && process.env.CEREBRAS_API_KEY) {
+      keys.push(process.env.CEREBRAS_API_KEY.trim());
+    }
+
+    this.slots = keys.map((key, i) => ({
+      key,
+      index: i,
+      cooldownUntil: 0,
+      requestCount: 0,
+      errorCount: 0,
+    }));
+
+    if (this.slots.length > 0) {
+      console.log(`[Cerebras] Key pool initialized: ${this.slots.length} key(s)`);
+    }
+  }
+
+  hasKeys(): boolean {
+    return this.slots.length > 0;
+  }
+
+  /** Get next available key using round-robin, skipping cooling-down keys */
+  private nextAvailableSlot(): KeySlot | null {
+    const now = Date.now();
+    const total = this.slots.length;
+    for (let i = 0; i < total; i++) {
+      const slot = this.slots[(this.cursor + i) % total];
+      if (slot.cooldownUntil <= now) {
+        this.cursor = (this.cursor + i + 1) % total;
+        return slot;
+      }
+    }
+    // All keys cooling — find the one that comes back soonest
+    const soonest = this.slots.reduce((a, b) => a.cooldownUntil < b.cooldownUntil ? a : b);
+    const wait = Math.max(0, soonest.cooldownUntil - now);
+    if (wait > 0) console.warn(`[Cerebras] All keys cooling — waiting ${wait}ms`);
+    return soonest;
+  }
+
+  /** Mark a key as rate-limited — cool it down for 60s */
+  private coolDown(slot: KeySlot, seconds = 60): void {
+    slot.cooldownUntil = Date.now() + seconds * 1000;
+    slot.errorCount++;
+    console.warn(`[Cerebras] Key #${slot.index + 1} cooling for ${seconds}s (errors: ${slot.errorCount})`);
+  }
+
+  /** Call Cerebras with automatic key rotation and retry */
+  async call(messages: RouterMessage[], maxTokens = 120): Promise<string> {
+    const model = process.env.CEREBRAS_MODEL || "llama3.1-70b";
+    const maxAttempts = Math.min(this.slots.length, 5);
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const slot = this.nextAvailableSlot();
+      if (!slot) throw new Error("No Cerebras keys available");
+
+      // Wait if key is cooling
+      const wait = Math.max(0, slot.cooldownUntil - Date.now());
+      if (wait > 0 && wait < 5000) await new Promise(r => setTimeout(r, wait));
+
+      try {
+        const t0 = Date.now();
+        const response = await fetch("https://api.cerebras.ai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${slot.key}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.35, stream: false }),
+          signal: AbortSignal.timeout(8000), // 8s timeout
+        });
+
+        if (response.status === 429) {
+          // Rate limited — cool this key and try next
+          const retryAfter = parseInt(response.headers.get("retry-after") || "60");
+          this.coolDown(slot, retryAfter);
+          console.warn(`[Cerebras] Key #${slot.index + 1} rate limited (429) — trying next key`);
+          continue;
+        }
+
+        if (response.status === 401 || response.status === 403) {
+          // Bad key — cool for 10 minutes
+          this.coolDown(slot, 600);
+          console.error(`[Cerebras] Key #${slot.index + 1} auth failed (${response.status})`);
+          continue;
+        }
+
+        if (!response.ok) {
+          const err = await response.text();
+          throw new Error(`Cerebras ${response.status}: ${err}`);
+        }
+
+        const data = await response.json() as any;
+        const text = data.choices?.[0]?.message?.content ?? "";
+        slot.requestCount++;
+        console.log(`[Cerebras] Key #${slot.index + 1} responded in ${Date.now()-t0}ms (requests: ${slot.requestCount})`);
+        return text;
+
+      } catch (err: any) {
+        // Timeout or network error — brief cooldown, try next key
+        if (err?.name === "TimeoutError" || err?.code === "UND_ERR_CONNECT_TIMEOUT") {
+          this.coolDown(slot, 30);
+          console.warn(`[Cerebras] Key #${slot.index + 1} timed out — trying next key`);
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    throw new Error(`All ${maxAttempts} Cerebras keys exhausted or rate-limited`);
+  }
+
+  /** Stream from Cerebras with key rotation */
+  async stream(messages: RouterMessage[], maxTokens = 120): Promise<Response> {
+    const model = process.env.CEREBRAS_MODEL || "llama3.1-70b";
+    const maxAttempts = Math.min(this.slots.length, 5);
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const slot = this.nextAvailableSlot();
+      if (!slot) throw new Error("No Cerebras keys available");
+
+      const wait = Math.max(0, slot.cooldownUntil - Date.now());
+      if (wait > 0 && wait < 5000) await new Promise(r => setTimeout(r, wait));
+
+      try {
+        const response = await fetch("https://api.cerebras.ai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${slot.key}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.35, stream: true }),
+          signal: AbortSignal.timeout(10000),
+        });
+
+        if (response.status === 429) {
+          const retryAfter = parseInt(response.headers.get("retry-after") || "60");
+          this.coolDown(slot, retryAfter);
+          console.warn(`[Cerebras] Key #${slot.index + 1} rate limited (stream) — trying next`);
+          continue;
+        }
+
+        if (response.status === 401 || response.status === 403) {
+          this.coolDown(slot, 600);
+          continue;
+        }
+
+        if (!response.ok) {
+          const err = await response.text();
+          throw new Error(`Cerebras stream ${response.status}: ${err}`);
+        }
+
+        slot.requestCount++;
+        console.log(`[Cerebras] Key #${slot.index + 1} streaming (requests: ${slot.requestCount})`);
+        return response;
+
+      } catch (err: any) {
+        if (err?.name === "TimeoutError") {
+          this.coolDown(slot, 30);
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    throw new Error(`All Cerebras stream keys exhausted`);
+  }
+
+  /** Log current pool status */
+  status(): object {
+    const now = Date.now();
+    return this.slots.map(s => ({
+      key: `key_${s.index + 1}`,
+      available: s.cooldownUntil <= now,
+      cooldownSec: s.cooldownUntil > now ? Math.ceil((s.cooldownUntil - now) / 1000) : 0,
+      requests: s.requestCount,
+      errors: s.errorCount,
+    }));
+  }
+}
+
+// Singleton pool — shared across all calls in this process
+const cerebrasPool = new CerebrasKeyPool();
+
+async function callCerebras(messages: RouterMessage[], maxTokens = 120): Promise<string> {
+  if (!cerebrasPool.hasKeys()) throw new Error("No CEREBRAS_API_KEY_1..5 configured");
+  return cerebrasPool.call(messages, maxTokens);
+}
+
+// Export pool for use in streaming pipeline
+export { cerebrasPool };
+
+/** Get current pool status — useful for health checks */
+export function getCerebrasPoolStatus(): object {
+  return cerebrasPool.status();
 }
 
 // ── Claude Smart Path ─────────────────────────────────────────────────────────

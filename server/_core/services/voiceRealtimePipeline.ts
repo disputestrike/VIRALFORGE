@@ -494,17 +494,18 @@ export class VoiceRealtimePipeline {
     transcript: string,
     epoch: number
   ): Promise<void> {
-    const apiKey = process.env.CEREBRAS_API_KEY!;
-    const model = process.env.CEREBRAS_MODEL || "llama3.1-70b";
-
-    const response = await fetch("https://api.cerebras.ai/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model, messages, max_tokens: 120, temperature: 0.35, stream: true }),
-    });
+    const { cerebrasPool } = await import("./llmRouter");
+    let response: Response;
+    try {
+      response = await cerebrasPool.stream(messages, 120);
+    } catch (poolErr) {
+      this.logger.warn("[PIPE:Cerebras] pool exhausted, falling back to Claude:", poolErr);
+      await this.streamClaude(messages, transcript, epoch);
+      return;
+    }
 
     if (!response.ok || !response.body) {
-      this.logger.warn("[PIPE:Cerebras] failed, falling back to Claude");
+      this.logger.warn("[PIPE:Cerebras] bad response, falling back to Claude");
       await this.streamClaude(messages, transcript, epoch);
       return;
     }
