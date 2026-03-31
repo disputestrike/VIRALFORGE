@@ -282,17 +282,19 @@ export function createCallEngine(opts: EngineOptions): void {
 
     cartesiaWs.send(JSON.stringify({
       context_id: cartesiaContextId,
-      model_id: "sonic-2",
-      voice: { mode: "id", id: voiceProfile.cartesiaId },
+      model_id: "sonic-english",  // sonic-english is the current production model
+      voice: {
+        mode: "id",
+        id: voiceProfile.cartesiaId,
+        __experimental_controls: { speed: voiceProfile.speed },
+      },
       transcript: text,
       output_format: {
         container: "raw",
-        encoding: "pcm_s16le",  // Cartesia outputs PCM16, we convert to mulaw
+        encoding: "pcm_s16le",
         sample_rate: 8000,
       },
-      speed: voiceProfile.speed,
       continue: continueCtx,
-      add_timestamps: false,
     }));
   }
 
