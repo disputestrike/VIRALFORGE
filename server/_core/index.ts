@@ -14,8 +14,8 @@ import { apiRateLimiter, aiRateLimiter, authRateLimiter, webhookRateLimiter } fr
 import * as voiceProcessingService from "./services/voiceProcessingService";
 import { startSessionPersistenceInterval } from "./services/voiceSessionManager";
 import { VoiceRealtimePipeline } from "./services/voiceRealtimePipeline";
-// NEW: Deepgram Voice Agent — unified STT+LLM+TTS in one WebSocket
-import { handleSignalWireSocket } from "../realtime/deepgramVoiceAgent";
+// NEW: Real-time voice engine — Deepgram STT + Cerebras/Claude + Cartesia TTS
+import { createCallEngine } from "../realtime/realtimeVoiceEngine";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -1077,16 +1077,18 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
           resolvedLeadId = leadId ? parseInt(leadId, 10) : undefined;
         }
 
-        handleSignalWireSocket(ws as unknown as import("ws").WebSocket, {
-          userId: resolvedUserId,
-          leadId: resolvedLeadId,
+        // ── NEW: Real-time voice engine ─────────────────────────────────
+        // Deepgram STT → Cerebras (fast) / Claude (smart) → Cartesia TTS
+        // Streaming end-to-end, instant barge-in, clean hangup
+        createCallEngine({
+          sigWs: ws as unknown as import("ws").WebSocket,
           sessionId: sessionId || undefined,
-          businessName,
+          leadId: resolvedLeadId,
+          userId: resolvedUserId,
+          businessName: undefined,
           industry: undefined,
+          voiceProfileId: undefined,
         });
-
-        // Legacy pipeline kept for fallback reference — not active
-        // (ws as any)._voicePipeline = new VoiceRealtimePipeline({...})
 
         let streamSid: string | null = null;
         const audioChunks: Buffer[] = [];

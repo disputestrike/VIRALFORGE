@@ -6,6 +6,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import LandingPage from "./pages/LandingPage";
+import { useAuth } from "./_core/hooks/useAuth";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
@@ -32,7 +33,14 @@ function Router() {
   return (
     <Switch>
       {/* Public pages */}
-      <Route path="/" component={LandingPage} />
+      <Route path="/">
+        {() => {
+          const { user, loading } = useAuth();
+          if (loading) return <div style={{minHeight:"100vh",background:"#0a0c12",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{color:"#fff",fontSize:14}}>Loading...</div></div>;
+          if (user) { window.location.replace("/dashboard"); return null; }
+          return <LandingPage />;
+        }}
+      </Route>
       <Route path="/login" component={Login} />
       <Route path="/about" component={About} />
       <Route path="/pricing" component={Pricing} />
