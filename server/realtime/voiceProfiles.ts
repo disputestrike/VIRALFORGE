@@ -13,69 +13,70 @@ export interface VoiceProfile {
 }
 
 // Cartesia's best production voices for phone agents
+// Cartesia official voices — verified from cartesia.ai documentation
 export const VOICE_PROFILES: VoiceProfile[] = [
   {
     id: "professional-female",
     name: "Sarah — Professional",
     description: "Clear, confident, professional female voice",
-    cartesiaId: "a0e99841-438c-4a64-b679-ae501e7d6091",
-    speed: 0.94,
+    cartesiaId: "694f9389-aac1-45b6-b726-9d9369183238",  // Cartesia: Sophie
+    speed: 0.9,
     gender: "female",
   },
   {
     id: "warm-female",
     name: "Emma — Warm",
     description: "Warm, friendly, approachable female voice",
-    cartesiaId: "79a125e8-cd45-4c13-8a67-188112f4dd22",
-    speed: 0.92,
+    cartesiaId: "a0e99841-438c-4a64-b679-ae501e7d6091",  // Cartesia: Friendly Female
+    speed: 0.9,
     gender: "female",
   },
   {
     id: "energetic-female",
     name: "Aria — Energetic",
     description: "Upbeat, energetic female — great for sales",
-    cartesiaId: "f9836c6e-a0bd-460e-9d3c-f7299fa60f94",
-    speed: 0.96,
+    cartesiaId: "79a125e8-cd45-4c13-8a67-188112f4dd22",  // Cartesia: Energetic Female
+    speed: 0.95,
     gender: "female",
   },
   {
     id: "authoritative-female",
     name: "Victoria — Authoritative",
     description: "Confident, authoritative female voice",
-    cartesiaId: "b7d50908-b17c-442d-ad8d-810c63997ed9",
-    speed: 0.93,
+    cartesiaId: "b7d50908-b17c-442d-ad8d-810c63997ed9",  // Cartesia: Professional Female
+    speed: 0.9,
     gender: "female",
   },
   {
     id: "professional-male",
     name: "James — Professional",
     description: "Deep, professional, trustworthy male voice",
-    cartesiaId: "421b3369-f63f-4b03-8980-37a44df1d4e8",
-    speed: 0.94,
+    cartesiaId: "421b3369-f63f-4b03-8980-37a44df1d4e8",  // Cartesia: Professional Male
+    speed: 0.9,
     gender: "male",
   },
   {
     id: "friendly-male",
     name: "Marcus — Friendly",
     description: "Friendly, conversational male voice",
-    cartesiaId: "69267136-1bdc-412f-ad78-0caad210fb40",
-    speed: 0.93,
+    cartesiaId: "5c42302c-194b-4d0c-ba1a-8cb485c84ab9",  // Cartesia: Friendly Male
+    speed: 0.9,
     gender: "male",
   },
   {
     id: "dynamic-male",
     name: "Alex — Dynamic",
     description: "Dynamic, persuasive male — great for closing",
-    cartesiaId: "41534e16-2966-4c6b-9670-111411def906",
-    speed: 0.95,
+    cartesiaId: "2ee87190-8f84-4925-97da-e52547f9462c",  // Cartesia: Confident Male
+    speed: 0.92,
     gender: "male",
   },
   {
     id: "calm-male",
     name: "David — Calm",
     description: "Calm, reassuring male — great for support",
-    cartesiaId: "d46abd1d-2d02-43e8-819f-51fb652c1c61",
-    speed: 0.92,
+    cartesiaId: "29e9b1dc-5c16-4ccf-9d7d-9e5fe4b1c456",  // Cartesia: Calm Male
+    speed: 0.88,
     gender: "male",
   },
 ];
