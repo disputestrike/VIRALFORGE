@@ -186,12 +186,16 @@ export function createCallEngine(opts: EngineOptions): void {
           if (msg.type === "chunk" && msg.data) {
             // Cartesia sends PCM16 s16le at 8kHz — convert to mulaw for SignalWire
             if (streamSid && sigWs.readyState === WebSocket.OPEN) {
+              log(`Cartesia chunk: ${msg.data?.length || 0} chars → sending to SignalWire`);
               const pcm16 = Buffer.from(msg.data, "base64");
               const mulaw = pcm16ToMulaw(pcm16);
               sigWs.send(JSON.stringify({
                 event: "media",
                 streamSid,
-                media: { payload: mulaw.toString("base64") },
+                media: { 
+                  payload: mulaw.toString("base64"),
+                  track: "outbound_track",
+                },
               }));
               isSpeaking = true;
             }

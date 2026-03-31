@@ -544,7 +544,7 @@ async function startServer() {
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect action="${statusCallback}" method="POST">
-    <Stream url="${streamUrl}" track="inbound_track">
+    <Stream url="${streamUrl}" track="both_tracks">
       <Parameter name="sessionId" value="${sid}" />
       <Parameter name="leadId" value="${leadId}" />
     </Stream>
@@ -693,7 +693,7 @@ async function startServer() {
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect action="${statusCallback}" method="POST">
-    <Stream url="${streamUrl}" track="inbound_track">
+    <Stream url="${streamUrl}" track="both_tracks">
       <Parameter name="sessionId" value="${sid}" />
       <Parameter name="leadId" value="" />
     </Stream>
