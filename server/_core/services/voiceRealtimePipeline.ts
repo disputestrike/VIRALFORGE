@@ -69,6 +69,7 @@ export class VoiceRealtimePipeline {
   // Silence fallback timer
   private replyStartTimer: NodeJS.Timeout | null = null;
   private silenceFallbackFired = false;
+  private _lastTranscript = "";  // for dedup check
   // Keepalive to prevent WS timeout
   private keepaliveTimer: NodeJS.Timeout | null = null;
 
@@ -296,7 +297,7 @@ export class VoiceRealtimePipeline {
 
     voiceSessionManager.updateSession(this.sessionId, { greetingSent: true });
 
-    const greeting = "Hello! Thanks for calling. How can I help you today?";
+    const greeting = "Hi, thanks for calling. How can I help you today?";
 
     if (this.cartesiaWs?.readyState === 1) {
       // Stream greeting through Cartesia WS
@@ -481,19 +482,10 @@ export class VoiceRealtimePipeline {
       this.customer.objectionHistory.push(transcript);
     }
 
-    // Silence fallback — fires ONCE per turn if no audio within 1200ms
-    // Longer timeout so Cerebras/Claude has time to respond first
-    // Once fired, never fires again for this turn (silenceFallbackFired flag)
+    // NO SILENCE FALLBACK — filler words ("one moment") are banned.
+    // Cerebras responds in ~30ms so there should be no dead air.
+    // If there is silence, it's a pipeline issue, not a UX issue.
     this.silenceFallbackFired = false;
-    this.replyStartTimer = setTimeout(() => {
-      if (this.generationEpoch === epoch && !this.isSpeaking && !this.silenceFallbackFired) {
-        this.silenceFallbackFired = true;
-        this.logger.log("[PIPE] silence fallback triggered (once only)");
-        void this.cartesiaSendText("Mmhm, one moment.");
-        this.cartesiaFlush();
-        this.setSpeakingTimeout(3000);
-      }
-    }, 1200);
 
     try {
       await this.streamResponse(transcript, epoch);
@@ -819,19 +811,30 @@ export class VoiceRealtimePipeline {
       }
 
       case "end_call": {
-        // User wants to end the call — clean termination
-        this.logger.log("[TOOL:end_call] User requested call end");
+        // User declined — clean, immediate termination
+        this.logger.log("[TOOL:end_call] Ending call cleanly");
         try {
-          // Signal SignalWire to hang up by sending hangup TwiML
-          const callSid = (this.socket as any)._callSid || this.sessionId;
-          if (callSid && process.env.SIGNALWIRE_SPACE_URL) {
-            // signalwire hangup handled by session completion
+          // Terminate SignalWire call via REST API
+          const callSid = (this.socket as any)._callSid;
+          if (callSid && process.env.SIGNALWIRE_SPACE_URL && process.env.SIGNALWIRE_API_KEY && process.env.SIGNALWIRE_PROJECT_ID) {
+            const url = `https://${process.env.SIGNALWIRE_SPACE_URL}/api/laml/2010-04-01/Accounts/${process.env.SIGNALWIRE_PROJECT_ID}/Calls/${callSid}`;
+            await fetch(url, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Authorization": "Basic " + Buffer.from(`${process.env.SIGNALWIRE_PROJECT_ID}:${process.env.SIGNALWIRE_API_KEY}`).toString("base64"),
+              },
+              body: "Status=completed",
+            });
+            this.logger.log(`[TOOL:end_call] SignalWire call ${callSid} terminated`);
           }
           // Complete the session
           if (this.sessionId) {
             voiceSessionManager.completeSession(this.sessionId, "not_interested");
             await voiceSessionManager.persistSessionToDatabase(this.sessionId);
           }
+          // Close the WebSocket
+          setTimeout(() => this.socket.close?.(), 500);
         } catch (e) { this.logger.error("[TOOL:end_call] error", e); }
         return JSON.stringify({ ok: true, message: "Call ended." });
       }
