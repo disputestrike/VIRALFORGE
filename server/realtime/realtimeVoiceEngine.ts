@@ -192,10 +192,7 @@ export function createCallEngine(opts: EngineOptions): void {
               sigWs.send(JSON.stringify({
                 event: "media",
                 streamSid,
-                media: { 
-                  payload: mulaw.toString("base64"),
-                  track: "outbound_track",
-                },
+                media: { payload: mulaw.toString("base64") },
               }));
               isSpeaking = true;
             }
