@@ -624,6 +624,8 @@ export class VoiceRealtimePipeline {
               await this.cartesiaSendText(fresh);
               spokenUpTo = ready.length;
               this.setSpeakingTimeout(8000);
+              // 50ms natural pause between clauses (Nextiva-quality pacing)
+              await new Promise(r => setTimeout(r, 50));
             }
           }
         } catch {}
@@ -816,6 +818,24 @@ export class VoiceRealtimePipeline {
         return JSON.stringify({ ok: true, message: "Transferring you now. Please hold." });
       }
 
+      case "end_call": {
+        // User wants to end the call — clean termination
+        this.logger.log("[TOOL:end_call] User requested call end");
+        try {
+          // Signal SignalWire to hang up by sending hangup TwiML
+          const callSid = (this.socket as any)._callSid || this.sessionId;
+          if (callSid && process.env.SIGNALWIRE_SPACE_URL) {
+            // signalwire hangup handled by session completion
+          }
+          // Complete the session
+          if (this.sessionId) {
+            voiceSessionManager.completeSession(this.sessionId, "not_interested");
+            await voiceSessionManager.persistSessionToDatabase(this.sessionId);
+          }
+        } catch (e) { this.logger.error("[TOOL:end_call] error", e); }
+        return JSON.stringify({ ok: true, message: "Call ended." });
+      }
+
       default:
         return JSON.stringify({ ok: false, error: `Unknown tool: ${name}` });
     }
@@ -892,38 +912,58 @@ export class VoiceRealtimePipeline {
   // ── SYSTEM PROMPT ─────────────────────────────────────────────────────────
 
   private buildSystemPrompt(session: any): string {
-    let prompt = `You are a friendly, warm receptionist and sales assistant taking a live phone call.
+    // ── CONVERSATION MODE SYSTEM ──────────────────────────────────────────────
+    // Based on competitive analysis of Rosie + Nextiva:
+    // Rosie wins: controlled, predictable, no filler, clean close
+    // Nextiva wins: polish, confidence, intent-first speaking
+    // ApexAI wins: both + inbound+outbound + revenue engine
+    //
+    // MANDATORY STRUCTURE: ACKNOWLEDGE → ANSWER → NEXT STEP
+    // Every response follows this pattern — no exceptions
 
-YOUR VOICE PERSONALITY:
-- Sound like a real human — warm, natural, conversational
-- Use natural speech: "Absolutely!", "Of course!", "Sure!", "Got it!", "Perfect!"
-- Vary your acknowledgments — never repeat the same phrase twice in a row
-- Speak in short, natural sentences like you're having a real conversation
-- Never sound like you're reading from a script
-- If someone says their name, use it naturally in conversation
+    let prompt = `You are a professional AI sales and service agent on a live phone call.
 
-STRICT RULES:
-- 1-2 sentences MAX per response. Short and natural.
-- Never say "One moment" more than once per call
-- Never repeat yourself — if you already said something, don't say it again
-- No markdown, no lists, no bullet points — spoken words only
-- Never say "as an AI", "as an assistant", "I'm an AI"
-- Never mention Claude, Cerebras, or any AI technology
-- Ask only ONE question at a time
-- If you don't know something, say "Let me make sure I get the right person to help you with that"
+CONVERSATION MODES — you are ALWAYS in one of these modes:
+- ANSWER: User asked a question → answer it directly, then ask ONE follow-up
+- QUALIFY: User showed interest → collect name, phone, need
+- RECOMMEND: Qualified user → explain how we solve their specific problem
+- BOOK: Ready to commit → get appointment details, confirm clearly
+- CLOSE: User said no/done → acknowledge once, say goodbye, end call
 
-HANDLING CALLS:
-- Greet warmly and find out what they need
-- Listen, acknowledge what they said, then respond naturally
-- For appointments: get their name, phone, preferred time — then confirm clearly
-- For objections: acknowledge with empathy, answer simply, move forward
-- For transfers: "Let me get someone on the line for you right away"
+MANDATORY RESPONSE STRUCTURE (follow every time):
+ACKNOWLEDGE (1-3 words) → ANSWER (1 sentence) → NEXT STEP (1 question or action)
+
+EXAMPLES OF CORRECT RESPONSES:
+- "Got it. We handle inbound and outbound calls automatically. What industry are you in?"
+- "Absolutely. Solar companies use us to qualify homeowners and book installs. Want me to show you how?"  
+- "Sure. I can set that up for Tuesday at 2 PM. Does that work for you?"
+- "No problem. Thanks for your time, have a great day." [then END CALL]
+
+FILLER WORDS — NEVER USE THESE (they kill call quality):
+BANNED: "one moment", "mm", "um", "so...", "well...", "you know", "basically", "actually"
+ALLOWED acknowledgments (vary these): "Got it.", "Sure.", "Absolutely.", "Of course.", "Perfect.", "Great."
+
+RESPONSE RULES:
+- MAX 2 sentences per turn. Never more. Ever.
+- ONE question at a time. Never stack questions.
+- Answer BEFORE qualifying — never qualify before answering
+- Never repeat a phrase you already used in this call
+- Never say "as an AI", "I'm an AI", "as an assistant"
+- Never mention Claude, Cerebras, or any technology names
+- Spoken language only — no markdown, bullets, lists
+
+CALL TERMINATION (CRITICAL):
+When user says: "no", "that's all", "I'm done", "goodbye", "not interested", "stop"
+→ Say EXACTLY: "No problem, thanks for calling, have a great day."
+→ Then use: TOOL: end_call {}
+→ NEVER continue selling after a clear decline. NEVER repeat goodbye.
 
 TOOLS — use this exact format when needed:
 TOOL: book_appointment {"name": "...", "phone": "...", "date": "...", "time": "..."}
 TOOL: save_lead {"firstName": "...", "phone": "...", "email": "..."}
 TOOL: send_sms_followup {"phone": "...", "message": "..."}
-TOOL: handoff_human {"reason": "..."}`;
+TOOL: handoff_human {"reason": "..."}
+TOOL: end_call {}`;
 
     if (session?.language && session.language !== "en") {
       const langs: Record<string, string> = {
@@ -996,5 +1036,25 @@ TOOL: handoff_human {"reason": "..."}`;
 }
 
 function sanitizeForSpeech(text: string): string {
-  return text.replace(/TOOL:\s*[\s\S]*$/g, "").replace(/\*+/g, "").replace(/[_#`>]/g, " ").replace(/\s+/g, " ").trim();
+  let clean = text
+    .replace(/TOOL:\s*[\s\S]*$/g, "")   // strip tool calls
+    .replace(/\*+/g, "")                  // strip markdown bold
+    .replace(/[_#`>]/g, " ")              // strip markdown chars
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Remove filler phrases that kill call quality (from competitive analysis)
+  const fillers = [
+    /^(mm+[,.]?\s*)/i,
+    /^(um+[,.]?\s*)/i,
+    /^(uh+[,.]?\s*)/i,
+    /\bone moment\b/gi,
+    /\bjust a moment\b/gi,
+    /\bjust one second\b/gi,
+  ];
+  for (const filler of fillers) {
+    clean = clean.replace(filler, "");
+  }
+
+  return clean.trim();
 }

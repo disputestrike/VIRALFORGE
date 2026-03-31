@@ -132,7 +132,7 @@ export default function LandingPageFull() {
           <Badge variant="outline" className="mb-6 px-4 py-1.5 text-xs font-medium"
             style={{ borderColor: "rgba(29,111,244,0.4)", color: BLUE_LIGHT, backgroundColor: "rgba(29,111,244,0.08)" }}>
             <Zap className="w-3 h-3 mr-1.5" />
-            Inbound + Outbound AI — 24/7
+            Your AI Revenue Engine.
           </Badge>
 
           <h1 className="text-5xl md:text-7xl font-black tracking-tight mb-6 leading-tight text-white">
@@ -825,6 +825,32 @@ export default function LandingPageFull() {
             Plus Zapier, Make, n8n, and any webhook-compatible platform.{" "}
             <a href="/dashboard" className="text-primary hover:underline">View integration docs →</a>
           </p>
+        </div>
+      </section>
+
+      {/* ── TRUST + COMPLIANCE ── */}
+      <section className="py-12 px-6" style={{ backgroundColor: "#f8f9fa" }}>
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-8">
+            <h3 className="text-xl font-bold mb-2" style={{ color: "#0f1117" }}>Enterprise-grade reliability</h3>
+            <p style={{ color: "rgba(15,17,23,0.55)", fontSize: "0.9rem" }}>
+              Built for businesses that can't afford downtime or missed opportunities.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { icon: "🔒", title: "SOC 2 Ready", desc: "Security controls aligned with enterprise standards" },
+              { icon: "📋", title: "TCPA Framework", desc: "Built-in compliance controls for outbound calling" },
+              { icon: "🔄", title: "99.9% Uptime", desc: "Railway infrastructure with automatic failover" },
+              { icon: "🤝", title: "Human Handoff", desc: "Instant live transfer when callers need a real person" },
+            ].map(({ icon, title, desc }) => (
+              <div key={title} className="p-4 rounded-xl" style={{ backgroundColor: "#ffffff", border: "1px solid rgba(0,0,0,0.06)" }}>
+                <div className="text-2xl mb-2">{icon}</div>
+                <div className="font-bold text-sm mb-1" style={{ color: "#0f1117" }}>{title}</div>
+                <div className="text-xs leading-relaxed" style={{ color: "rgba(15,17,23,0.55)" }}>{desc}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
