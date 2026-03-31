@@ -60,6 +60,13 @@ export const ENV = {
   adminEmail: process.env.ADMIN_EMAIL ?? "",
   adminName:  process.env.ADMIN_NAME ?? "ApexAI Admin",
 
+  /** After answer, wait this many seconds before opening the bidirectional stream (TwiML Pause before Connect). */
+  voicePreConnectPauseSec: Math.min(10, Math.max(0, parseInt(process.env.VOICE_PRE_CONNECT_PAUSE_SEC ?? "2", 10) || 0)),
+  /** After stream starts + TTS ready, wait before first greeting (ms). Avoids instant robocall feel. */
+  voiceGreetingDelayMs: Math.max(0, parseInt(process.env.VOICE_GREETING_DELAY_MS ?? "1800", 10) || 1800),
+  /** Multiply Cartesia voice profile speed (0.92 = ~8% slower). Set VOICE_TTS_SPEED_SCALE=1 to disable. */
+  voiceTtsSpeedScale: Math.min(1.25, Math.max(0.55, parseFloat(process.env.VOICE_TTS_SPEED_SCALE ?? "0.92") || 0.92)),
+
   // ── Legacy (kept for backward compat) ─────────────────────
   appId: process.env.VITE_APP_ID ?? "",
 

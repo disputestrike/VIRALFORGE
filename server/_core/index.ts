@@ -565,9 +565,13 @@ async function startServer() {
     // <Connect><Stream> is required for bidirectional audio (per SignalWire official example)
     // <Start><Stream> is unidirectional only — cannot send AI audio back to caller
     const statusCallback = `https://${wsHost}/api/voice/status`;
+    const preStreamPause =
+      ENV.voicePreConnectPauseSec > 0
+        ? `  <Pause length="${ENV.voicePreConnectPauseSec}"/>\n`
+        : "";
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Connect action="${statusCallback}" method="POST">
+${preStreamPause}  <Connect action="${statusCallback}" method="POST">
     <Stream url="${streamUrl}" track="inbound_track">
       <Parameter name="sessionId" value="${sid}" />
       <Parameter name="leadId" value="${leadId}" />
@@ -712,11 +716,15 @@ async function startServer() {
     const wsHost = process.env.RAILWAY_PUBLIC_DOMAIN || req.get("host");
     const streamUrl = `wss://${wsHost}/api/voice-stream`;
     const statusCallback = `https://${wsHost}/api/voice/status`;
+    const preStreamPause =
+      ENV.voicePreConnectPauseSec > 0
+        ? `  <Pause length="${ENV.voicePreConnectPauseSec}"/>\n`
+        : "";
 
     res.type("text/xml");
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Connect action="${statusCallback}" method="POST">
+${preStreamPause}  <Connect action="${statusCallback}" method="POST">
     <Stream url="${streamUrl}" track="inbound_track">
       <Parameter name="sessionId" value="${sid}" />
       <Parameter name="leadId" value="" />

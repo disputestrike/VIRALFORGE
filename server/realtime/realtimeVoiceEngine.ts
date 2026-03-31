@@ -39,6 +39,7 @@ import {
   lookupDiscountsSpoken,
   lookupServiceAreaSpoken,
 } from "./toolLayer";
+import { ENV } from "../_core/env";
 
 // ── Clients ───────────────────────────────────────────────────────────────────
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
@@ -703,7 +704,12 @@ export function createCallEngine(opts: EngineOptions): void {
         } catch (e) {
           log(`Session bind: ${e}`);
         }
-        await new Promise((r) => setTimeout(r, 200));
+        const greetDelay = ENV.voiceGreetingDelayMs;
+        if (greetDelay > 0) {
+          traceEvent(callId, "greeting_wait", { ms: greetDelay });
+          log(`[GREETING] Waiting ${greetDelay}ms before speaking (natural pickup)`);
+          await new Promise((r) => setTimeout(r, greetDelay));
+        }
         if (!isEnded) {
           const greeting = `Hi, thanks for calling ${clientConfig.businessName}. How can I help you today?`;
           await speak(greeting, generationEpoch);
@@ -712,7 +718,7 @@ export function createCallEngine(opts: EngineOptions): void {
           setTimeout(() => {
             greetingDone = true;
             log("[GREETING] Barge-in enabled");
-          }, 2500);
+          }, 2800);
         }
       };
       waitForCartesia();
