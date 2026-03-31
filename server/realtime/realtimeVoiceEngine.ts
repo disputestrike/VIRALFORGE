@@ -271,6 +271,9 @@ export function createCallEngine(opts: EngineOptions): void {
           log(`Cartesia error: ${JSON.stringify(msg)}`);
         } else if (msg.type === "done") {
           isSpeaking = false;
+          // Fresh context for the next utterance — reusing a finalized ctx_id causes
+          // Cartesia 400 "unable to infer voice mode" on speak() after greeting.
+          cartesiaContextId = "";
           if (streamSid && sigWs.readyState === WebSocket.OPEN) {
             sigWs.send(JSON.stringify({ event: "mark", streamSid, mark: { name: "done" } }));
           }
@@ -488,7 +491,8 @@ export function createCallEngine(opts: EngineOptions): void {
     ];
 
     const stream = await client.chat.completions.create({
-      model: process.env.CEREBRAS_MODEL || "llama-3.3-70b",
+      // llama-3.3-70b removed from public API (404) — use gpt-oss-120b or llama3.1-8b; override via CEREBRAS_MODEL
+      model: process.env.CEREBRAS_MODEL || "gpt-oss-120b",
       messages,
       stream: true,
       max_tokens: 110,
@@ -523,6 +527,8 @@ export function createCallEngine(opts: EngineOptions): void {
     epoch: number,
     source: "cerebras" | "claude"
   ): Promise<void> {
+    // New TTS utterance for this reply — do not chunk into greeting context_id.
+    cartesiaContextId = "";
     let assembled = "";
     let spokenUpTo = 0;
     let fullText = "";
