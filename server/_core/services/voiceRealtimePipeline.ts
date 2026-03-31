@@ -121,6 +121,9 @@ export class VoiceRealtimePipeline {
     // Connect Cartesia WebSocket for streaming TTS
     await this.connectCartesia();
 
+    // Wait briefly for Deepgram WS to connect (it's async import)
+    await new Promise<void>(resolve => setTimeout(resolve, 500));
+
     // Wait up to 2s for Cartesia WS to open before greeting
     await new Promise<void>(resolve => {
       if (this.cartesiaWs?.readyState === 1) { resolve(); return; }
@@ -435,8 +438,9 @@ export class VoiceRealtimePipeline {
     const combined = Buffer.concat(this.audioChunks);
     this.clearAudioBuffer();
 
-    if (combined.length < 1600) return; // too short
-    if (!this.isSpeechLike(combined)) return; // silence
+    if (combined.length < 800) return; // too short (~100ms at 8kHz)
+    // Don't filter by isSpeechLike here — silence timer already gated this
+    // Whisper/Deepgram will return empty string if no speech detected
 
     this.isProcessing = true;
     const epoch = ++this.generationEpoch;
@@ -473,7 +477,10 @@ export class VoiceRealtimePipeline {
       ...recentHistory.map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
     ];
 
-    const hasCerebras = !!process.env.CEREBRAS_API_KEY;
+    // Check if ANY Cerebras key is configured (pool uses _1 through _5)
+    const hasCerebras = !!(process.env.CEREBRAS_API_KEY ||
+      process.env.CEREBRAS_API_KEY_1 ||
+      process.env.CEREBRAS_API_KEY_2);
     const route = hasCerebras
       ? this.chooseRoute(transcript, this.customer.objectionHistory.length)
       : "smart";
@@ -848,7 +855,7 @@ GOAL: Qualify the lead, handle objections, book appointments.`;
     for (let i = 0; i < buf.length; i++) {
       if (buf[i] !== 0xFF && buf[i] !== 0x7F && buf[i] !== 0xFE && buf[i] !== 0x7E) nonSilence++;
     }
-    return nonSilence > buf.length * 0.12;
+    return nonSilence > buf.length * 0.06; // 6% — phone audio is heavily compressed
   }
 
   private setSpeakingTimeout(ms: number): void {

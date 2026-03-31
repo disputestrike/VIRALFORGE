@@ -335,7 +335,10 @@ export async function routedLLMCall(
   turnHistory: Array<{ role: string; content: string }>,
   objectionCount = 0
 ): Promise<LLMResponse> {
-  const hasCerebras = !!process.env.CEREBRAS_API_KEY;
+  // Check if ANY Cerebras key is configured (pool uses _1 through _5)
+  const hasCerebras = !!(process.env.CEREBRAS_API_KEY ||
+    process.env.CEREBRAS_API_KEY_1 ||
+    process.env.CEREBRAS_API_KEY_2);
   const route = hasCerebras
     ? chooseRoute(transcript, turnHistory, objectionCount)
     : "smart"; // No Cerebras = always use Claude
