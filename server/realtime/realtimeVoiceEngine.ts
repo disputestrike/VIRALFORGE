@@ -212,6 +212,7 @@ export function createCallEngine(opts: EngineOptions): void {
   let turnStartedAt = 0;
   let firstMediaLogged = false;
 
+  /** `connected` + `start` both call this; assign sockets before `open` and skip if CONNECTING to avoid duplicate STT/TTS websockets. */
   function ensureAudioPipeline(): void {
     if (!cartesiaWs || cartesiaWs.readyState !== WebSocket.OPEN) connectCartesia();
     if (!dgWs || dgWs.readyState !== WebSocket.OPEN) connectDeepgram();
@@ -219,13 +220,14 @@ export function createCallEngine(opts: EngineOptions): void {
 
   // ── Cartesia ────────────────────────────────────────────────────────────────
   function connectCartesia() {
+    if (cartesiaWs && cartesiaWs.readyState === WebSocket.CONNECTING) return;
     const ws = new WebSocket(
       `wss://api.cartesia.ai/tts/websocket?api_key=${process.env.CARTESIA_API_KEY}&cartesia_version=2024-11-13`
     );
+    cartesiaWs = ws;
 
     ws.on("open", () => {
       log("Cartesia connected");
-      cartesiaWs = ws;
       traceEvent(callId, "cartesia_ready");
     });
 
@@ -263,7 +265,10 @@ export function createCallEngine(opts: EngineOptions): void {
       }
     });
 
-    ws.on("close", () => { log("Cartesia closed"); cartesiaWs = null; });
+    ws.on("close", () => {
+      log("Cartesia closed");
+      if (cartesiaWs === ws) cartesiaWs = null;
+    });
     ws.on("error", (e) => log(`Cartesia error: ${e.message}`));
   }
 
@@ -311,6 +316,7 @@ export function createCallEngine(opts: EngineOptions): void {
 
   // ── Deepgram STT ────────────────────────────────────────────────────────────
   function connectDeepgram() {
+    if (dgWs && dgWs.readyState === WebSocket.CONNECTING) return;
     const params = new URLSearchParams({
       model: "nova-2",           // nova-2 with mulaw 8kHz phone audio
       encoding: "mulaw",
@@ -328,10 +334,10 @@ export function createCallEngine(opts: EngineOptions): void {
       `wss://api.deepgram.com/v1/listen?${params}`,
       { headers: { Authorization: `Token ${process.env.DEEPGRAM_API_KEY}` } }
     );
+    dgWs = ws;
 
     ws.on("open", () => {
       log("Deepgram STT connected");
-      dgWs = ws;
       dgReady = true;
       traceEvent(callId, "deepgram_ready");
     });
@@ -364,7 +370,13 @@ export function createCallEngine(opts: EngineOptions): void {
       } catch {}
     });
 
-    ws.on("close", () => { log("Deepgram closed"); dgWs = null; });
+    ws.on("close", () => {
+      log("Deepgram closed");
+      if (dgWs === ws) {
+        dgWs = null;
+        dgReady = false;
+      }
+    });
     ws.on("error", (e) => { log(`Deepgram error: ${e.message}`); });
   }
 

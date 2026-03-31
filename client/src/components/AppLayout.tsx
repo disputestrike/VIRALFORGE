@@ -62,6 +62,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [collapsed, setCollapsed] = useState(() => {
     return localStorage.getItem("sidebar-collapsed") === "true";
   });
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("sidebar-collapsed", String(collapsed));
@@ -103,7 +104,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
     : "U";
 
   const sidebarWidth = collapsed ? "64px" : "224px";
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background flex">
