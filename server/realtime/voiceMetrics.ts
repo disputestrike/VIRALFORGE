@@ -11,6 +11,7 @@ export type VoiceTracePhase =
   | "cartesia_ready"
   | "greeting_sent"
   | "stt_final"
+  | "response_pause"
   | "llm_route"
   | "tts_first_chunk"
   | "hangup_signal"

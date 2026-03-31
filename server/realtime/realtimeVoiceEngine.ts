@@ -295,18 +295,20 @@ export function createCallEngine(opts: EngineOptions): void {
       log(`cartesiaSend SKIPPED: no ws or not open (state=${cartesiaWs?.readyState})`);
       return;
     }
-    log(`cartesiaSend: "${text.slice(0,40)}" voiceId=${voiceProfile.cartesiaId}`);
+    const ttsSpeed = Math.min(1.2, Math.max(0.55, voiceProfile.speed * ENV.voiceTtsSpeedScale));
+    log(`cartesiaSend: "${text.slice(0,40)}" voiceId=${voiceProfile.cartesiaId} speed=${ttsSpeed}`);
     if (!cartesiaContextId) cartesiaContextId = `ctx_${Date.now()}`;
 
+    // voice must be ONLY { mode, id } — nesting __experimental_controls breaks validation (400 invalid voice spec).
     cartesiaWs.send(JSON.stringify({
       context_id: cartesiaContextId,
-      model_id: "sonic-english",  // sonic-english is the current production model
+      model_id: "sonic-english",
       voice: {
         mode: "id",
         id: voiceProfile.cartesiaId,
-        __experimental_controls: { speed: voiceProfile.speed },
       },
       transcript: text,
+      speed: ttsSpeed,
       output_format: {
         container: "raw",
         encoding: "pcm_mulaw",
@@ -344,8 +346,8 @@ export function createCallEngine(opts: EngineOptions): void {
       channels: "1",
       punctuate: "true",
       interim_results: "true",
-      endpointing: "300",
-      utterance_end_ms: "750",
+      endpointing: "400",
+      utterance_end_ms: "1000",
       vad_events: "true",
       smart_format: "true",
     });
@@ -402,6 +404,13 @@ export function createCallEngine(opts: EngineOptions): void {
 
   // ── LLM response ────────────────────────────────────────────────────────────
   async function handleUserTurn(transcript: string): Promise<void> {
+    if (isEnded) return;
+
+    const microPause = ENV.voiceResponseMicroPauseMs;
+    if (microPause > 0) {
+      traceEvent(callId, "response_pause", { ms: microPause });
+      await new Promise((r) => setTimeout(r, microPause));
+    }
     if (isEnded) return;
 
     turnCtl = onProcessing(turnCtl);

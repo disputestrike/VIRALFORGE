@@ -67,6 +67,8 @@ export const ENV = {
   voicePlayRingBeforeStream: process.env.VOICE_PLAY_RING_BEFORE_STREAM !== "false",
   /** Multiply Cartesia voice profile speed (~0.90 = slightly slower / more natural vs default). */
   voiceTtsSpeedScale: Math.min(1.25, Math.max(0.55, parseFloat(process.env.VOICE_TTS_SPEED_SCALE ?? "0.90") || 0.9)),
+  /** After user stops speaking (STT final), brief pause before LLM/TTS — structured pacing (~200–350ms; set 0 to disable). */
+  voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "260", 10) || 0),
 
   // ── Legacy (kept for backward compat) ─────────────────────
   appId: process.env.VITE_APP_ID ?? "",
