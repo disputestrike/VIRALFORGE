@@ -86,8 +86,9 @@ export function isObjection(transcript: string): boolean {
 
 export function isComplexTurn(transcript: string): boolean {
   const t = transcript.toLowerCase();
-  if (transcript.length > 160) return true;
-  if ((transcript.match(/\?/g) || []).length >= 2) return true;
+  // Keep most turns on the fast path (Cerebras); reserve Claude for clearly heavy turns
+  if (transcript.length > 220) return true;
+  if ((transcript.match(/\?/g) || []).length >= 3) return true;
   return [
     "how does this work", "what makes you different",
     "compare", "versus", "better than", "prove it",

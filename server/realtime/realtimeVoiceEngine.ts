@@ -41,6 +41,50 @@ import {
 } from "./toolLayer";
 import { ENV } from "../_core/env";
 
+/**
+ * Push LLM text to TTS as soon as it's speakable — not only on full sentence end.
+ * Cuts time-to-first-audio and avoids the "robot waiting for a period" feel.
+ */
+function drainSpeakableToTts(
+  assembled: string,
+  spokenUpTo: number,
+  sendClause: (s: string) => void
+): number {
+  let i = spokenUpTo;
+  while (i < assembled.length) {
+    const rest = assembled.slice(i);
+    if (!rest.trim()) break;
+
+    const sent = rest.match(/^([^.!?]{1,}?[.!?]+\s*)/);
+    if (sent?.[1]?.trim() && sent[1].trim().length >= 2) {
+      sendClause(sent[1]);
+      i += sent[1].length;
+      continue;
+    }
+
+    const comma = rest.match(/^([^,\n]{8,120},)/);
+    if (comma?.[1]?.trim()) {
+      sendClause(comma[1]);
+      i += comma[1].length;
+      continue;
+    }
+
+    if (rest.length >= 54) {
+      const cut = rest.lastIndexOf(" ", 80);
+      if (cut >= 34) {
+        const frag = rest.slice(0, cut);
+        if (frag.trim().length >= 20) {
+          sendClause(frag);
+          i += frag.length;
+          continue;
+        }
+      }
+    }
+    break;
+  }
+  return i;
+}
+
 // ── Clients ───────────────────────────────────────────────────────────────────
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
@@ -102,19 +146,19 @@ CONFIG FACTS (prefer these over guessing):
 - Service areas / ZIPs: ${client.serviceAreas.length ? client.serviceAreas.join(", ") : "not listed — do not claim coverage without verification"}
 - Discounts: ${client.discountsLine || "say promotions vary by eligibility"}
 
-ABSOLUTE RULES:
-- MAX 2 sentences per response. NEVER more. This is enforced.
-- MAX 20 words per sentence.
-- ZERO filler words: never say "um", "uh", "one moment", "let me check", "perfect", "great", "so..."
-- ONE question per response maximum.
-- Answer questions BEFORE trying to qualify or book.
+VOICE & PACE (sound human, not a script):
+- You're a sharp human on the phone — warm, confident, brief. Never stiff or robotic.
+- Max 2 short sentences per turn; ~18 words per sentence max. Keep it tight.
+- Skip long filler ("um", "uh", "one moment", "let me check", "as an AI"). Short natural nods are OK: "Yeah," "Okay," "Sure —" before the answer.
+- One question per turn max unless they asked two things.
+- Answer what they asked first; then one clear next step if needed.
 - If caller declines: say "No problem, thanks for calling, have a great day." then TOOL: end_call {}
-- Never say "as an AI" or mention Claude, Cerebras, or any technology.
-- Spoken words only — no markdown, no bullets, no lists.
+- Never say "as an AI" or name any technology.
+- Spoken words only — no markdown, bullets, or lists.
 
-ALLOWED acknowledgments (vary each turn): "Got it." / "Sure." / "Absolutely." / "Of course."
+RESPONSE SHAPE: [optional 1–4 word nod] → [direct answer] → [optional one short follow-up]
 
-RESPONSE SHAPE: [Acknowledge 1-3 words] → [Answer 1 sentence] → [One next question or action]
+Vary wording each turn — don't repeat the same opener every time.
 
 EXAMPLE PERFECT RESPONSES:
 "Got it. We handle solar inbound calls and book appointments directly to your calendar. Are you getting a lot of inbound leads right now?"
@@ -300,8 +344,8 @@ export function createCallEngine(opts: EngineOptions): void {
       channels: "1",
       punctuate: "true",
       interim_results: "true",
-      endpointing: "500",
-      utterance_end_ms: "1000",
+      endpointing: "300",
+      utterance_end_ms: "750",
       vad_events: "true",
       smart_format: "true",
     });
@@ -428,8 +472,8 @@ export function createCallEngine(opts: EngineOptions): void {
       model: process.env.CEREBRAS_MODEL || "llama-3.3-70b",
       messages,
       stream: true,
-      max_tokens: 120,
-      temperature: 0.3,
+      max_tokens: 110,
+      temperature: 0.45,
     });
 
     await streamToCartesia(stream as any, epoch, "cerebras");
@@ -462,8 +506,6 @@ export function createCallEngine(opts: EngineOptions): void {
     let spokenUpTo = 0;
     let fullText = "";
 
-    const clauseRegex = /[^.!?]+[.!?]+/g;
-
     const sendClause = (text: string) => {
       if (!text.trim() || epoch !== generationEpoch || isEnded) return;
       // Strip tool calls from speech
@@ -485,18 +527,7 @@ export function createCallEngine(opts: EngineOptions): void {
           if (!delta) continue;
           assembled += delta;
           fullText += delta;
-
-          // Find and send complete clauses
-          const matches = assembled.match(clauseRegex);
-          if (matches) {
-            const lastMatch = assembled.lastIndexOf(matches[matches.length - 1]);
-            const ready = assembled.slice(0, lastMatch + matches[matches.length - 1].length);
-            const fresh = ready.slice(spokenUpTo);
-            if (fresh.trim()) {
-              sendClause(fresh);
-              spokenUpTo = ready.length;
-            }
-          }
+          spokenUpTo = drainSpeakableToTts(assembled, spokenUpTo, sendClause);
         }
       } else {
         // Claude streaming
@@ -506,17 +537,7 @@ export function createCallEngine(opts: EngineOptions): void {
             const delta = event.delta.text || "";
             assembled += delta;
             fullText += delta;
-
-            const matches = assembled.match(clauseRegex);
-            if (matches) {
-              const lastMatch = assembled.lastIndexOf(matches[matches.length - 1]);
-              const ready = assembled.slice(0, lastMatch + matches[matches.length - 1].length);
-              const fresh = ready.slice(spokenUpTo);
-              if (fresh.trim()) {
-                sendClause(fresh);
-                spokenUpTo = ready.length;
-              }
-            }
+            spokenUpTo = drainSpeakableToTts(assembled, spokenUpTo, sendClause);
           }
         }
       }
@@ -525,8 +546,9 @@ export function createCallEngine(opts: EngineOptions): void {
       throw e;
     }
 
-    // Send remaining text
+    // Flush anything left (stream ended mid-phrase)
     if (epoch === generationEpoch && !isEnded) {
+      spokenUpTo = drainSpeakableToTts(assembled, spokenUpTo, sendClause);
       const remaining = fullText.slice(spokenUpTo);
       if (remaining.trim()) sendClause(remaining);
       cartesiaFlush();
