@@ -29,18 +29,25 @@ import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Security from "./pages/Security";
 
+function RootPage() {
+  const { user, loading } = useAuth();
+  if (loading) return (
+    <div style={{minHeight:"100vh",background:"#0a0c12",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{color:"rgba(255,255,255,0.5)",fontSize:14}}>Loading...</div>
+    </div>
+  );
+  if (user) {
+    window.location.replace("/dashboard");
+    return null;
+  }
+  return <LandingPage />;
+}
+
 function Router() {
   return (
     <Switch>
       {/* Public pages */}
-      <Route path="/">
-        {() => {
-          const { user, loading } = useAuth();
-          if (loading) return <div style={{minHeight:"100vh",background:"#0a0c12",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{color:"#fff",fontSize:14}}>Loading...</div></div>;
-          if (user) { window.location.replace("/dashboard"); return null; }
-          return <LandingPage />;
-        }}
-      </Route>
+      <Route path="/" component={RootPage} />
       <Route path="/login" component={Login} />
       <Route path="/about" component={About} />
       <Route path="/pricing" component={Pricing} />
