@@ -854,6 +854,16 @@ async function startServer() {
     })
   );
 
+  // ── Cerebras Pool Status ──────────────────────────────────────────────────
+  app.get("/api/cerebras/pool-status", async (_req, res) => {
+    try {
+      const { getCerebrasPoolStatus } = await import("./services/llmRouter");
+      res.json({ ok: true, pool: getCerebrasPoolStatus() });
+    } catch (e: any) {
+      res.json({ ok: false, pool: [], error: e.message });
+    }
+  });
+
   // ─── WebSocket Handler for Voice Streaming ────────────────────────────────
   // This handles real-time audio from SignalWire and processes it
   const wss = new WebSocketServer({ noServer: true });
