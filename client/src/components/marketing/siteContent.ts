@@ -205,9 +205,34 @@ export const channelFeatures: NavMegaItem[] = [
 
 export const resourcesNav: NavMegaItem[] = [
   { href: "#results", title: "Customer stories", description: "Results across roofing, solar, HVAC, and more." },
+  { href: "#capabilities", title: "Platform stack", description: "Phones, CRM, Zapier, workflows, webchat, analytics — what ships in-app." },
   { href: "#faq", title: "FAQ", description: "Setup, compliance, and how billing maps to usage." },
   { href: "/pricing", title: "Pricing", description: "Inbound minutes and outbound lead tiers." },
   { href: "/about", title: "About ApexAI", description: "Why we built inbound + outbound in one product." },
+];
+
+/** Mirrors `docs/integration/CROSSWALK.md` Part 1 (rows 1–20) — product surface in Settings + core flows */
+export const platformCapabilities: { title: string; blurb: string }[] = [
+  { title: "Dedicated phone numbers", blurb: "Provision and activate lines per tenant; inbound SMS routes to your account." },
+  { title: "Knowledge base", blurb: "Upload and crawl sources so voice answers from your facts." },
+  { title: "CRM & lead capture", blurb: "Leads, scoring hooks, and pipelines inside the app." },
+  { title: "AI call summaries", blurb: "Post-call summaries on recordings for coaching and CRM." },
+  { title: "Lead scoring", blurb: "Configurable rules that run when leads are created." },
+  { title: "Voice profiles", blurb: "Multiple Cartesia voices; per-user selection in Settings." },
+  { title: "Spam & blocklist", blurb: "Inbound rejection patterns to protect your lines." },
+  { title: "Escalation rules", blurb: "Keyword routing to human transfer when needed." },
+  { title: "Zapier", blurb: "Outbound webhooks for lead created and call completed." },
+  { title: "CRM connections", blurb: "Salesforce / HubSpot / Pipedrive OAuth stubs and sync path." },
+  { title: "Workflow builder", blurb: "Draft automation graphs for future campaign logic." },
+  { title: "Customer memory", blurb: "Persistent memory store keyed to leads for richer calls." },
+  { title: "Sentiment", blurb: "Transcript-level signals for analytics and QA." },
+  { title: "Support tickets", blurb: "Internal ticketing for handoffs and follow-ups." },
+  { title: "Mobile devices", blurb: "Device registry for app push and account linkage." },
+  { title: "Social connections", blurb: "OAuth surface for future social posting." },
+  { title: "Email sequences", blurb: "Triggered email automation on lead and lifecycle events." },
+  { title: "RCS readiness", blurb: "Carrier registration data model for rich messaging." },
+  { title: "Webchat widgets", blurb: "Embeddable chat that captures leads into the same CRM." },
+  { title: "Analytics dashboard", blurb: "Dashboard breakdowns, snapshots, and funnel metrics." },
 ];
 
 /** Exact bullets from Pricing.tsx — inbound / outbound plans */

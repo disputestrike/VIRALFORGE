@@ -11,6 +11,7 @@ import LandingTestimonialCarousel from "@/components/marketing/LandingTestimonia
 import ApexLogo from "@/components/branding/ApexLogo";
 import { landingColors as C } from "@/components/marketing/landingTheme";
 import {
+  platformCapabilities,
   platformOverview,
   platformPillars,
   pricingInboundBullets,
@@ -32,6 +33,12 @@ import {
   Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+function publicAsset(path: string): string {
+  const base = import.meta.env.BASE_URL || "/";
+  const prefix = base.endsWith("/") ? base : `${base}/`;
+  return `${prefix}${path.replace(/^\//, "")}`;
+}
 
 const testimonials = [
   { name: "Moises R.", co: "Roofing — Dallas", quote: "200+ appointments, 160 contracts, $2M revenue in two weeks.", before: "5% response rate manually", after: "47% with ApexAI", icon: "🏗️" },
@@ -269,6 +276,16 @@ export default function LandingPage() {
             <p className="mt-4 text-lg leading-relaxed text-zinc-300">{platformOverview.subtitle}</p>
           </div>
 
+          <div className="mb-16 overflow-hidden rounded-2xl border border-white/15 bg-white/[0.02]">
+            <img
+              src={publicAsset("marketing/dashboard-analytics.webp")}
+              alt="Analytics dashboard — calls, leads, and outcomes"
+              className="w-full object-cover object-top"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+
           <div className="mb-16 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {platformPillars.map((p) => {
               const Icon = p.icon;
@@ -394,6 +411,50 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* CROSSWALK-aligned capabilities (Settings + core flows) */}
+      <section id="capabilities" className="scroll-mt-24 border-b border-white/20 bg-black px-6 py-20 md:py-24">
+        <div className="mx-auto max-w-6xl">
+          <div className="mx-auto mb-12 max-w-2xl text-center">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-400">Unified platform</p>
+            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">Everything we ship in the product</h2>
+            <p className="mt-4 text-lg text-zinc-300">
+              Same stack behind voice: phones, CRM, Zapier, workflows, webchat, analytics — surfaced in Settings and live calls. Mirrors our integration crosswalk (20 core capabilities).
+            </p>
+          </div>
+          <div className="mb-14 grid gap-6 lg:grid-cols-2">
+            <div className="overflow-hidden rounded-2xl border border-white/15">
+              <img
+                src={publicAsset("marketing/integrations-display.webp")}
+                alt="Integrations and connected tools"
+                className="h-full w-full object-cover"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-white/15">
+              <img
+                src={publicAsset("marketing/workflow-diagram.webp")}
+                alt="Workflow and automation diagram"
+                className="h-full w-full object-cover"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {platformCapabilities.map((cap) => (
+              <div key={cap.title} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <h3 className="text-sm font-semibold text-white">{cap.title}</h3>
+                <p className="mt-1 text-xs leading-relaxed text-zinc-400">{cap.blurb}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-8 text-center text-xs text-zinc-500">
+            Detailed status: <code className="rounded bg-white/5 px-1.5 py-0.5 text-zinc-400">docs/integration/CROSSWALK.md</code>
+          </p>
+        </div>
+      </section>
+
       {/* DIFFERENTIATION */}
       <section id="different" className="scroll-mt-24 border-b border-white/20 bg-black px-6 py-20 md:py-24">
         <div className="mx-auto max-w-5xl">
@@ -511,6 +572,22 @@ export default function LandingPage() {
                 </div>
               );
             })}
+          </div>
+          <div className="mb-12 grid gap-4 md:grid-cols-2">
+            <img
+              src={publicAsset("marketing/team-collaboration.webp")}
+              alt="Team collaboration on revenue and calls"
+              className="h-48 w-full rounded-2xl border border-white/15 object-cover md:h-56"
+              loading="lazy"
+              decoding="async"
+            />
+            <img
+              src={publicAsset("marketing/growth-chart.webp")}
+              alt="Growth and performance chart"
+              className="h-48 w-full rounded-2xl border border-white/15 object-cover md:h-56"
+              loading="lazy"
+              decoding="async"
+            />
           </div>
           <IndustryDemos />
         </div>

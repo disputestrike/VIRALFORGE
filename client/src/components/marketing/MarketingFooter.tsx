@@ -1,3 +1,4 @@
+import { getLoginUrl } from "@/const";
 import { landingColors as C } from "./landingTheme";
 import ApexLogo from "@/components/branding/ApexLogo";
 
@@ -55,11 +56,14 @@ export default function MarketingFooter() {
               <a href="#demo" className={link}>
                 Live demo
               </a>
+              <a href="#capabilities" className={link}>
+                Platform stack
+              </a>
               <a href="/pricing" className={link}>
                 Pricing
               </a>
-              <a href="/dashboard" className={link}>
-                Dashboard
+              <a href={getLoginUrl()} className={link}>
+                Sign in
               </a>
             </div>
           </div>
