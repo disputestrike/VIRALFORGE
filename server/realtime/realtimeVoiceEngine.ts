@@ -24,7 +24,14 @@ import {
 import { getVoiceProfile, type VoiceProfile } from "./voiceProfiles";
 import voiceSessionManager from "../_core/services/voiceSessionManager";
 import { ENV } from "../_core/env";
-import { traceStart, traceEvent, traceEnd, traceTurnTiming } from "./voiceMetrics";
+import {
+  traceStart,
+  traceEvent,
+  traceEnd,
+  traceTurnTiming,
+  markSttFinalForLatency,
+  logSttFinalToTtsLatencyIfPending,
+} from "./voiceMetrics";
 import {
   createTurnController,
   onUserSpeechStart,
@@ -112,6 +119,17 @@ class CerebrasPool {
 
 const cerebrasPool = new CerebrasPool();
 
+/** Mu-law frame energy (same idea as VoiceRealtimePipeline) — fast path for barge-in before STT text. */
+function estimateMulawEnergy(mulawBuf: Buffer): number {
+  let sum = 0;
+  for (let i = 0; i < mulawBuf.length; i++) {
+    const b = mulawBuf[i]!;
+    const distFromSilence = Math.min(Math.abs(b - 0xff), Math.abs(b - 0x7f));
+    sum += distFromSilence;
+  }
+  return mulawBuf.length > 0 ? Math.round(sum / mulawBuf.length) : 0;
+}
+
 // ── System prompt builder ─────────────────────────────────────────────────────
 function buildPrompt(
   state: CallState,
@@ -153,6 +171,9 @@ VOICE & PACE (sound human, not a script):
 - If caller declines: say "No problem, thanks for calling, have a great day." then TOOL: end_call {}
 - Never say "as an AI", "language model", "connection issue", or name any technology. Do not repeat the same apology line twice in one call.
 - Spoken words only — no markdown, bullets, or lists.
+
+STT / TRANSCRIPTION (phone line is noisy):
+- If a word sounds slightly wrong but context is clear (e.g. "solar" vs "so lar", "no" vs "go"), assume the caller's intended meaning and respond naturally. Do not say "What did you say?" unless the transcript is empty or completely unintelligible.
 
 RESPONSE SHAPE: [optional 1–4 word nod] → [direct answer] → [optional one short follow-up]
 
@@ -258,6 +279,7 @@ export function createCallEngine(opts: EngineOptions): void {
         if (msg.type === "chunk" && msg.data) {
           // Request pcm_mulaw + 8kHz in cartesiaSend — same as voiceRealtimePipeline; forward base64 mulaw to SignalWire.
           if (streamSid && sigWs.readyState === WebSocket.OPEN) {
+            if (greetingDone) logSttFinalToTtsLatencyIfPending(callId);
             sigWs.send(JSON.stringify({
               event: "media",
               streamSid,
@@ -341,14 +363,14 @@ export function createCallEngine(opts: EngineOptions): void {
   function connectDeepgram() {
     if (dgWs && dgWs.readyState === WebSocket.CONNECTING) return;
     const params = new URLSearchParams({
-      model: "nova-2",           // nova-2 with mulaw 8kHz phone audio
+      model: "nova-2-phonecall",
       encoding: "mulaw",
       sample_rate: "8000",
       channels: "1",
       punctuate: "true",
       interim_results: "true",
-      endpointing: "400",
-      utterance_end_ms: "1000",
+      endpointing: String(ENV.voiceDeepgramEndpointingMs),
+      utterance_end_ms: String(ENV.voiceDeepgramUtteranceEndMs),
       vad_events: "true",
       smart_format: "true",
     });
@@ -376,9 +398,9 @@ export function createCallEngine(opts: EngineOptions): void {
 
           if (!transcript.trim()) return;
 
-          // Barge-in: only after greeting is done to prevent echo loop
-          if (isSpeaking && greetingDone && transcript.length > 3) {
-            log(`[BARGE-IN] User spoke: "${transcript}"`);
+          // Text backup if energy path missed (avoid double epoch if interruptRequested already set)
+          if (isSpeaking && greetingDone && transcript.trim().length >= 2 && !turnCtl.interruptRequested) {
+            log(`[BARGE-IN] STT: "${transcript}"`);
             turnCtl = onUserSpeechStart(turnCtl);
             generationEpoch++;
             stopSpeaking();
@@ -387,6 +409,7 @@ export function createCallEngine(opts: EngineOptions): void {
           if (isFinal && speechFinal && greetingDone) {
             traceEvent(callId, "stt_final", { textLen: transcript.length });
             log(`[STT] Final: "${transcript}"`);
+            markSttFinalForLatency(callId);
             await handleUserTurn(transcript);
           }
         }
@@ -804,8 +827,26 @@ export function createCallEngine(opts: EngineOptions): void {
         traceEvent(callId, "first_media_in");
       }
 
+      const audio = Buffer.from(payload, "base64");
+      if (audio.length === 0) return;
+
+      // Instant barge-in: energy on raw mu-law (same strategy as VoiceRealtimePipeline).
+      // While assistant audio plays, drop quiet frames so STT is not flooded with echo; loud speech = cut TTS immediately.
+      if (greetingDone && isSpeaking) {
+        const energy = estimateMulawEnergy(audio);
+        const th = ENV.voiceBargeInEnergyThreshold;
+        if (energy > th && !turnCtl.interruptRequested) {
+          log(`[BARGE-IN] energy=${energy} (threshold=${th})`);
+          traceEvent(callId, "barge_in_energy", { energy, threshold: th });
+          turnCtl = onUserSpeechStart(turnCtl);
+          generationEpoch++;
+          stopSpeaking();
+        } else if (energy <= th && !turnCtl.interruptRequested) {
+          return;
+        }
+      }
+
       if (dgReady && dgWs && dgWs.readyState === WebSocket.OPEN) {
-        const audio = Buffer.from(payload, "base64");
         dgWs.send(audio);
       }
     }

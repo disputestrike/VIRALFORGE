@@ -1,5 +1,8 @@
 /**
  * turnController.ts — explicit turn state for phone agents (P0 discipline)
+ *
+ * Fast barge-in is implemented in realtimeVoiceEngine (mu-law energy) and VoiceRealtimePipeline
+ * before STT text arrives — those paths call onUserSpeechStart and stop TTS immediately.
  */
 
 export type TurnState = "idle" | "assistant_speaking" | "user_speaking" | "processing";

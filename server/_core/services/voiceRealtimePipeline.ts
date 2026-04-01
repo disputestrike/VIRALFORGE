@@ -153,15 +153,16 @@ export class VoiceRealtimePipeline {
     }
 
     const params = new URLSearchParams({
-      model: "nova-2-phonecall",  // phone-optimized model
+      model: "nova-2-phonecall",
       encoding: "mulaw",
       sample_rate: "8000",
       channels: "1",
       interim_results: "true",
       punctuate: "true",
       smart_format: "true",
-      endpointing: "500",
-      utterance_end_ms: "1000",
+      endpointing: String(ENV.voiceDeepgramEndpointingMs),
+      utterance_end_ms: String(ENV.voiceDeepgramUtteranceEndMs),
+      vad_events: "true",
     });
 
     const session = this.sessionId ? voiceSessionManager.getSession(this.sessionId) : null;
@@ -326,12 +327,12 @@ export class VoiceRealtimePipeline {
     // Energy-based barge-in (from scaffold: estimateSpeechEnergyPcm16)
     if (this.isSpeaking) {
       const energy = this.estimateEnergy(rawBytes);
-      const threshold = parseInt(process.env.INTERRUPTION_ENERGY_THRESHOLD || "600");
+      const threshold = ENV.voiceBargeInEnergyThreshold;
       if (energy > threshold) {
-        this.logger.log(`[PIPE] barge-in energy=${energy}`);
+        this.logger.log(`[PIPE] barge-in energy=${energy} (threshold=${threshold})`);
         this.interruptSpeech();
       } else {
-        return; // discard non-speech during AI playback
+        return;
       }
     }
 

@@ -82,8 +82,22 @@ export const ENV = {
   voicePlayRingBeforeStream: process.env.VOICE_PLAY_RING_BEFORE_STREAM !== "false",
   /** Multiply Cartesia voice profile speed (~0.91 default; override with VOICE_TTS_SPEED_SCALE). */
   voiceTtsSpeedScale: Math.min(1.25, Math.max(0.55, parseFloat(process.env.VOICE_TTS_SPEED_SCALE ?? "0.91") || 0.91)),
-  /** After user stops speaking (STT final), brief pause before LLM/TTS — structured pacing (~200–350ms; set 0 to disable). */
-  voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "240", 10) || 0),
+  /** After Deepgram speech_final, brief pause before LLM (lower = snappier; 0 = none). */
+  voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "180", 10) || 0),
+  /**
+   * Mu-law barge-in threshold on the 0–127 scale used by estimateEnergy (avg distance from silence).
+   * Lower = easier interrupt. Values &gt; 127 are treated as legacy mis-scaled (e.g. 600) and mapped with /5 so they still work.
+   */
+  voiceBargeInEnergyThreshold: (() => {
+    const raw =
+      parseInt(process.env.VOICE_BARGE_IN_ENERGY_THRESHOLD || process.env.INTERRUPTION_ENERGY_THRESHOLD || "48", 10) || 48;
+    const scaled = raw > 127 ? Math.round(raw / 5) : raw;
+    return Math.max(12, Math.min(125, scaled));
+  })(),
+  /** Deepgram streaming: ms of silence before end-of-turn (lower = faster replies; too low may clip words). */
+  voiceDeepgramEndpointingMs: Math.max(100, Math.min(2000, parseInt(process.env.VOICE_DEEPGRAM_ENDPOINTING_MS ?? "300", 10) || 300)),
+  /** Deepgram utterance_end_ms — cap wait for utterance boundary. */
+  voiceDeepgramUtteranceEndMs: Math.max(300, Math.min(3000, parseInt(process.env.VOICE_DEEPGRAM_UTTERANCE_END_MS ?? "800", 10) || 800)),
   /** Cerebras streaming (phone): max completion tokens per turn — keep low for snappy replies. */
   voiceLlmMaxTokens: Math.min(220, Math.max(56, parseInt(process.env.VOICE_LLM_MAX_TOKENS ?? "105", 10) || 105)),
   /** Cerebras streaming temperature — lower = more consistent; higher = more varied. */
