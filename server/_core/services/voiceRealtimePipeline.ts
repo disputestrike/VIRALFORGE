@@ -63,6 +63,8 @@ export class VoiceRealtimePipeline {
   // Cartesia WebSocket for streaming TTS
   private cartesiaWs: any = null;
   private cartesiaContextId: string | null = null;
+  /** Cartesia: first clause in an assistant utterance must use continue=false. */
+  private cartesiaNeedsNewContext = true;
 
   // Customer state
   private customer: CustomerState = { objectionHistory: [], qualification: {} };
@@ -152,18 +154,26 @@ export class VoiceRealtimePipeline {
       return;
     }
 
+    const model = (process.env.VOICE_DEEPGRAM_MODEL ?? "nova-2-phonecall").trim();
     const params = new URLSearchParams({
-      model: "nova-2",
+      model,
       encoding: "mulaw",
       sample_rate: "8000",
       channels: "1",
       interim_results: "true",
       punctuate: "true",
-      smart_format: "true",
       endpointing: String(ENV.voiceDeepgramEndpointingMs),
-      utterance_end_ms: String(ENV.voiceDeepgramUtteranceEndMs),
-      vad_events: "true",
+      language: "en",
     });
+    if (process.env.VOICE_DEEPGRAM_USE_UTTERANCE_END === "true") {
+      params.set("utterance_end_ms", String(ENV.voiceDeepgramUtteranceEndMs));
+    }
+    if (process.env.VOICE_DEEPGRAM_VAD_EVENTS === "true") {
+      params.set("vad_events", "true");
+    }
+    if (process.env.VOICE_DEEPGRAM_SMART_FORMAT === "true") {
+      params.set("smart_format", "true");
+    }
 
     const session = this.sessionId ? voiceSessionManager.getSession(this.sessionId) : null;
     if (session?.language && session.language !== "en") {
@@ -176,9 +186,18 @@ export class VoiceRealtimePipeline {
     import("ws").then(({ default: WebSocket }) => {
       const ws = new WebSocket(url, { headers: { Authorization: `Token ${apiKey}` } });
 
+      ws.on("unexpected-response", (_req: unknown, res: import("http").IncomingMessage) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (c: Buffer) => chunks.push(c));
+        res.on("end", () => {
+          const body = Buffer.concat(chunks).toString("utf8").slice(0, 800);
+          this.logger.error(`[PIPE:DG] handshake HTTP ${res.statusCode}: ${body}`);
+        });
+      });
+
       ws.on("open", () => {
         this.deepgramReady = true;
-        this.logger.log("[PIPE:DG] connected");
+        this.logger.log(`[PIPE:DG] connected model=${model}`);
       });
 
       ws.on("message", async (raw: any) => {
@@ -268,13 +287,16 @@ export class VoiceRealtimePipeline {
       }
     } catch {}
 
+    const continueCtx = !this.cartesiaNeedsNewContext;
+    this.cartesiaNeedsNewContext = false;
+
     this.cartesiaWs.send(JSON.stringify({
       context_id: this.cartesiaContextId,
-      model_id: "sonic-2",
+      model_id: "sonic-english",
       voice: { mode: "id", id: voiceId },
       transcript: text,
       output_format: { container: "raw", encoding: "pcm_mulaw", sample_rate: 8000 },
-      continue: true,
+      continue: continueCtx,
     }));
   }
 
@@ -302,6 +324,7 @@ export class VoiceRealtimePipeline {
     const greeting = "Hi, thanks for calling. How can I help you today?";
 
     if (this.cartesiaWs?.readyState === 1) {
+      this.cartesiaNeedsNewContext = true;
       // Stream greeting through Cartesia WS
       await this.cartesiaSendText(greeting);
       this.cartesiaFlush();
@@ -584,6 +607,7 @@ export class VoiceRealtimePipeline {
     transcript: string,
     epoch: number
   ): Promise<void> {
+    this.cartesiaNeedsNewContext = true;
     const { cerebrasPool } = await import("./llmRouter");
     let response: Response;
     try {
@@ -657,6 +681,7 @@ export class VoiceRealtimePipeline {
     transcript: string,
     epoch: number
   ): Promise<void> {
+    this.cartesiaNeedsNewContext = true;
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 

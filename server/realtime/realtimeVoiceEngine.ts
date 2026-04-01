@@ -352,13 +352,14 @@ export function createCallEngine(opts: EngineOptions): void {
     log(`cartesiaSend: "${text.slice(0,40)}" voiceId=${voiceProfile.cartesiaId} speed=${ttsSpeed}`);
     if (!cartesiaContextId) cartesiaContextId = `ctx_${Date.now()}`;
 
+    const voiceId = voiceProfile.cartesiaId?.trim() || "694f9389-aac1-45b6-b726-9d9369183238";
     // voice must be ONLY { mode, id } — nesting __experimental_controls breaks validation (400 invalid voice spec).
     cartesiaWs.send(JSON.stringify({
       context_id: cartesiaContextId,
       model_id: "sonic-english",
       voice: {
         mode: "id",
-        id: voiceProfile.cartesiaId,
+        id: voiceId,
       },
       transcript: text,
       speed: ttsSpeed,
@@ -392,27 +393,51 @@ export function createCallEngine(opts: EngineOptions): void {
   // ── Deepgram STT ────────────────────────────────────────────────────────────
   function connectDeepgram() {
     if (dgWs && dgWs.readyState === WebSocket.CONNECTING) return;
+    const apiKey = (process.env.DEEPGRAM_API_KEY ?? "").trim();
+    if (!apiKey) {
+      log("Deepgram skipped: no DEEPGRAM_API_KEY");
+      return;
+    }
+
+    // Minimal query set avoids HTTP 400 on handshake (telephony-optimized model + mulaw 8k).
+    // Extra flags (utterance_end_ms, vad_events, smart_format) caused 400 on some projects — opt in via env.
+    const model = (process.env.VOICE_DEEPGRAM_MODEL ?? "nova-2-phonecall").trim();
     const params = new URLSearchParams({
-      model: "nova-2",
+      model,
       encoding: "mulaw",
       sample_rate: "8000",
       channels: "1",
       punctuate: "true",
       interim_results: "true",
       endpointing: String(ENV.voiceDeepgramEndpointingMs),
-      utterance_end_ms: String(ENV.voiceDeepgramUtteranceEndMs),
-      vad_events: "true",
-      smart_format: "true",
+      language: "en",
     });
+    // Optional — was part of 400 responses on some accounts; enable explicitly if needed.
+    if (process.env.VOICE_DEEPGRAM_USE_UTTERANCE_END === "true") {
+      params.set("utterance_end_ms", String(ENV.voiceDeepgramUtteranceEndMs));
+    }
+    if (process.env.VOICE_DEEPGRAM_VAD_EVENTS === "true") {
+      params.set("vad_events", "true");
+    }
+    if (process.env.VOICE_DEEPGRAM_SMART_FORMAT === "true") {
+      params.set("smart_format", "true");
+    }
 
-    const ws = new WebSocket(
-      `wss://api.deepgram.com/v1/listen?${params}`,
-      { headers: { Authorization: `Token ${process.env.DEEPGRAM_API_KEY}` } }
-    );
+    const url = `wss://api.deepgram.com/v1/listen?${params}`;
+    const ws = new WebSocket(url, { headers: { Authorization: `Token ${apiKey}` } });
     dgWs = ws;
 
+    ws.on("unexpected-response", (_req, res: import("http").IncomingMessage) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (c: Buffer) => chunks.push(c));
+      res.on("end", () => {
+        const body = Buffer.concat(chunks).toString("utf8").slice(0, 800);
+        log(`Deepgram handshake HTTP ${res.statusCode}: ${body}`);
+      });
+    });
+
     ws.on("open", () => {
-      log("Deepgram STT connected");
+      log(`Deepgram STT connected (model=${model})`);
       dgReady = true;
       traceEvent(callId, "deepgram_ready");
     });
@@ -610,6 +635,8 @@ export function createCallEngine(opts: EngineOptions): void {
     let assembled = "";
     let spokenUpTo = 0;
     let fullText = "";
+    /** Cartesia requires the first frame of a context to use continue=false; continuation uses continue=true. */
+    let firstTtsClause = true;
 
     const sendClause = (text: string) => {
       if (!text.trim() || epoch !== generationEpoch || isEnded) return;
@@ -621,7 +648,8 @@ export function createCallEngine(opts: EngineOptions): void {
         .replace(/\s+/g, " ")
         .trim();
       if (!clean) return;
-      cartesiaSend(clean, true);
+      cartesiaSend(clean, !firstTtsClause);
+      firstTtsClause = false;
     };
 
     try {
