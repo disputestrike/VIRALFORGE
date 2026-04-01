@@ -667,7 +667,10 @@ export function createCallEngine(opts: EngineOptions): void {
         .replace(/\s+/g, " ")
         .trim();
       if (!clean) return;
-      cartesiaSend(clean, !firstTtsClause);
+      // Each clause gets its OWN context_id — never chain continue=true
+      // Chaining causes "context closed" errors when Cartesia finalizes mid-stream
+      cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+      cartesiaSend(clean, false);
       firstTtsClause = false;
     };
 
