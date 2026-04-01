@@ -98,8 +98,8 @@ export const ENV = {
   voiceDeepgramEndpointingMs: Math.max(100, Math.min(2000, parseInt(process.env.VOICE_DEEPGRAM_ENDPOINTING_MS ?? "300", 10) || 300)),
   /** Deepgram utterance_end_ms — cap wait for utterance boundary. */
   voiceDeepgramUtteranceEndMs: Math.max(300, Math.min(3000, parseInt(process.env.VOICE_DEEPGRAM_UTTERANCE_END_MS ?? "800", 10) || 800)),
-  /** Cerebras streaming (phone): max completion tokens per turn — default allows real multi-sentence turns. */
-  voiceLlmMaxTokens: Math.min(220, Math.max(56, parseInt(process.env.VOICE_LLM_MAX_TOKENS ?? "165", 10) || 165)),
+  /** Cerebras / voice LLM: max completion tokens per turn (phone). Cap 512 so env can request fuller answers. */
+  voiceLlmMaxTokens: Math.min(512, Math.max(120, parseInt(process.env.VOICE_LLM_MAX_TOKENS ?? "320", 10) || 320)),
   /** Cerebras streaming temperature — lower = more consistent; higher = more varied. */
   voiceLlmTemperature: Math.min(0.85, Math.max(0.2, parseFloat(process.env.VOICE_LLM_TEMPERATURE ?? "0.40") || 0.4)),
   /**

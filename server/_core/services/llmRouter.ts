@@ -8,6 +8,11 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { ENV } from "../env";
+
+function voiceStreamTemperature(): number {
+  return ENV.voiceLlmTemperature;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -259,7 +264,13 @@ class CerebrasKeyPool {
               Authorization: `Bearer ${slot.key}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.35, stream: true }),
+            body: JSON.stringify({
+              model,
+              messages,
+              max_tokens: maxTokens,
+              temperature: voiceStreamTemperature(),
+              stream: true,
+            }),
             signal: AbortSignal.timeout(10000),
           });
 

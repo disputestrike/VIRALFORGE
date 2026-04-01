@@ -19,7 +19,9 @@ export const DEFAULT_CLIENT: ClientConfig = {
   serviceAreas: [],
   faqAnswers: {
     what_is:
-      "Apex AI is a phone and messaging platform that answers calls, qualifies leads, and helps book appointments.",
+      "Apex AI is an AI phone-agent platform: we answer inbound calls 24/7, qualify leads, book appointments, send SMS follow-ups, and plug into CRMs and calendars so businesses never miss revenue when the phone rings.",
+    who_for:
+      "We work with home services, solar, HVAC, med spas, and any business that lives or dies on phone leads — owners who need coverage after hours and consistent follow-up.",
   },
 };
 

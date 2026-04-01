@@ -239,13 +239,13 @@ export function createCallEngine(opts: EngineOptions): void {
     if (sid) {
       const s = voiceSessionManager.getSession(sid);
       if (s?.conversationHistory?.length) {
-        return s.conversationHistory.slice(-8).map((m) => ({
+        return s.conversationHistory.slice(-16).map((m) => ({
           role: m.role,
           content: m.content,
         }));
       }
     }
-    return conversationHistory.slice(-8);
+    return conversationHistory.slice(-16);
   }
   let firstMediaLogged = false;
 
@@ -545,16 +545,16 @@ export function createCallEngine(opts: EngineOptions): void {
       "Sorry, I'm having a brief connection issue. Could you repeat that?";
 
     try {
-      await respondCerebras(epoch);
+      await respondCerebras(epoch, transcript);
     } catch (e: any) {
       log(`[ERROR] Cerebras LLM failed: ${e.message}`);
       try {
-        await respondCerebras(epoch);
+        await respondCerebras(epoch, transcript);
       } catch (e2: any) {
         log(`[ERROR] Cerebras retry failed: ${e2.message}`);
         if (allowAnthropic) {
           try {
-            await respondAnthropicFallback(epoch);
+            await respondAnthropicFallback(epoch, transcript);
           } catch (e3: any) {
             log(`[ERROR] Anthropic fallback failed: ${e3.message}`);
             try {
@@ -571,9 +571,26 @@ export function createCallEngine(opts: EngineOptions): void {
     traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
   }
 
-  async function respondCerebras(epoch: number): Promise<void> {
+  async function buildSystemPromptWithTenant(userTranscript: string): Promise<string> {
+    const base = buildVoiceSystemPrompt(callState, businessName, industry, clientConfig);
+    if (!activeUserId) return base;
+    try {
+      const { buildVoiceTenantContextBlock } = await import("../_core/services/tenantContextForVoice");
+      const block = await buildVoiceTenantContextBlock({
+        userId: activeUserId,
+        leadId: activeLeadId ?? null,
+        userMessage: userTranscript,
+      });
+      if (block.trim()) return `${base}\n\n${block}`;
+    } catch (e) {
+      log(`[Voice] tenant KB context failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    return base;
+  }
+
+  async function respondCerebras(epoch: number, userTranscript: string): Promise<void> {
     const client = cerebrasPool.getClient();
-    const prompt = buildVoiceSystemPrompt(callState, businessName, industry, clientConfig);
+    const prompt = await buildSystemPromptWithTenant(userTranscript);
     const messages = [
       { role: "system" as const, content: prompt },
       ...historyForLlm(),
@@ -613,10 +630,10 @@ export function createCallEngine(opts: EngineOptions): void {
     throw lastErr;
   }
 
-  async function respondAnthropicFallback(epoch: number): Promise<void> {
+  async function respondAnthropicFallback(epoch: number, userTranscript: string): Promise<void> {
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-    const prompt = buildVoiceSystemPrompt(callState, businessName, industry, clientConfig);
+    const prompt = await buildSystemPromptWithTenant(userTranscript);
     const messages = historyForLlm().map(m => ({
       role: m.role as "user" | "assistant",
       content: m.content,
@@ -624,7 +641,8 @@ export function createCallEngine(opts: EngineOptions): void {
 
     const stream = await client.messages.stream({
       model: process.env.CLAUDE_MODEL || "claude-opus-4-5",
-      max_tokens: 200,
+      max_tokens: ENV.voiceLlmMaxTokens,
+      temperature: ENV.voiceLlmTemperature,
       system: prompt,
       messages,
     });

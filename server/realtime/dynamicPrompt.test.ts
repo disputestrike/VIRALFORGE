@@ -17,5 +17,7 @@ describe("buildVoiceSystemPrompt", () => {
     expect(out).toContain("CURRENT MODE");
     expect(out).toContain("BOOKING POLICY");
     expect(out).toContain("20008");
+    expect(out).toContain("MANDATORY COMPANY FACTS");
+    expect(out).toContain("what_is:");
   });
 });
