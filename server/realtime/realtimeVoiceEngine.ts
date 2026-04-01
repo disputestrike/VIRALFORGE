@@ -630,7 +630,8 @@ export function createCallEngine(opts: EngineOptions): void {
     epoch: number,
     source: "cerebras" | "claude"
   ): Promise<void> {
-    // Fresh context for every response — prevents "context closed" cascade errors
+    // Fresh context for this entire response — all clauses share it via continue=true
+    // stopSpeaking() cancels this one context ID to stop all audio instantly
     cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
     let assembled = "";
     let spokenUpTo = 0;
@@ -640,21 +641,20 @@ export function createCallEngine(opts: EngineOptions): void {
 
     const sendClause = (text: string) => {
       if (!text.trim() || epoch !== generationEpoch || isEnded) return;
-      // Strip tool calls, URLs, markdown from speech
       const clean = text
-        .replace(/TOOL:\s*\w+\s*\{[^}]*\}/g, "")  // remove tool calls
-        .replace(/https?:\/\/[^\s]+/gi, "")           // remove URLs
-        .replace(/www\.[^\s]+/gi, "")                  // remove www links
+        .replace(/TOOL:\s*\w+\s*\{[^}]*\}/g, "")
+        .replace(/https?:\/\/[^\s]+/gi, "")
+        .replace(/www\.[^\s]+/gi, "")
         .replace(/\*+/g, "")
         .replace(/[_#`]/g, " ")
-        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")   // [text](url) → text only
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
         .replace(/\s+/g, " ")
         .trim();
       if (!clean) return;
-      // Each clause gets its OWN context_id — never chain continue=true
-      // Chaining causes "context closed" errors when Cartesia finalizes mid-stream
-      cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
-      cartesiaSend(clean, false);
+      // ONE context per full response — continue=true chains clauses together
+      // stopSpeaking() cancels this single context → stops ALL clauses instantly
+      // Fresh context set at start of streamToCartesia before first clause
+      cartesiaSend(clean, !firstTtsClause);
       firstTtsClause = false;
     };
 
