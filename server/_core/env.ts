@@ -76,8 +76,8 @@ export const ENV = {
    * Set VOICE_PLAY_RING_BEFORE_STREAM=false to skip (e.g. debugging).
    */
   voicePlayRingBeforeStream: process.env.VOICE_PLAY_RING_BEFORE_STREAM !== "false",
-  /** Multiply Cartesia voice profile speed (~0.90 = slightly slower / more natural vs default). */
-  voiceTtsSpeedScale: Math.min(1.25, Math.max(0.55, parseFloat(process.env.VOICE_TTS_SPEED_SCALE ?? "0.90") || 0.9)),
+  /** Multiply Cartesia voice profile speed (~0.91 default; override with VOICE_TTS_SPEED_SCALE). */
+  voiceTtsSpeedScale: Math.min(1.25, Math.max(0.55, parseFloat(process.env.VOICE_TTS_SPEED_SCALE ?? "0.91") || 0.91)),
   /** After user stops speaking (STT final), brief pause before LLM/TTS — structured pacing (~200–350ms; set 0 to disable). */
   voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "240", 10) || 0),
   /** Cerebras streaming (phone): max completion tokens per turn — keep low for snappy replies. */
