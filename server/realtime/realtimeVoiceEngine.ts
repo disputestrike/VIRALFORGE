@@ -23,6 +23,7 @@ import {
 } from "./callPolicy";
 import { getVoiceProfile, type VoiceProfile } from "./voiceProfiles";
 import voiceSessionManager from "../_core/services/voiceSessionManager";
+import { ENV } from "../_core/env";
 import { traceStart, traceEvent, traceEnd, traceTurnTiming } from "./voiceMetrics";
 import {
   createTurnController,
@@ -37,7 +38,6 @@ import {
   lookupDiscountsSpoken,
   lookupServiceAreaSpoken,
 } from "./toolLayer";
-import { ENV } from "../_core/env";
 import { cerebrasModelCandidates } from "../_core/services/llmRouter";
 
 /**
@@ -685,16 +685,16 @@ export function createCallEngine(opts: EngineOptions): void {
 
     // Terminate SignalWire call
     const sid = callSid;
-    if (sid && process.env.SIGNALWIRE_SPACE_URL && process.env.SIGNALWIRE_PROJECT_ID) {
+    if (sid && ENV.signalwireSpaceUrl && ENV.signalwireProjectId && ENV.signalwireToken) {
       try {
         await fetch(
-          `https://${process.env.SIGNALWIRE_SPACE_URL}/api/laml/2010-04-01/Accounts/${process.env.SIGNALWIRE_PROJECT_ID}/Calls/${sid}`,
+          `https://${ENV.signalwireSpaceUrl}/api/laml/2010-04-01/Accounts/${ENV.signalwireProjectId}/Calls/${sid}`,
           {
             method: "POST",
             headers: {
               "Content-Type": "application/x-www-form-urlencoded",
               Authorization: "Basic " + Buffer.from(
-                `${process.env.SIGNALWIRE_PROJECT_ID}:${process.env.SIGNALWIRE_API_KEY}`
+                `${ENV.signalwireProjectId}:${ENV.signalwireToken}`
               ).toString("base64"),
             },
             body: "Status=completed",

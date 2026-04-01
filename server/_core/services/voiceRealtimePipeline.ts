@@ -14,6 +14,7 @@
 import * as voiceSessionManager from "./voiceSessionManager";
 import { resolveVoiceProfile } from "./voiceProfiles";
 import { routedLLMCall } from "./llmRouter";
+import { ENV } from "../env";
 
 type OutboundSocket = { send(data: string): void; close?(): void };
 type PipelineLogger = Pick<Console, "log" | "warn" | "error">;
@@ -825,13 +826,13 @@ export class VoiceRealtimePipeline {
         try {
           // Terminate SignalWire call via REST API
           const callSid = (this.socket as any)._callSid;
-          if (callSid && process.env.SIGNALWIRE_SPACE_URL && process.env.SIGNALWIRE_API_KEY && process.env.SIGNALWIRE_PROJECT_ID) {
-            const url = `https://${process.env.SIGNALWIRE_SPACE_URL}/api/laml/2010-04-01/Accounts/${process.env.SIGNALWIRE_PROJECT_ID}/Calls/${callSid}`;
+          if (callSid && ENV.signalwireSpaceUrl && ENV.signalwireToken && ENV.signalwireProjectId) {
+            const url = `https://${ENV.signalwireSpaceUrl}/api/laml/2010-04-01/Accounts/${ENV.signalwireProjectId}/Calls/${callSid}`;
             await fetch(url, {
               method: "POST",
               headers: {
                 "Content-Type": "application/x-www-form-urlencoded",
-                "Authorization": "Basic " + Buffer.from(`${process.env.SIGNALWIRE_PROJECT_ID}:${process.env.SIGNALWIRE_API_KEY}`).toString("base64"),
+                "Authorization": "Basic " + Buffer.from(`${ENV.signalwireProjectId}:${ENV.signalwireToken}`).toString("base64"),
               },
               body: "Status=completed",
             });

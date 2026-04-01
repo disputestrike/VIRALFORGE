@@ -300,11 +300,10 @@ async function startServer() {
         console.log(`[EmailWorker] ▶ QUEUED→PROCESSING | jobId: ${job.id} | type: ${job.data.type} | email: ${job.data.email} | leadId: ${job.data.leadId}`);
         try {
           const { Resend } = await import("resend");
-          const resend = new Resend(process.env.RESEND_API_KEY);
+          const resend = new Resend(ENV.resendApiKey);
 
           const { email, type, leadName, scheduledTime, calendarLink } = job.data;
-          const SENDER_EMAIL = process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || "noreply@apexai.com";
-          const SENDER_NAME = process.env.RESEND_FROM_NAME || process.env.FROM_NAME || "ApexAI";
+          const SENDER_NAME = ENV.resendFromName;
 
           let subject = "";
           let html = "";
@@ -365,7 +364,7 @@ async function startServer() {
 
           // Send email
           const result = await resend.emails.send({
-            from: `${SENDER_NAME} <${SENDER_EMAIL}>`,
+            from: ENV.resendFromHeader,
             to: email,
             subject: subject,
             html: html,

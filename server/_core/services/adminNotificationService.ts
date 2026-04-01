@@ -6,16 +6,15 @@
  */
 
 import * as queueService from './queue';
-
-const RESEND_KEY = process.env.RESEND_API_KEY;
+import { ENV } from '../env';
 
 async function sendAdminEmailDirect(subject: string, html: string): Promise<void> {
   if (!ADMIN_EMAIL) return;
-  if (RESEND_KEY) {
+  if (ENV.resendApiKey) {
     try {
       const { Resend } = await import('resend');
-      const resend = new Resend(RESEND_KEY);
-      await resend.emails.send({ from: `${process.env.RESEND_FROM_NAME || process.env.FROM_NAME || 'ApexAI'} <${process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || 'noreply@apexai.com'}>`, to: ADMIN_EMAIL, subject, html });
+      const resend = new Resend(ENV.resendApiKey);
+      await resend.emails.send({ from: ENV.resendFromHeader, to: ADMIN_EMAIL, subject, html });
       return;
     } catch (e) {
       console.error('[AdminNotify] Resend failed:', e);

@@ -38,7 +38,7 @@ const groups = [
   },
   {
     name: "Email (Resend)",
-    keys: ["RESEND_API_KEY"],
+    keys: ["RESEND_API_KEY", "RESEND_FROM_EMAIL", "RESEND_FROM_NAME"],
   },
   {
     name: "Database",

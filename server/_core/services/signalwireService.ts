@@ -1,19 +1,12 @@
 /**
  * SIGNALWIRE SERVICE — Voice Calls + SMS
- * Replaces Twilio. Uses SignalWire REST API (Twilio-compatible).
- *
- * Credentials (set in Railway Variables):
- *   SIGNALWIRE_PROJECT_ID  = 1f2c4e53-292d-4389-ba0c-5ff2fa07fb5e
- *   SIGNALWIRE_TOKEN       = PT4238c7e4...
- *   SIGNALWIRE_SPACE_URL   = apexai1.signalwire.com
- *   SIGNALWIRE_PHONE_NUMBER = +18336596005
- *   SIGNALWIRE_SIGNING_KEY = PSK_z6bSZsDasA1oENvdsNZ16bGu
- *
- * Cost: ~$0.003/min (vs Twilio $0.014/min — 4x cheaper)
- * thinQ LCR: add THINQ_ACCOUNT_ID + THINQ_AUTH_TOKEN later for $0.001-0.002/min
+ * Uses SignalWire REST API (Twilio-compatible).
+ * Railway: SIGNALWIRE_PROJECT_ID, SIGNALWIRE_TOKEN, SIGNALWIRE_SPACE_URL,
+ * SIGNALWIRE_PHONE_NUMBER (spaces/parens OK — normalized via ENV), SIGNALWIRE_SIGNING_KEY.
  */
 
 import { ENV } from "../env";
+import { normalizeToE164US } from "../phoneE164";
 
 // ── SignalWire client (Twilio-compatible REST API) ─────────────────────────
 function getSignalWireClient() {
@@ -65,13 +58,14 @@ export async function initiateCall(data: {
   if (!ENV.signalwirePhoneNumber) throw new Error("SIGNALWIRE_PHONE_NUMBER is required");
 
   const sessionId = data.sessionId || `session_${Date.now()}`;
-  const callerNumber = await getOptimalCallerNumber(data.phoneNumber);
+  const toNumber = normalizeToE164US(data.phoneNumber) || data.phoneNumber.trim();
+  const callerNumber = await getOptimalCallerNumber(toNumber);
 
   // Build webhook URL — same routes as before, no changes needed
   const baseUrl = ENV.publicUrl;
 
   const call = await client.calls.create({
-    to: data.phoneNumber,
+    to: toNumber,
     from: callerNumber,
     url: `${baseUrl}/api/voice/start?leadId=${data.leadId}&sessionId=${sessionId}&campaignId=${data.campaignId || ""}`,
     statusCallback: `${baseUrl}/api/voice/status`,
@@ -80,7 +74,7 @@ export async function initiateCall(data: {
     recordingStatusCallback: `${baseUrl}/api/voice/recording`,
   });
 
-  console.log(`[SignalWire] Call initiated: ${call.sid} → ${data.phoneNumber} from ${callerNumber}`);
+  console.log(`[SignalWire] Call initiated: ${call.sid} → ${toNumber} from ${callerNumber}`);
   return { callSid: call.sid, status: call.status };
 }
 
@@ -92,15 +86,16 @@ export async function sendSMS(data: {
   const client = getSignalWireClient();
   if (!ENV.signalwirePhoneNumber) throw new Error("SIGNALWIRE_PHONE_NUMBER is required");
 
-  const fromNumber = await getOptimalCallerNumber(data.to);
+  const toNumber = normalizeToE164US(data.to) || data.to.trim();
+  const fromNumber = await getOptimalCallerNumber(toNumber);
 
   const message = await client.messages.create({
     body: data.body,
     from: fromNumber,
-    to: data.to,
+    to: toNumber,
   });
 
-  console.log(`[SignalWire] SMS sent: ${message.sid} → ${data.to}`);
+  console.log(`[SignalWire] SMS sent: ${message.sid} → ${toNumber}`);
   return { messageSid: message.sid, status: message.status };
 }
 

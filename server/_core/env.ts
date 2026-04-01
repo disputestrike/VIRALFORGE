@@ -3,6 +3,8 @@
  * All process.env reads go through here — never access process.env directly in app code
  */
 
+import { normalizeToE164US } from "./phoneE164";
+
 function hasAnyCerebrasKey(): boolean {
   if ((process.env.CEREBRAS_API_KEY ?? "").trim()) return true;
   for (let i = 1; i <= 10; i++) {
@@ -37,7 +39,7 @@ export const ENV = {
   signalwireProjectId:   process.env.SIGNALWIRE_PROJECT_ID ?? "",
   signalwireToken:       process.env.SIGNALWIRE_TOKEN ?? "",
   signalwireSpaceUrl:    process.env.SIGNALWIRE_SPACE_URL ?? "",
-  signalwirePhoneNumber: process.env.SIGNALWIRE_PHONE_NUMBER ?? "",
+  signalwirePhoneNumber: normalizeToE164US(process.env.SIGNALWIRE_PHONE_NUMBER ?? "") || (process.env.SIGNALWIRE_PHONE_NUMBER ?? "").trim(),
   signalwireSigningKey:  process.env.SIGNALWIRE_SIGNING_KEY ?? "",
 
   // ── thinQ LCR (optional — add later for even cheaper routing) ────────────
@@ -46,7 +48,9 @@ export const ENV = {
   thinqSipDomain:  process.env.THINQ_SIP_DOMAIN ?? "sip.thinq.com",
 
   // ── Resend (transactional email) ──────────────────────────
-  resendApiKey: process.env.RESEND_API_KEY ?? "",
+  resendApiKey:     process.env.RESEND_API_KEY ?? "",
+  resendFromEmail:  process.env.RESEND_FROM_EMAIL ?? "",
+  resendFromName:   process.env.RESEND_FROM_NAME ?? "ApexAI",
 
   // ── ElevenLabs (TTS) ──────────────────────────────────────
   elevenLabsApiKey: process.env.ELEVENLABS_API_KEY ?? "",
@@ -114,6 +118,13 @@ export const ENV = {
     return this.deepgramApiKey !== "" && this.cartesiaApiKey !== "" && llm;
   },
   get queueEnabled()  { return this.redisUrl !== ""; },
+
+  /** Resend `from` header — uses Railway RESEND_FROM_* when set. */
+  get resendFromHeader(): string {
+    const email = this.resendFromEmail || "noreply@apexai.com";
+    const name = (this.resendFromName || "ApexAI").trim() || "ApexAI";
+    return `${name} <${email}>`;
+  },
   /** TRPC / templates / SMS-email AI text — Cerebras when keys exist; else Anthropic if set (or fallback flag). */
   get aiEnabled() {
     return (

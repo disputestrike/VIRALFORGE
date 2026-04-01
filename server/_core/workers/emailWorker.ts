@@ -8,15 +8,11 @@
 import { Worker } from "bullmq";
 import { Redis } from "ioredis";
 import { Resend } from "resend";
+import { ENV } from "../env";
 
 const redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
 
-// Initialize Resend client
-const resend = new Resend(process.env.RESEND_API_KEY || "");
-
-const SENDER_EMAIL = process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || "noreply@apexai.com";
-const SENDER_NAME_W = process.env.RESEND_FROM_NAME || process.env.FROM_NAME || "ApexAI";
-const SENDER_NAME = "ApexAI";
+const resend = new Resend(ENV.resendApiKey || "");
 
 /**
  * Email templates
@@ -55,7 +51,7 @@ function generateAppointmentConfirmationEmail(
 
             <p>If you need to reschedule, just reply to this email or call us.</p>
             
-            <p>Best regards,<br><strong>${SENDER_NAME} Team</strong></p>
+            <p>Best regards,<br><strong>${ENV.resendFromName} Team</strong></p>
             
             <hr style="margin-top: 40px; border: none; border-top: 1px solid #ddd;">
             <p style="font-size: 12px; color: #666;">
@@ -99,7 +95,7 @@ function generateAppointmentReminderEmail(
             <p>We're looking forward to speaking with you!</p>
             <p>If you need to reschedule, let us know as soon as possible.</p>
             
-            <p>Best regards,<br><strong>${SENDER_NAME} Team</strong></p>
+            <p>Best regards,<br><strong>${ENV.resendFromName} Team</strong></p>
           </div>
         </body>
       </html>
@@ -125,7 +121,7 @@ function generateFollowUpEmail(
               <a href="mailto:sales@apexai.com" style="background-color: #0052FF; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Get in Touch</a>
             </p>
             
-            <p>Best regards,<br><strong>${SENDER_NAME} Team</strong></p>
+            <p>Best regards,<br><strong>${ENV.resendFromName} Team</strong></p>
           </div>
         </body>
       </html>
@@ -168,7 +164,7 @@ export const emailWorker = new Worker(
 
       // Send email via Resend
       const result = await resend.emails.send({
-        from: `${SENDER_NAME} <${SENDER_EMAIL}>`,
+        from: ENV.resendFromHeader,
         to: email,
         subject: emailContent.subject,
         html: emailContent.html,

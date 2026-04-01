@@ -14,6 +14,7 @@ import * as twilioService from "./_core/services/signalwireService";
 import * as voiceSessionManager from "./_core/services/voiceSessionManager";
 import * as followUpEngine from "./_core/services/followUpEngine";
 import { saasRouter } from "./routers/saasRouter";
+import { ENV } from "./_core/env";
 
 // ─── Admin guard ──────────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -332,9 +333,9 @@ const messagesRouter = router({
       } else if (input.channel === "email" && lead.email) {
         try {
           const { Resend } = await import("resend");
-          const resend = new Resend(process.env.RESEND_API_KEY);
+          const resend = new Resend(ENV.resendApiKey);
           await resend.emails.send({
-            from: `${process.env.RESEND_FROM_NAME || "ApexAI"} <${process.env.RESEND_FROM_EMAIL || "noreply@apexai.com"}>`,
+            from: ENV.resendFromHeader,
             to: (lead as any).email as string,
             subject: input.subject || "Message from ApexAI",
             text: input.body,
