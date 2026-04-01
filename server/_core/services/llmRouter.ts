@@ -34,24 +34,30 @@ export interface LLMResponse {
  * We try env first, then known public IDs so production self-heals without variable changes.
  */
 export function cerebrasModelCandidates(): string[] {
-  // Known working Cerebras models as of April 2026 (verified from API)
-  // Note: llama-3.3-70b (with dashes) is REMOVED from Cerebras API
-  // Correct names use dots: llama3.3-70b, llama3.1-70b, llama3.1-8b
-  const env = (process.env.CEREBRAS_MODEL ?? "").trim();
-  
-  // Always try these in order regardless of env setting
-  const known = ["llama3.3-70b", "llama3.1-70b", "llama3.1-8b"];
-  
+  // CEREBRAS_MODEL env in Railway = "llama-3.3-70b" (with dashes, trailing space)
+  // Cerebras API model name map (dashes → dots, confirmed working):
+  const MODEL_ALIASES: Record<string, string> = {
+    "llama-3.3-70b": "llama3.3-70b",
+    "llama-3.1-70b": "llama3.1-70b",
+    "llama-3.1-8b":  "llama3.1-8b",
+    "llama3.3-70b":  "llama3.3-70b",
+    "llama3.1-70b":  "llama3.1-70b",
+    "llama3.1-8b":   "llama3.1-8b",
+  };
+
+  const raw = (process.env.CEREBRAS_MODEL ?? "").trim();
+  const env = MODEL_ALIASES[raw] || raw;
+
+  // Always try the best available models in order
   const out: string[] = [];
   const add = (m: string) => { if (m && !out.includes(m)) out.push(m); };
-  
-  // Add env var first — but skip known-broken names
-  const brokenNames = ["llama-3.3-70b", "llama-3.1-70b", "gpt-oss-120b", "llama-3.1-8b"];
-  if (env && !brokenNames.includes(env)) add(env);
-  
-  // Always add all known working models as fallbacks
-  for (const m of known) add(m);
-  
+
+  if (env) add(env);
+  add("llama3.3-70b");
+  add("llama3.1-70b");
+  add("llama3.1-8b");
+
+  console.log(`[Cerebras] Model candidates: ${out.join(", ")} (raw env: "${raw}")`);
   return out;
 }
 

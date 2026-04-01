@@ -526,7 +526,7 @@ export function createCallEngine(opts: EngineOptions): void {
     const sorry = "Sorry, I'm having a brief connection issue. Could you repeat that?";
 
     traceEvent(callId, "llm_route", { path: preferCerebras ? "cerebras" : "claude" });
-    log(`[ROUTE] ${preferCerebras ? "Cerebras" : "Claude"}`);
+    log(`[ROUTE] ${preferCerebras ? "Cerebras (LLM_PREFER_CEREBRAS=true)" : "Claude (default — set LLM_PREFER_CEREBRAS=true to use Cerebras)"}`);
 
     if (preferCerebras) {
       // Cerebras fast-path: try Cerebras, fall back to Claude
