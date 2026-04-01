@@ -24,6 +24,10 @@ export const users = mysqlTable("users", {
   language: varchar("language", { length: 20 }).default("en"),
   // Plan tier
   plan: varchar("plan", { length: 50 }).default("trial"),
+  /** Stripe Customer id (cus_...) — set after first checkout or portal */
+  stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),
+  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 255 }),
+  stripeSubscriptionStatus: varchar("stripeSubscriptionStatus", { length: 64 }),
   // Agency settings
   isAgency: boolean("isAgency").default(false),
   agencyName: varchar("agencyName", { length: 200 }),

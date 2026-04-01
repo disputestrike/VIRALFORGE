@@ -112,6 +112,40 @@ export async function updateUserRole(userId: number, role: "user" | "admin") {
   await db.update(users).set({ role }).where(eq(users.id, userId));
 }
 
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return rows[0];
+}
+
+export async function findUserByStripeCustomerId(customerId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(users).where(eq(users.stripeCustomerId, customerId)).limit(1);
+  return rows[0];
+}
+
+export async function updateUserStripeBilling(
+  userId: number,
+  patch: {
+    stripeCustomerId?: string | null;
+    stripeSubscriptionId?: string | null;
+    stripeSubscriptionStatus?: string | null;
+    plan?: string | null;
+  }
+) {
+  const db = await getDb();
+  if (!db) return;
+  const clean: Record<string, unknown> = {};
+  if (patch.stripeCustomerId !== undefined) clean.stripeCustomerId = patch.stripeCustomerId;
+  if (patch.stripeSubscriptionId !== undefined) clean.stripeSubscriptionId = patch.stripeSubscriptionId;
+  if (patch.stripeSubscriptionStatus !== undefined) clean.stripeSubscriptionStatus = patch.stripeSubscriptionStatus;
+  if (patch.plan !== undefined && patch.plan !== null) clean.plan = patch.plan;
+  if (Object.keys(clean).length === 0) return;
+  await db.update(users).set(clean as any).where(eq(users.id, userId));
+}
+
 // ─── Leads ────────────────────────────────────────────────────────────────────
 export async function getLeads(opts?: { search?: string; segment?: string; status?: string; verificationStatus?: string; limit?: number; offset?: number; userId?: number }) {
   const db = await getDb();

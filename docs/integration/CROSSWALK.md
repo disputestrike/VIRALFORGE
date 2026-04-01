@@ -73,6 +73,53 @@ The **Part 1 table below** (rows **1–20**) is the same numbering as your **“
 | 19 | Webchat | 4 | ✅ `webchat_widgets` (0017) | ✅ `webchat.*` + **`GET/POST /api/public/webchat/*`** | ✅ Settings | Config + lead capture; CORS via allowed origins |
 | 20 | Analytics dashboard | 4 | ✅ `call_recordings` + `leads` aggregates in `getDashboardBreakdown` + `analytics_snapshots` | ✅ `analytics.dashboardBreakdown` + `recordSnapshot` + tenant `snapshots` | ✅ Analytics page | Leads by segment + calls by outcome charts |
 
+### Part 1 — Evidence index (where to look in the repo)
+
+Use this table to prove **DB + API + UI** for each shipped row. Paths are relative to the repo root (`ApexAI/`).
+
+| # | Evidence: DB / SQL | Evidence: API | Evidence: UI | Evidence: tests / runtime |
+|---|-------------------|---------------|-------------|---------------------------|
+| 1 | `drizzle/schema.ts` → `userPhoneNumbers`; `0018_user_phone_numbers_align.sql` | `server/routers.ts` → `settings.listPhoneNumbers`, `setPhoneNumberActive`, `onboarding.provisionNumber` | `client/src/pages/Settings.tsx` (Dedicated phone numbers) | Inbound tenant resolution: `server/db.ts` `getUserIdByPhoneNumber`, `server/_core/index.ts` SMS/voice |
+| 2 | `knowledge_bases` + sources (`0011`, Drizzle) | `server/routers/knowledgeBaseRouter.ts` → `appRouter.knowledgeBase` | `Settings.tsx` (Knowledge base) | — |
+| 3 | `drizzle/schema.ts` → `leads` + `createdBy` | `server/routers.ts` → `leads.*` | `client/src/pages/Leads.tsx` | `server/comprehensive.test.ts` |
+| 4 | `call_recordings.aiSummary` | `server/_core/services/callSummaryService.ts`, persist in `voiceSessionManager` | Voice AI / recordings UI | — |
+| 5 | `lead_scoring_rules` (`0012`) | `server/routers/leadScoringRouter.ts` | `Settings.tsx` (Lead scoring) | `leadScoringApply` on `leads.create` |
+| 6 | `system_config` + `server/_core/services/voiceProfiles.ts` | `settings.voiceProfiles`, `settings.update` (`voiceProfileId`) | `Settings.tsx` (voice profile) | `server/_core/services/voiceProfiles.test.ts` |
+| 7 | `blocked_phone_numbers` (`0013`) | `server/routers/phoneBlocklistRouter.ts` | `Settings.tsx` (Blocklist) | Inbound filter `server/_core/index.ts` |
+| 8 | `escalation_rules` (`0013`) | `server/routers/escalationRouter.ts` | `Settings.tsx` (Escalation) | `server/_core/services/voiceRealtimePipeline.ts` transfer |
+| 9 | `zapier_webhooks` (`0012`) | `server/routers/zapierRouter.ts`, `server/_core/services/zapierEmit.ts` | `Settings.tsx` (Zapier) | Emitted on lead + call persist |
+| 10 | `crm_connections` (`0014`) | `server/routers/crmRouter.ts` | `Settings.tsx` (CRM connections) | OAuth stubs |
+| 11 | `workflows` (`0015`) | `server/routers/workflowRouter.ts` | `Settings.tsx` (Workflows) | JSON draft |
+| 12 | `customer_memories` (`0015`) | `server/routers/memoryRouter.ts` | `Settings.tsx` (Memory) | — |
+| 13 | `call_recordings.sentiment` | `analytics.sentimentSummary`, `server/_core/services/sentimentInfer.ts` | `client/src/pages/Analytics.tsx` | `server/sentimentInfer.test.ts` |
+| 14 | `support_tickets` (`0015`) | `server/routers/ticketsRouter.ts` | `Settings.tsx` (Tickets) | — |
+| 15 | `mobile_devices` (`0016`) | `server/routers/mobileRouter.ts` | `Settings.tsx` (Mobile devices) | — |
+| 16 | `social_connections` (`0017`) | `server/routers/socialRouter.ts` | `Settings.tsx` (Social) | — |
+| 17 | `email_sequences` (`0015`) | `server/routers/emailSequencesRouter.ts`, `server/_core/services/emailSequenceTrigger.ts` | `Settings.tsx` (Email sequences) | Queue: `server/_core/index.ts` |
+| 18 | `rcs_registrations` (`0017`) | `server/routers/rcsRouter.ts` | `Settings.tsx` (RCS) | — |
+| 19 | `webchat_widgets` (`0017`) | `server/routers/webchatRouter.ts`, `server/_core/webchatPublicApi.ts` | `Settings.tsx` (Webchat) | `server/webchatPublicApi.test.ts` |
+| 20 | `analytics_snapshots`, aggregates | `analytics.dashboardBreakdown`, `recordSnapshot` | `client/src/pages/Analytics.tsx` | Charts from tRPC |
+
+### Billing (Stripe) — go-live wiring
+
+| Layer | Location |
+|-------|----------|
+| Env | `server/_core/env.ts` — `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_STARTER\|GROWTH\|ENTERPRISE`, success/cancel paths |
+| HTTP webhook | `POST /api/stripe/webhook` — `server/_core/index.ts` (raw body, before `express.json`) |
+| Service | `server/_core/services/stripeBilling.ts` — Checkout, Portal, webhook dispatch |
+| API | `server/routers/saasRouter.ts` → `saas.billing.status`, `createCheckoutSession`, `createPortalSession` |
+| UI | `client/src/pages/Settings.tsx` — **Billing & subscription** card |
+| DB | `drizzle/schema.ts` `users.stripeCustomerId` / `stripeSubscriptionId` / `stripeSubscriptionStatus`; safe ALTER in `server/_core/index.ts` + `drizzle/0019_user_stripe_billing.sql` |
+
+### Voice quality / prompt (Part 2 overlap)
+
+| Item | Evidence |
+|------|----------|
+| Dynamic system prompt | `server/realtime/dynamicPrompt.ts` — `buildVoiceSystemPrompt`; `server/realtime/dynamicPrompt.test.ts` |
+| Live pipeline | `server/_core/services/voiceRealtimePipeline.ts` — barge-in, STT, transfer |
+| TTS | `server/_core/services/ttsService.ts` — Cartesia; `server/tts.service.test.ts` |
+| Tunables | `server/_core/env.ts` — `voiceBargeInEnergyThreshold`, `voiceDeepgramEndpointingMs`, `voiceTtsSpeedScale`, `voiceResponseMicroPauseMs`, etc. |
+
 ---
 
 ## Part 2 — Premium voice agent (5 modules)
@@ -101,7 +148,7 @@ The **Part 1 table below** (rows **1–20**) is the same numbering as your **“
 
 ## Part 4 — Website / marketing
 
-**Frozen per product owner request** — no landing changes unless explicitly approved.
+Landing lists **platform capabilities** (Part 1 mirror) at anchor `#capabilities` (`client/src/pages/LandingPage.tsx`, `client/src/components/marketing/siteContent.ts`).
 
 ---
 
@@ -139,3 +186,4 @@ The **Part 1 table below** (rows **1–20**) is the same numbering as your **“
 | 2026-04-01 | Part 3 Jobs + Webhooks crosswalk ✅; `voiceProfiles.test.ts` (`listVoiceProfiles`, `getVoiceProfileById`) | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` (204 tests) |
 | 2026-04-01 | `sentimentInfer`: dedupe POS keyword; skip counting `interested` when phrase `not interested`; tests for weighted negatives; Part 2 Sentiment row cites `sentimentInfer.test.ts` | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` (206 tests) |
 | 2026-04-01 | `webhooksRouter.test.ts` — `omniAiLead` open vs `WEBHOOK_SECRET` + `x-webhook-secret`; Part 3 Webhooks row cites test file | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` (209 tests) |
+| 2026-04-01 | Stripe: `stripeBilling.ts` + `POST /api/stripe/webhook` + `saas.billing.*` + Settings billing card; users stripe columns; CROSSWALK evidence index + Part 1 file map | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` |

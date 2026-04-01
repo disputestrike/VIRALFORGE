@@ -112,6 +112,16 @@ export const ENV = {
     return "low";
   })(),
 
+  // ── Stripe (subscriptions — Customer Portal + Checkout) ───
+  stripeSecretKey: (process.env.STRIPE_SECRET_KEY ?? "").trim(),
+  stripeWebhookSecret: (process.env.STRIPE_WEBHOOK_SECRET ?? "").trim(),
+  /** Price ids from Stripe Dashboard (recurring prices) */
+  stripePriceStarter: (process.env.STRIPE_PRICE_STARTER ?? "").trim(),
+  stripePriceGrowth: (process.env.STRIPE_PRICE_GROWTH ?? "").trim(),
+  stripePriceEnterprise: (process.env.STRIPE_PRICE_ENTERPRISE ?? "").trim(),
+  stripeCheckoutSuccessPath: process.env.STRIPE_CHECKOUT_SUCCESS_PATH ?? "/settings?billing=success",
+  stripeCheckoutCancelPath: process.env.STRIPE_CHECKOUT_CANCEL_PATH ?? "/settings?billing=cancel",
+
   // ── Legacy (kept for backward compat) ─────────────────────
   appId: process.env.VITE_APP_ID ?? "",
 
@@ -132,6 +142,7 @@ export const ENV = {
     return this.deepgramApiKey !== "" && this.cartesiaApiKey !== "" && llm;
   },
   get queueEnabled()  { return this.redisUrl !== ""; },
+  get stripeEnabled() { return this.stripeSecretKey !== ""; },
 
   /** Resend `from` header — uses Railway RESEND_FROM_* when set. */
   get resendFromHeader(): string {

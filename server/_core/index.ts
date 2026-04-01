@@ -82,6 +82,9 @@ async function runMigrations() {
           "ALTER TABLE `users` ADD COLUMN `whiteLabel` tinyint(1) DEFAULT 0",
           "ALTER TABLE `users` ADD COLUMN `picture` varchar(512) NULL",
           "ALTER TABLE `users` ADD COLUMN `voiceProfileId` varchar(100) NULL",
+          "ALTER TABLE `users` ADD COLUMN `stripeCustomerId` varchar(255) NULL",
+          "ALTER TABLE `users` ADD COLUMN `stripeSubscriptionId` varchar(255) NULL",
+          "ALTER TABLE `users` ADD COLUMN `stripeSubscriptionStatus` varchar(64) NULL",
         ];
         for (const sql of alterStatements) {
           try {
@@ -407,6 +410,26 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
+  // Stripe webhook must use raw body (register before express.json)
+  app.post(
+    "/api/stripe/webhook",
+    webhookRateLimiter,
+    express.raw({ type: "application/json" }),
+    async (req, res) => {
+      try {
+        const { handleStripeWebhook } = await import("./services/stripeBilling");
+        const out = await handleStripeWebhook(req);
+        if (!out.received) {
+          return res.status(400).send(out.error ?? "Bad request");
+        }
+        return res.json({ received: true });
+      } catch (e: unknown) {
+        console.error("[Stripe] webhook error:", e);
+        return res.status(500).send("Webhook handler error");
+      }
+    }
+  );
+
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -462,6 +485,7 @@ async function startServer() {
           : "incomplete — set DEEPGRAM_API_KEY, CARTESIA_API_KEY, and CEREBRAS_API_KEY_* (or LLM_ALLOW_ANTHROPIC_FALLBACK=true + ANTHROPIC_API_KEY)",
         sms:      ENV.smsEnabled    ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         email:    ENV.emailEnabled  ? "ready"  : "disabled — add RESEND_API_KEY",
+        stripe:   ENV.stripeEnabled ? "ready — webhook POST /api/stripe/webhook" : "disabled — add STRIPE_SECRET_KEY + price ids",
         stt:      ENV.sttEnabled    ? "ready"  : "disabled — add OPENAI_API_KEY or DEEPGRAM_API_KEY",
         tts:      ENV.ttsEnabled    ? "ready"  : "disabled — add CARTESIA_API_KEY",
         ai:       ENV.aiEnabled     ? "ready"  : "disabled — add CEREBRAS_API_KEY_* or ANTHROPIC_API_KEY",

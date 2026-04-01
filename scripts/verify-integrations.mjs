@@ -52,6 +52,16 @@ const groups = [
     name: "Auth / session",
     keys: ["JWT_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
   },
+  {
+    name: "Stripe (billing)",
+    keys: [
+      "STRIPE_SECRET_KEY",
+      "STRIPE_WEBHOOK_SECRET",
+      "STRIPE_PRICE_STARTER",
+      "STRIPE_PRICE_GROWTH",
+      "STRIPE_PRICE_ENTERPRISE",
+    ],
+  },
 ];
 
 let strictFail = false;

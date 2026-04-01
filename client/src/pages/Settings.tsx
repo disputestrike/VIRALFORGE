@@ -29,6 +29,7 @@ import {
   Share2,
   MessageCircle,
   Radio,
+  CreditCard,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -360,6 +361,20 @@ export default function Settings() {
     onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
   });
 
+  const { data: billingStatus } = trpc.saas.billing.status.useQuery();
+  const checkoutMut = trpc.saas.billing.createCheckoutSession.useMutation({
+    onSuccess: (data) => {
+      if (data.url) window.location.href = data.url;
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Checkout failed"),
+  });
+  const portalMut = trpc.saas.billing.createPortalSession.useMutation({
+    onSuccess: (data) => {
+      if (data.url) window.location.href = data.url;
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Portal failed"),
+  });
+
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-3xl">
       <div>
@@ -416,6 +431,78 @@ export default function Settings() {
               ))}
             </ul>
           )}
+        </CardContent>
+      </Card>
+
+      {/* ── BILLING (Stripe Checkout + Customer Portal) ───────────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-primary" />
+            Billing & subscription
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Subscriptions are billed through Stripe. Set <code className="text-xs">STRIPE_SECRET_KEY</code>,{" "}
+            <code className="text-xs">STRIPE_PRICE_STARTER|GROWTH|ENTERPRISE</code>, and{" "}
+            <code className="text-xs">STRIPE_WEBHOOK_SECRET</code> on Railway; webhook URL:{" "}
+            <code className="text-xs break-all">{typeof window !== "undefined" ? `${window.location.origin}/api/stripe/webhook` : "/api/stripe/webhook"}</code>
+          </p>
+          {billingStatus && typeof billingStatus === "object" && "stripeConfigured" in billingStatus ? (
+            <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2 text-xs space-y-1">
+              <p>
+                <span className="text-muted-foreground">Stripe:</span>{" "}
+                {billingStatus.stripeConfigured ? "configured" : "not configured"}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Plan:</span> {String(billingStatus.plan ?? "—")}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Subscription:</span>{" "}
+                {billingStatus.subscriptionStatus ?? "none"}{" "}
+                {billingStatus.subscriptionId ? <span className="font-mono opacity-70">({billingStatus.subscriptionId})</span> : null}
+              </p>
+            </div>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={checkoutMut.isPending || !billingStatus?.pricesConfigured?.starter}
+              onClick={() => checkoutMut.mutate({ tier: "starter" })}
+            >
+              Subscribe — Starter
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={checkoutMut.isPending || !billingStatus?.pricesConfigured?.growth}
+              onClick={() => checkoutMut.mutate({ tier: "growth" })}
+            >
+              Subscribe — Growth
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={checkoutMut.isPending || !billingStatus?.pricesConfigured?.enterprise}
+              onClick={() => checkoutMut.mutate({ tier: "enterprise" })}
+            >
+              Subscribe — Enterprise
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              style={{ backgroundColor: "#1d6ff4" }}
+              disabled={portalMut.isPending || !billingStatus?.stripeCustomerId}
+              onClick={() => portalMut.mutate()}
+            >
+              Manage billing (portal)
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
