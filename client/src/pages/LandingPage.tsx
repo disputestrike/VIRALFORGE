@@ -71,7 +71,7 @@ export default function LandingPage() {
       body: "ApexAI picks up in under a second, qualifies the caller, and books the appointment — without a human ever picking up the phone.",
       points: ["Instant pickup — zero calls to voicemail", "Real-time lead qualification", "Books directly to your calendar", "Auto SMS confirmation sent", "Full transcript and recording"],
       panel: (
-        <div className="rounded-2xl border border-white/10 p-7" style={{ backgroundColor: C.bg }}>
+        <div className="rounded-2xl border border-white/25 p-7" style={{ backgroundColor: C.bg }}>
           <div className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-white/40">Live call example</div>
           {[
             { r: "Caller", t: "Do you handle solar companies?" },
@@ -108,7 +108,7 @@ export default function LandingPage() {
       body: "Upload your lead list and ApexAI calls them all. Qualifies the interested ones, books appointments, and follows up on everyone else automatically.",
       points: ["Upload contacts — calling in minutes", "Handles objections naturally", "Books qualified leads automatically", "SMS and email follow-up built in", "Full campaign analytics dashboard"],
       panel: (
-        <div className="rounded-2xl border border-white/10 p-7" style={{ backgroundColor: C.bg }}>
+        <div className="rounded-2xl border border-white/25 p-7" style={{ backgroundColor: C.bg }}>
           <div className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-white/40">Campaign dashboard — live</div>
           {[
             { label: "Campaign", value: "Solar Q1 — Texas", color: C.blue2 },
@@ -118,7 +118,7 @@ export default function LandingPage() {
             { label: "Conversion rate", value: "9.2%", color: C.green },
             { label: "SMS follow-ups sent", value: "374", color: C.blue3 },
           ].map(({ label, value, color }) => (
-            <div key={label} className="flex justify-between border-b border-white/[0.07] py-2.5">
+            <div key={label} className="flex justify-between border-b border-white/20 py-2.5">
               <span className="text-[13px] text-white/40">{label}</span>
               <span className="text-sm font-bold" style={{ color }}>
                 {value}
@@ -134,7 +134,7 @@ export default function LandingPage() {
       body: "No back-and-forth. The AI collects name, phone, and preferred time — confirms it, sends a reminder, and writes it to your calendar.",
       points: ["Name, phone, and time collected", "Instant confirmation SMS sent", "Calendar sync and reminders", "Reduces no-shows by 60%", "CRM updated automatically"],
       panel: (
-        <div className="rounded-2xl border border-white/10 p-7" style={{ backgroundColor: C.bg }}>
+        <div className="rounded-2xl border border-white/25 p-7" style={{ backgroundColor: C.bg }}>
           <div className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-white/40">Booking confirmation</div>
           <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5">
             <div className="mb-2 text-xs font-bold text-emerald-400">✓ APPOINTMENT CONFIRMED</div>
@@ -152,7 +152,7 @@ export default function LandingPage() {
       body: "Every call recorded, transcribed, and scored. Know your conversion rate, top objections, and AI performance — turn by turn.",
       points: ["All calls recorded and transcribed", "Lead scoring per call", "Objection pattern tracking", "Per-campaign conversion analytics", "Export to your CRM"],
       panel: (
-        <div className="rounded-2xl border border-white/10 p-7" style={{ backgroundColor: C.bg }}>
+        <div className="rounded-2xl border border-white/25 p-7" style={{ backgroundColor: C.bg }}>
           <div className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-white/40">Analytics — today</div>
           {[
             { label: "Calls handled", value: "847", pct: "+23%" },
@@ -161,7 +161,7 @@ export default function LandingPage() {
             { label: "Avg call duration", value: "3m 24s", pct: "stable" },
             { label: "Conversion rate", value: "7.9%", pct: "+2.1%" },
           ].map(({ label, value, pct }) => (
-            <div key={label} className="flex items-center justify-between border-b border-white/[0.07] py-2.5">
+            <div key={label} className="flex items-center justify-between border-b border-white/20 py-2.5">
               <span className="text-[13px] text-white/40">{label}</span>
               <span className="flex items-center gap-2">
                 <span className="text-sm font-bold text-white">{value}</span>
@@ -175,7 +175,7 @@ export default function LandingPage() {
   ];
 
   return (
-    <div className="min-w-0 bg-zinc-50 text-zinc-900 antialiased" style={{ fontFamily: "-apple-system, 'Helvetica Neue', Arial, sans-serif" }}>
+    <div className="min-w-0 bg-black text-white antialiased" style={{ fontFamily: "-apple-system, 'Helvetica Neue', Arial, sans-serif" }}>
       <style>{`
         .show-mobile{display:none!important}
         @media(max-width:768px){
@@ -189,15 +189,15 @@ export default function LandingPage() {
         @media(max-width:768px){.footer-cols{grid-template-columns:1fr!important;gap:28px!important}}
       `}</style>
 
-      <div className="border-b border-blue-200/60 bg-blue-50 px-6 py-2 text-center text-sm font-semibold text-blue-900">
+      <div className="border-b border-white/25 bg-black px-6 py-2.5 text-center text-sm font-semibold text-white/90">
         {tickerItems[ticker % tickerItems.length]}
       </div>
 
       <MarketingNav />
 
       {/* HERO — new shell: dark band, not full-page dark */}
-      <section className="relative overflow-hidden bg-zinc-950 px-6 py-24 text-center text-white md:py-28">
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(29,111,244,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(29,111,244,0.03)_1px,transparent_1px)] bg-[size:56px_56px]" />
+      <section className="relative overflow-hidden border-b border-white/20 bg-black px-6 py-24 text-center text-white md:py-28">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:56px_56px]" />
         <div className="pointer-events-none absolute left-1/2 top-[8%] h-[420px] w-[780px] -translate-x-1/2 bg-[radial-gradient(ellipse,rgba(29,111,244,0.12)_0%,transparent_65%)]" />
         <div className="relative mx-auto max-w-3xl">
           <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-200">
@@ -240,12 +240,12 @@ export default function LandingPage() {
       </section>
 
       {/* Logos */}
-      <section className="border-y border-zinc-200 bg-white py-10">
+      <section className="border-y border-white/20 bg-black py-10">
         <div className="mx-auto max-w-6xl px-6">
           <p className="mb-6 text-center text-xs font-bold uppercase tracking-wider text-zinc-400">Teams running high-intent phone revenue</p>
           <div className="flex flex-wrap justify-center gap-3">
             {logos.map((l) => (
-              <span key={l} className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm font-semibold text-zinc-600">
+              <span key={l} className="rounded-lg border border-white/25 bg-white/5 px-4 py-2 text-sm font-semibold text-zinc-200">
                 {l}
               </span>
             ))}
@@ -254,12 +254,12 @@ export default function LandingPage() {
       </section>
 
       {/* PLATFORM */}
-      <section id="platform" className="scroll-mt-24 border-b border-zinc-200 bg-white px-6 py-20 md:py-24">
+      <section id="platform" className="scroll-mt-24 border-b border-white/20 bg-black px-6 py-20 md:py-24">
         <div className="mx-auto max-w-6xl">
           <div className="mx-auto mb-14 max-w-2xl text-center">
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">Platform</p>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-zinc-900 md:text-4xl">{platformOverview.title}</h2>
-            <p className="mt-4 text-lg leading-relaxed text-zinc-600">{platformOverview.subtitle}</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-400">Platform</p>
+            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">{platformOverview.title}</h2>
+            <p className="mt-4 text-lg leading-relaxed text-zinc-300">{platformOverview.subtitle}</p>
           </div>
 
           <div className="mb-16 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -270,23 +270,23 @@ export default function LandingPage() {
                 <div
                   key={p.href}
                   id={id}
-                  className="scroll-mt-28 rounded-2xl border border-zinc-200 bg-zinc-50/80 p-6 transition-shadow hover:shadow-md"
+                  className="scroll-mt-28 rounded-2xl border border-white/20 bg-white/5 p-6 transition-shadow hover:border-white/30"
                 >
                   {Icon ? (
-                    <div className="mb-4 flex size-11 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600">
+                    <div className="mb-4 flex size-11 items-center justify-center rounded-xl bg-blue-600/20 text-blue-400">
                       <Icon className="size-5" />
                     </div>
                   ) : null}
-                  <h3 className="text-lg font-bold text-zinc-900">{p.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-zinc-600">{p.description}</p>
+                  <h3 className="text-lg font-bold text-white">{p.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-400">{p.description}</p>
                 </div>
               );
             })}
           </div>
 
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-950 p-6 md:p-10">
-            <p className="mb-6 text-center text-xs font-bold uppercase tracking-wider text-blue-400/90">Interactive — same four modules in the app</p>
-            <div className="mb-8 flex flex-wrap justify-center gap-1 rounded-xl bg-zinc-900/80 p-1">
+          <div className="rounded-3xl border border-white/25 bg-black p-6 md:p-10">
+            <p className="mb-6 text-center text-xs font-bold uppercase tracking-wider text-blue-400">Interactive — same four modules in the app</p>
+            <div className="mb-8 flex flex-wrap justify-center gap-1 rounded-xl border border-white/15 bg-white/5 p-1">
               {tabs.map((tab, i) => (
                 <button
                   key={tab.label}
@@ -325,12 +325,12 @@ export default function LandingPage() {
       </section>
 
       {/* FEATURES — ApexAI product + pricing bullets */}
-      <section id="features" className="scroll-mt-24 border-b border-zinc-200 bg-zinc-50 px-6 py-20 md:py-24">
+      <section id="features" className="scroll-mt-24 border-b border-white/20 bg-black px-6 py-20 md:py-24">
         <div className="mx-auto max-w-6xl">
           <div className="mx-auto mb-12 max-w-2xl text-center">
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">Features</p>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-zinc-900 md:text-4xl">What ApexAI does in your account</h2>
-            <p className="mt-4 text-lg text-zinc-600">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-400">Features</p>
+            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">What ApexAI does in your account</h2>
+            <p className="mt-4 text-lg text-zinc-300">
               Voice AI capabilities from the product surface, plus the inbound and outbound capabilities listed on pricing — no generic “AI widget” list.
             </p>
           </div>
@@ -339,16 +339,16 @@ export default function LandingPage() {
               const Icon = f.icon;
               const fid = f.href.replace("#", "");
               return (
-                <div key={f.href} id={fid} className="scroll-mt-28 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <div key={f.href} id={fid} className="scroll-mt-28 rounded-2xl border border-white/20 bg-white/5 p-6">
                   <div className="flex gap-4">
                     {Icon ? (
-                      <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600">
+                      <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-blue-600/20 text-blue-400">
                         <Icon className="size-5" />
                       </div>
                     ) : null}
                     <div>
-                      <h3 className="font-bold text-zinc-900">{f.title}</h3>
-                      <p className="mt-1 text-sm leading-relaxed text-zinc-600">{f.description}</p>
+                      <h3 className="font-bold text-white">{f.title}</h3>
+                      <p className="mt-1 text-sm leading-relaxed text-zinc-400">{f.description}</p>
                     </div>
                   </div>
                 </div>
@@ -356,27 +356,27 @@ export default function LandingPage() {
             })}
           </div>
 
-          <div id="features-channels" className="scroll-mt-28 mt-10 rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
-            <h3 className="text-xl font-bold text-zinc-900">Channels, campaigns, and ops</h3>
-            <p className="mt-2 text-zinc-600">Everything that ships beside the live voice agent — how teams actually run revenue.</p>
+          <div id="features-channels" className="scroll-mt-28 mt-10 rounded-2xl border border-white/20 bg-white/5 p-8">
+            <h3 className="text-xl font-bold text-white">Channels, campaigns, and ops</h3>
+            <p className="mt-2 text-zinc-300">Everything that ships beside the live voice agent — how teams actually run revenue.</p>
             <div className="mt-8 grid gap-8 md:grid-cols-2">
               <div>
-                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-blue-600">Inbound (pricing)</p>
+                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-blue-400">Inbound (pricing)</p>
                 <ul className="space-y-2">
                   {pricingInboundBullets.map((x) => (
-                    <li key={x} className="flex gap-2 text-sm text-zinc-700">
-                      <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                    <li key={x} className="flex gap-2 text-sm text-zinc-300">
+                      <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-400" />
                       {x}
                     </li>
                   ))}
                 </ul>
               </div>
               <div>
-                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-blue-600">Outbound (pricing)</p>
+                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-blue-400">Outbound (pricing)</p>
                 <ul className="space-y-2">
                   {pricingOutboundBullets.map((x) => (
-                    <li key={x} className="flex gap-2 text-sm text-zinc-700">
-                      <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                    <li key={x} className="flex gap-2 text-sm text-zinc-300">
+                      <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-400" />
                       {x}
                     </li>
                   ))}
@@ -388,28 +388,28 @@ export default function LandingPage() {
       </section>
 
       {/* DIFFERENTIATION */}
-      <section id="different" className="scroll-mt-24 border-b border-zinc-200 bg-white px-6 py-20 md:py-24">
+      <section id="different" className="scroll-mt-24 border-b border-white/20 bg-black px-6 py-20 md:py-24">
         <div className="mx-auto max-w-5xl">
           <div className="mb-12 text-center">
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">Why ApexAI</p>
-            <h2 className="mt-3 text-3xl font-extrabold text-zinc-900 md:text-4xl">Legacy IVR vs ApexAI</h2>
-            <p className="mx-auto mt-4 max-w-xl text-zinc-600">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-400">Why ApexAI</p>
+            <h2 className="mt-3 text-3xl font-extrabold text-white md:text-4xl">Legacy IVR vs ApexAI</h2>
+            <p className="mx-auto mt-4 max-w-xl text-zinc-300">
               Menus and voicemail leak revenue. ApexAI holds a real conversation, qualifies intent, and books — on every ring.
             </p>
           </div>
           <div className="grid gap-5 md:grid-cols-2">
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-8">
-              <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">Legacy phone tree</p>
-              <ul className="mt-4 list-disc space-y-2 pl-5 text-zinc-600">
+            <div className="rounded-2xl border border-white/25 bg-black p-8">
+              <p className="text-xs font-bold uppercase tracking-wider text-zinc-500">Legacy phone tree</p>
+              <ul className="mt-4 list-disc space-y-2 pl-5 text-zinc-300">
                 <li>Press 1… press 2… callers hang up</li>
                 <li>Voicemail when you are busy</li>
                 <li>No qualification or follow-up</li>
                 <li>Static scripts, no learning loop</li>
               </ul>
             </div>
-            <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-8">
-              <p className="text-xs font-bold uppercase tracking-wider text-blue-600">ApexAI</p>
-              <ul className="mt-4 list-disc space-y-2 pl-5 text-zinc-800">
+            <div className="rounded-2xl border border-blue-500/40 bg-blue-500/10 p-8">
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-400">ApexAI</p>
+              <ul className="mt-4 list-disc space-y-2 pl-5 text-zinc-200">
                 <li>Natural dialogue — sub-second pickup</li>
                 <li>24/7 answers with barge-in and handoff</li>
                 <li>Qualifies, books, SMS confirms</li>
@@ -421,12 +421,12 @@ export default function LandingPage() {
       </section>
 
       {/* HOW IT WORKS */}
-      <section id="how-it-works" className="scroll-mt-24 border-b border-zinc-200 bg-zinc-50 px-6 py-20 md:py-24">
+      <section id="how-it-works" className="scroll-mt-24 border-b border-white/20 bg-black px-6 py-20 md:py-24">
         <div className="mx-auto max-w-6xl">
           <div className="mb-12 text-center">
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">How it works</p>
-            <h2 className="mt-3 text-3xl font-extrabold text-zinc-900 md:text-4xl">Real-time phone conversation — not a chatbot</h2>
-            <p className="mx-auto mt-4 max-w-xl text-zinc-600">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-400">How it works</p>
+            <h2 className="mt-3 text-3xl font-extrabold text-white md:text-4xl">Real-time phone conversation — not a chatbot</h2>
+            <p className="mx-auto mt-4 max-w-xl text-zinc-300">
               Your caller talks naturally. The system listens, decides when they are done speaking, generates a reply, and speaks with a natural voice — while optional actions like calendar and SMS run in the background.
             </p>
           </div>
@@ -439,14 +439,14 @@ export default function LandingPage() {
               { icon: "✅", label: "Actions", sub: "Bookings, CRM updates, and text confirmations when you enable them.", color: "#f59e0b" },
             ].map(({ icon, label, sub, color }, idx) => (
               <div key={label} className="flex min-w-0 items-stretch">
-                <div className="flex flex-1 flex-col gap-2 rounded-xl border border-zinc-200 bg-white p-4 text-center shadow-sm">
+                <div className="flex flex-1 flex-col gap-2 rounded-xl border border-white/20 bg-white/5 p-4 text-center">
                   <span className="text-2xl">{icon}</span>
                   <span className="text-xs font-bold" style={{ color }}>
                     {label}
                   </span>
-                  <span className="text-[11px] leading-snug text-zinc-500">{sub}</span>
+                  <span className="text-[11px] leading-snug text-zinc-400">{sub}</span>
                 </div>
-                {idx < 4 && <span className="how-works-arrow hidden items-center px-1 text-blue-500 lg:flex">→</span>}
+                {idx < 4 && <span className="how-works-arrow hidden items-center px-1 text-blue-400 lg:flex">→</span>}
               </div>
             ))}
           </div>
@@ -454,28 +454,28 @@ export default function LandingPage() {
       </section>
 
       {/* DEMO */}
-      <section id="demo" className="scroll-mt-24 border-b border-zinc-200 bg-white px-6 py-20 md:py-24">
+      <section id="demo" className="scroll-mt-24 border-b border-white/20 bg-black px-6 py-20 md:py-24">
         <div className="mx-auto max-w-6xl">
           <div className="mb-10 text-center">
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">Live demo</p>
-            <p className="mx-auto mt-3 max-w-2xl text-zinc-600">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-400">Live demo</p>
+            <p className="mx-auto mt-3 max-w-2xl text-zinc-300">
               No signup. No credit card. We call you so you hear the same experience your leads get on your lines.
             </p>
           </div>
-          <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-6 md:p-10">
+          <div className="rounded-3xl border border-white/25 bg-black p-6 md:p-10">
             <DemoCallWidget />
           </div>
         </div>
       </section>
 
       {/* SOLUTIONS */}
-      <section id="solutions" className="scroll-mt-24 border-b border-zinc-200 bg-zinc-50 px-6 py-20 md:py-24">
+      <section id="solutions" className="scroll-mt-24 border-b border-white/20 bg-black px-6 py-20 md:py-24">
         <div id="inbound" className="h-px scroll-mt-28 overflow-hidden opacity-0" aria-hidden />
         <div className="mx-auto max-w-6xl">
           <div className="mb-10 text-center">
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">Solutions</p>
-            <h2 className="mt-3 text-3xl font-extrabold text-zinc-900 md:text-4xl">Industry packs</h2>
-            <p className="mx-auto mt-4 max-w-2xl text-zinc-600">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-400">Solutions</p>
+            <h2 className="mt-3 text-3xl font-extrabold text-white md:text-4xl">Industry packs</h2>
+            <p className="mx-auto mt-4 max-w-2xl text-zinc-300">
               Same ApexAI engine — scripts and qualification tuned for how you already sell. Jump to a vertical or play the demos below.
             </p>
           </div>
@@ -485,16 +485,16 @@ export default function LandingPage() {
               const sid = s.href.replace("#", "");
               return (
                 <div key={s.href} id={sid} className="scroll-mt-28">
-                  <div className="h-full rounded-xl border border-zinc-200 bg-white p-5 shadow-sm transition-shadow hover:border-blue-200 hover:shadow-md">
+                  <div className="h-full rounded-xl border border-white/20 bg-white/5 p-5 transition-colors hover:border-blue-400/40">
                     <div className="flex items-start gap-3">
                       {Icon ? (
-                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-600">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-blue-600/20 text-blue-400">
                           <Icon className="size-5" />
                         </div>
                       ) : null}
                       <div>
-                        <h3 className="font-bold text-zinc-900">{s.title}</h3>
-                        <p className="mt-1 text-sm text-zinc-600">{s.description}</p>
+                        <h3 className="font-bold text-white">{s.title}</h3>
+                        <p className="mt-1 text-sm text-zinc-400">{s.description}</p>
                       </div>
                     </div>
                   </div>
@@ -507,39 +507,39 @@ export default function LandingPage() {
       </section>
 
       {/* ROI */}
-      <section id="calculator" className="scroll-mt-24 border-b border-zinc-200 bg-white px-6 py-20 md:py-24">
+      <section id="calculator" className="scroll-mt-24 border-b border-white/20 bg-black px-6 py-20 md:py-24">
         <div id="outbound" className="h-px scroll-mt-28 overflow-hidden opacity-0" aria-hidden />
         <div className="mx-auto max-w-6xl text-center">
-          <p className="text-xs font-bold uppercase tracking-wider text-blue-600">Revenue calculator</p>
-          <h2 className="mt-3 text-3xl font-extrabold text-zinc-900 md:text-4xl">Model the gap</h2>
-          <p className="mx-auto mt-4 mb-10 max-w-xl text-zinc-600">
+          <p className="text-xs font-bold uppercase tracking-wider text-blue-400">Revenue calculator</p>
+          <h2 className="mt-3 text-3xl font-extrabold text-white md:text-4xl">Model the gap</h2>
+          <p className="mx-auto mt-4 mb-10 max-w-xl text-zinc-300">
             Slide your current funnel metrics. See an illustrative comparison when more leads get contacted and booked.
           </p>
           <ROICalculator />
         </div>
       </section>
 
-      <LandingTestimonialCarousel testimonials={testimonials} variant="light" />
+      <LandingTestimonialCarousel testimonials={testimonials} variant="dark" />
 
-      <LandingFaq variant="light" />
+      <LandingFaq variant="dark" />
 
       {/* TRUST */}
-      <section id="trust" className="scroll-mt-24 border-b border-zinc-200 bg-zinc-50 px-6 py-16 md:py-20">
+      <section id="trust" className="scroll-mt-24 border-b border-white/20 bg-black px-6 py-16 md:py-20">
         <div className="mx-auto max-w-6xl">
-          <h2 className="mb-10 text-center text-2xl font-extrabold text-zinc-900 md:text-3xl">Enterprise-grade reliability</h2>
+          <h2 className="mb-10 text-center text-2xl font-extrabold text-white md:text-3xl">Enterprise-grade reliability</h2>
           <div className="grid-3 grid gap-4 md:grid-cols-3">
             {[
-              { icon: <Shield className="size-6 text-blue-600" />, title: "SOC 2 ready", desc: "Security controls aligned with enterprise standards. Data encrypted in transit and at rest." },
-              { icon: <MessageSquare className="size-6 text-blue-600" />, title: "TCPA-aware", desc: "Built-in controls for outbound at scale. You manage consent; we help you stay organized." },
-              { icon: <Zap className="size-6 text-blue-600" />, title: "99.9% uptime", desc: "Hosted on redundant cloud infrastructure with monitoring and failover." },
-              { icon: <Phone className="size-6 text-blue-600" />, title: "Human handoff", desc: "Instant live transfer anytime a caller needs a real person. Seamless." },
-              { icon: <Star className="size-6 text-blue-600" />, title: "All calls recorded", desc: "Full transcripts and recordings for every conversation. Review anytime." },
-              { icon: <Calendar className="size-6 text-blue-600" />, title: "12+ languages", desc: "English, Spanish, French, German, Portuguese, and more. Global ready." },
+              { icon: <Shield className="size-6 text-blue-400" />, title: "SOC 2 ready", desc: "Security controls aligned with enterprise standards. Data encrypted in transit and at rest." },
+              { icon: <MessageSquare className="size-6 text-blue-400" />, title: "TCPA-aware", desc: "Built-in controls for outbound at scale. You manage consent; we help you stay organized." },
+              { icon: <Zap className="size-6 text-blue-400" />, title: "99.9% uptime", desc: "Hosted on redundant cloud infrastructure with monitoring and failover." },
+              { icon: <Phone className="size-6 text-blue-400" />, title: "Human handoff", desc: "Instant live transfer anytime a caller needs a real person. Seamless." },
+              { icon: <Star className="size-6 text-blue-400" />, title: "All calls recorded", desc: "Full transcripts and recordings for every conversation. Review anytime." },
+              { icon: <Calendar className="size-6 text-blue-400" />, title: "12+ languages", desc: "English, Spanish, French, German, Portuguese, and more. Global ready." },
             ].map(({ icon, title, desc }) => (
-              <div key={title} className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+              <div key={title} className="rounded-2xl border border-white/20 bg-white/5 p-6">
                 <div className="mb-3">{icon}</div>
-                <h3 className="font-bold text-zinc-900">{title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-600">{desc}</p>
+                <h3 className="font-bold text-white">{title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-400">{desc}</p>
               </div>
             ))}
           </div>
@@ -547,7 +547,7 @@ export default function LandingPage() {
       </section>
 
       {/* CTA */}
-      <section className="relative overflow-hidden bg-zinc-950 px-6 py-20 text-center text-white">
+      <section className="relative overflow-hidden border-t border-white/20 bg-black px-6 py-20 text-center text-white">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(29,111,244,0.15)_0%,transparent_70%)]" />
         <div className="relative mx-auto max-w-lg">
           <h2 className="text-3xl font-black tracking-tight md:text-4xl">

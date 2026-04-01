@@ -3,12 +3,12 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Phone, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
 
-const D2 = "#141820";
+const D2 = "#000000";
 const BLUE = "#1d6ff4";
 const BLUE_LIGHT = "#60a5fa";
 const GREEN = "#34d399";
-const DIM2 = "rgba(255,255,255,0.45)";
-const DIM3 = "rgba(255,255,255,0.08)";
+const DIM2 = "rgba(255,255,255,0.55)";
+const DIM3 = "rgba(255,255,255,0.22)";
 
 const INDUSTRIES = [
   { value: "solar", label: "Solar" },
@@ -61,7 +61,7 @@ export default function DemoCallWidget() {
   };
 
   const fieldStyle = {
-    backgroundColor: "#0a0c12",
+    backgroundColor: "#000000",
     border: `1px solid ${DIM3}`,
     outline: "none" as const,
     fontSize: "16px",

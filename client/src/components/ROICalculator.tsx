@@ -3,12 +3,12 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, TrendingUp } from "lucide-react";
 import { Link } from "wouter";
 
-const D3 = "#1a1e2a";
+const D3 = "#000000";
 const BLUE = "#1d6ff4";
 const GREEN = "#34d399";
 const AMBER = "#fbbf24";
-const DIM2 = "rgba(255,255,255,0.5)";
-const DIM3 = "rgba(255,255,255,0.1)";
+const DIM2 = "rgba(255,255,255,0.6)";
+const DIM3 = "rgba(255,255,255,0.22)";
 
 export default function ROICalculator() {
   const [leadsPerDay, setLeadsPerDay] = useState(20);
@@ -87,7 +87,7 @@ export default function ROICalculator() {
               value={dealValue}
               onChange={e => setDealValue(Number(e.target.value))}
               className="w-full min-h-[52px] px-4 py-3 rounded-xl text-white box-border"
-              style={{ backgroundColor: "#0a0c12", border: `1px solid ${DIM3}`, outline: "none", fontSize: "16px" }}
+              style={{ backgroundColor: "#000000", border: `1px solid ${DIM3}`, outline: "none", fontSize: "16px" }}
             />
           </div>
 

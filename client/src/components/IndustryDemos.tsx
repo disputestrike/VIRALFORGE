@@ -2,12 +2,12 @@ import { useState, useRef } from "react";
 import { Play, Pause, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const D2 = "#141820";
+const D2 = "#000000";
 const BLUE = "#1d6ff4";
 const BLUE_LIGHT = "#60a5fa";
 const GREEN = "#34d399";
-const DIM2 = "rgba(255,255,255,0.45)";
-const DIM3 = "rgba(255,255,255,0.08)";
+const DIM2 = "rgba(255,255,255,0.55)";
+const DIM3 = "rgba(255,255,255,0.22)";
 
 // Audio files — replace URLs with actual recordings
 // Using SimpleTalk's demo audio as reference for structure (we'll record our own)

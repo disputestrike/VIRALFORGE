@@ -274,7 +274,39 @@ export function createCallEngine(opts: EngineOptions): void {
   let keepaliveTimer: NodeJS.Timeout | null = null;
   let voiceProfile: VoiceProfile = resolveVoiceProfileForEngine(voiceProfileId);
   const conversationHistory: { role: "user" | "assistant"; content: string }[] = [];
+  /** Prevents overlapping handleUserTurn from concurrent Deepgram speech_final events (epoch churn + broken LLM turns). */
+  let userTurnBusy = false;
+  let pendingUserTranscript: string | null = null;
   let turnStartedAt = 0;
+
+  function appendHistory(role: "user" | "assistant", content: string): void {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    conversationHistory.push({ role, content: trimmed });
+    const sid = activeSessionId;
+    if (sid) {
+      try {
+        voiceSessionManager.addMessage(sid, role, trimmed);
+      } catch (e) {
+        log(`addMessage failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+  }
+
+  /** Prefer persisted session transcript when synced so CRM/debug match what the LLM sees. */
+  function historyForLlm(): { role: "user" | "assistant"; content: string }[] {
+    const sid = activeSessionId;
+    if (sid) {
+      const s = voiceSessionManager.getSession(sid);
+      if (s?.conversationHistory?.length) {
+        return s.conversationHistory.slice(-8).map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
+      }
+    }
+    return conversationHistory.slice(-8);
+  }
   let firstMediaLogged = false;
 
   /** `connected` + `start` both call this; assign sockets before `open` and skip if CONNECTING to avoid duplicate STT/TTS websockets. */
@@ -465,7 +497,9 @@ export function createCallEngine(opts: EngineOptions): void {
             traceEvent(callId, "stt_final", { textLen: transcript.length });
             log(`[STT] Final: "${transcript}"`);
             markSttFinalForLatency(callId);
-            await handleUserTurn(transcript);
+            void enqueueUserTurn(transcript).catch((e) =>
+              log(`enqueueUserTurn failed: ${e instanceof Error ? e.message : String(e)}`)
+            );
           }
         }
       } catch {}
@@ -482,7 +516,30 @@ export function createCallEngine(opts: EngineOptions): void {
   }
 
   // ── LLM response ────────────────────────────────────────────────────────────
-  async function handleUserTurn(transcript: string): Promise<void> {
+  async function enqueueUserTurn(transcript: string): Promise<void> {
+    if (userTurnBusy) {
+      pendingUserTranscript = transcript;
+      log(`[STT] Queued final while busy (${transcript.slice(0, 72)}…)`);
+      return;
+    }
+    userTurnBusy = true;
+    try {
+      let next: string | null = transcript;
+      while (next) {
+        const t = next;
+        next = null;
+        await handleUserTurnImpl(t);
+        if (pendingUserTranscript) {
+          next = pendingUserTranscript;
+          pendingUserTranscript = null;
+        }
+      }
+    } finally {
+      userTurnBusy = false;
+    }
+  }
+
+  async function handleUserTurnImpl(transcript: string): Promise<void> {
     if (isEnded) return;
 
     const microPause = ENV.voiceResponseMicroPauseMs;
@@ -524,7 +581,7 @@ export function createCallEngine(opts: EngineOptions): void {
       return;
     }
 
-    conversationHistory.push({ role: "user", content: transcript });
+    appendHistory("user", transcript);
 
     traceEvent(callId, "llm_route", { path: "cerebras" });
     log("[ROUTE] Cerebras (A/B — set LLM_ALLOW_ANTHROPIC_FALLBACK for Claude)");
@@ -568,7 +625,7 @@ export function createCallEngine(opts: EngineOptions): void {
     const prompt = buildPrompt(callState, businessName, industry, clientConfig);
     const messages = [
       { role: "system" as const, content: prompt },
-      ...conversationHistory.slice(-8),
+      ...historyForLlm(),
     ];
 
     const models = cerebrasModelCandidates();
@@ -609,7 +666,7 @@ export function createCallEngine(opts: EngineOptions): void {
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
     const prompt = buildPrompt(callState, businessName, industry, clientConfig);
-    const messages = conversationHistory.slice(-8).map(m => ({
+    const messages = historyForLlm().map(m => ({
       role: m.role as "user" | "assistant",
       content: m.content,
     }));
@@ -690,7 +747,7 @@ export function createCallEngine(opts: EngineOptions): void {
     // Store assistant response
     const cleanResponse = fullText.replace(/TOOL:\s*\w+\s*\{[^}]*\}/g, "").trim();
     if (cleanResponse) {
-      conversationHistory.push({ role: "assistant", content: cleanResponse });
+      appendHistory("assistant", cleanResponse);
       callState = markQuestionAnswered(callState);
     }
 
@@ -706,7 +763,7 @@ export function createCallEngine(opts: EngineOptions): void {
     cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     cartesiaSend(text, false);
     cartesiaFlush();
-    conversationHistory.push({ role: "assistant", content: text });
+    appendHistory("assistant", text);
   }
 
   // ── Tool execution ────────────────────────────────────────────────────────

@@ -106,14 +106,14 @@ export default function LandingFaq({ variant = "dark" }: { variant?: FaqVariant 
           className={
             light
               ? "w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-2 shadow-sm"
-              : "w-full rounded-xl border border-white/[0.08] bg-[#141820] px-2"
+              : "w-full rounded-xl border border-white/25 bg-black px-2"
           }
         >
           {items.map((item, i) => (
             <AccordionItem
               key={item.q}
               value={`item-${i}`}
-              className={light ? "border-zinc-200 px-2" : "border-white/[0.07] px-2"}
+              className={light ? "border-zinc-200 px-2" : "border-white/20 px-2"}
             >
               <AccordionTrigger
                 className={

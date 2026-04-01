@@ -6,7 +6,7 @@ export default function MarketingFooter() {
   return (
     <footer
       style={{
-        backgroundColor: "#07080d",
+        backgroundColor: "#000000",
         borderTop: `1px solid ${C.borderW}`,
         padding: "48px 24px 32px",
         fontFamily: "-apple-system, 'Helvetica Neue', Arial, sans-serif",
