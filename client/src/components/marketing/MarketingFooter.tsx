@@ -24,7 +24,7 @@ export default function MarketingFooter() {
         >
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-              <ApexLogo variant="full" imgClassName="h-[44px] w-auto rounded-md border border-white/10 sm:h-[52px]" />
+              <ApexLogo variant="full" size="md" imgClassName="rounded-md border border-white/10 px-2 py-1" />
             </div>
             <p style={{ color: C.dim2, fontSize: 13, lineHeight: 1.65, maxWidth: 280 }}>
               AI phone agents for inbound and outbound. Book more appointments without scaling headcount.

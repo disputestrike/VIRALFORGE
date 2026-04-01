@@ -85,7 +85,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-6 max-w-sm mx-auto px-4">
           <div className="mb-8 flex items-center justify-center">
-            <ApexLogo variant="wordmark" imgClassName="h-10 w-auto rounded-md border border-border/40 sm:h-12" />
+            <ApexLogo variant="wordmark" size="lg" imgClassName="rounded-md border border-border/40 px-3 py-2" />
           </div>
           <h2 className="text-xl font-semibold">Sign in to continue</h2>
           <p className="text-muted-foreground text-sm">Access your campaign management dashboard</p>
@@ -114,16 +114,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <div className="h-14 flex items-center border-b border-border px-3 gap-2 overflow-hidden">
           {!collapsed && (
             <Link href="/dashboard" className="flex flex-col gap-0.5 no-underline flex-1 min-w-0">
-              <ApexLogo
-                variant="full"
-                imgClassName="h-7 w-auto max-w-[148px] object-left object-contain rounded-md border border-border/40 sm:h-8"
-              />
+              <ApexLogo variant="full" size="xs" imgClassName="max-w-[148px] rounded-md border border-border/40 px-1.5 py-0.5" />
               <p className="text-[9px] text-muted-foreground leading-none">Outbound Engine</p>
             </Link>
           )}
           {collapsed && (
             <Link href="/dashboard" className="flex items-center justify-center w-full no-underline">
-              <ApexLogo variant="mark" imgClassName="h-6 w-auto rounded-md border border-border/40 sm:h-7" />
+              <ApexLogo variant="mark" size="xs" imgClassName="rounded-md border border-border/40" />
             </Link>
           )}
         </div>

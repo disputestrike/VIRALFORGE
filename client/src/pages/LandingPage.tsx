@@ -205,7 +205,7 @@ export default function LandingPage() {
         <div className="pointer-events-none absolute left-1/2 top-[8%] h-[420px] w-[780px] -translate-x-1/2 bg-[radial-gradient(ellipse,rgba(29,111,244,0.12)_0%,transparent_65%)]" />
         <div className="relative mx-auto max-w-3xl">
           <div className="mb-6 flex justify-center sm:mb-8">
-            <ApexLogo variant="full" imgClassName="h-[64px] w-auto rounded-md border border-white/10 sm:h-[88px]" />
+            <ApexLogo variant="full" size="lg" imgClassName="rounded-md border border-white/10 px-3 py-1.5" />
           </div>
           <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-200">
             <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />
@@ -399,7 +399,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-5xl">
           <div className="mb-12 text-center">
             <div className="mb-4 flex justify-center">
-              <ApexLogo variant="mark" imgClassName="h-[44px] w-auto rounded-md border border-white/10 sm:h-[54px]" />
+              <ApexLogo variant="mark" size="md" imgClassName="rounded-md border border-white/10 px-3 py-2" />
             </div>
             <p className="text-xs font-bold uppercase tracking-wider text-blue-400">Why ApexAI</p>
             <h2 className="mt-3 text-3xl font-extrabold text-white md:text-4xl">Legacy IVR vs ApexAI</h2>
