@@ -538,8 +538,9 @@ export function createCallEngine(opts: EngineOptions): void {
     traceEvent(callId, "llm_route", { path: "cerebras" });
     log("[ROUTE] Cerebras (A/B — set LLM_ALLOW_ANTHROPIC_FALLBACK for Claude)");
 
+    // Anthropic is ON by default — only disabled if explicitly set to false
     const allowAnthropic =
-      process.env.LLM_ALLOW_ANTHROPIC_FALLBACK === "true" &&
+      process.env.LLM_ALLOW_ANTHROPIC_FALLBACK !== "false" &&
       !!(process.env.ANTHROPIC_API_KEY ?? "").trim();
 
     const sorry =
@@ -548,7 +549,15 @@ export function createCallEngine(opts: EngineOptions): void {
     try {
       await respondCerebras(epoch, transcript);
     } catch (e: any) {
-      log(`[ERROR] Cerebras LLM failed: ${e.message}`);
+      log(`[ERROR] Cerebras failed: ${e.message} — trying Claude`);
+      if (allowAnthropic) {
+        try {
+          await respondAnthropicFallback(epoch, transcript);
+          return;
+        } catch (e2: any) {
+          log(`[ERROR] Claude fallback failed: ${e2.message}`);
+        }
+      }
       try {
         await respondCerebras(epoch, transcript);
       } catch (e2: any) {

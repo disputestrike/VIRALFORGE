@@ -35,7 +35,7 @@ export interface LLMResponse {
  */
 export function cerebrasModelCandidates(): string[] {
   const env = (process.env.CEREBRAS_MODEL ?? "").trim();
-  const fallbacks = ["llama-3.1-70b", "llama3.1-70b", "llama3.1-8b"];
+  const fallbacks = ["llama3.3-70b", "llama3.1-70b", "llama3.1-8b"];
   const out: string[] = [];
   const add = (m: string) => {
     if (m && !out.includes(m)) out.push(m);
