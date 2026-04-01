@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Phone, ArrowRight, CheckCircle2, Loader2, Mic } from "lucide-react";
+import { Phone, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
 
 const D2 = "#141820";
 const D3 = "#1a1e2a";
@@ -51,70 +51,69 @@ export default function DemoCallWidget() {
   };
 
   return (
-    <section id="try-it" className="py-20 px-6" style={{ backgroundColor: D2 }}>
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-5"
-            style={{ backgroundColor: `${GREEN}15`, border: `1px solid ${GREEN}30` }}>
-            <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: GREEN }} />
-            <span className="text-sm font-semibold" style={{ color: GREEN }}>Live Demo Available Now</span>
-          </div>
-          <h2 className="text-4xl md:text-5xl font-black text-white mb-4">
-            Experience the AI Firsthand
-          </h2>
-          <p className="text-xl max-w-2xl mx-auto" style={{ color: DIM2 }}>
-            Enter your number and our AI will call you within seconds. Hear exactly what your customers hear.
-          </p>
+    <div id="try-it" className="w-full">
+      <div className="text-center mb-8 sm:mb-10">
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-5"
+          style={{ backgroundColor: `${GREEN}15`, border: `1px solid ${GREEN}30` }}>
+          <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: GREEN }} />
+          <span className="text-sm font-semibold" style={{ color: GREEN }}>Live demo available</span>
         </div>
+        <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-4 tracking-tight">
+          Get called by the same voice your leads hear
+        </h2>
+        <p className="text-base sm:text-lg max-w-xl mx-auto leading-relaxed px-2" style={{ color: "rgba(255,255,255,0.72)" }}>
+          Enter your number — you’ll get a short demo call in seconds. No signup required.
+        </p>
+      </div>
 
-        <div className="max-w-xl mx-auto">
-          <div className="p-8 rounded-2xl" style={{ backgroundColor: D3, border: `1px solid ${BLUE}30` }}>
+      <div className="max-w-lg mx-auto w-full">
+        <div className="p-6 sm:p-8 rounded-2xl" style={{ backgroundColor: D3, border: `1px solid ${DIM3}` }}>
 
             {step === "form" && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
-                    <label className="block text-xs font-semibold mb-1.5 text-white">Your First Name *</label>
+                    <label className="block text-sm font-medium mb-2 text-white/90">First name *</label>
                     <input
                       type="text"
-                      placeholder="e.g. Sarah"
+                      placeholder="Sarah"
                       value={form.firstName}
                       onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))}
-                      className="w-full px-4 py-3 rounded-xl text-white placeholder-gray-500 text-sm"
+                      className="w-full px-4 py-3 rounded-xl text-white placeholder:text-white/35"
                       style={{ backgroundColor: D2, border: `1px solid ${DIM3}`, outline: "none", fontSize: "16px" }}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold mb-1.5 text-white">Your Phone Number *</label>
+                    <label className="block text-sm font-medium mb-2 text-white/90">Phone number *</label>
                     <input
                       type="tel"
                       placeholder="(555) 000-0000"
                       value={form.phone}
                       onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                      className="w-full px-4 py-3 rounded-xl text-white placeholder-gray-500 text-sm"
+                      className="w-full px-4 py-3 rounded-xl text-white placeholder:text-white/35"
                       style={{ backgroundColor: D2, border: `1px solid ${DIM3}`, outline: "none", fontSize: "16px" }}
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-1.5 text-white">Your Email (optional)</label>
+                  <label className="block text-sm font-medium mb-2 text-white/90">Email (optional)</label>
                   <input
                     type="email"
                     placeholder="you@company.com"
                     value={form.email}
                     onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                    className="w-full px-4 py-3 rounded-xl text-white placeholder-gray-500 text-sm"
+                    className="w-full px-4 py-3 rounded-xl text-white placeholder:text-white/35"
                     style={{ backgroundColor: D2, border: `1px solid ${DIM3}`, outline: "none", fontSize: "16px" }}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-1.5 text-white">Your Industry</label>
+                  <label className="block text-sm font-medium mb-2 text-white/90">Industry</label>
                   <select
                     value={form.industry}
                     onChange={e => setForm(f => ({ ...f, industry: e.target.value }))}
-                    className="w-full px-4 py-3 rounded-xl text-white text-sm"
+                    className="w-full px-4 py-3 rounded-xl text-white"
                     style={{ backgroundColor: D2, border: `1px solid ${DIM3}`, outline: "none", fontSize: "16px" }}
                   >
                     {INDUSTRIES.map(ind => (
@@ -137,8 +136,8 @@ export default function DemoCallWidget() {
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
 
-                <p className="text-center text-xs" style={{ color: DIM2 }}>
-                  By submitting you agree to receive a demo call. No spam. No obligation.
+                <p className="text-center text-xs leading-relaxed pt-1" style={{ color: "rgba(255,255,255,0.5)" }}>
+                  By submitting you agree to one demo call. No spam. Unsubscribe anytime.
                 </p>
               </div>
             )}
@@ -151,14 +150,14 @@ export default function DemoCallWidget() {
                     style={{ backgroundColor: BLUE }} />
                   <Phone className="w-8 h-8" style={{ color: BLUE_LIGHT }} />
                 </div>
-                <h3 className="text-2xl font-bold text-white mb-2">Connecting Your Call...</h3>
+                <h3 className="text-2xl font-bold text-white mb-2">Calling you now…</h3>
                 <p className="text-sm mb-6" style={{ color: DIM2 }}>
-                  Our AI is dialing <strong className="text-white">{form.phone}</strong> right now.
-                  <br />Pick up in the next 30 seconds.
+                  Dialing <strong className="text-white">{form.phone}</strong>
+                  <br />Answer within the next minute.
                 </p>
                 <div className="flex items-center justify-center gap-2" style={{ color: DIM2 }}>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span className="text-sm">Routing through SignalWire...</span>
+                  <span className="text-sm">Connecting…</span>
                 </div>
               </div>
             )}
@@ -186,23 +185,21 @@ export default function DemoCallWidget() {
                 </div>
                 <Button variant="outline" className="text-white border-white/20"
                   onClick={() => { setStep("form"); setForm({ firstName: "", phone: "", email: "", industry: "solar" }); }}>
-                  Try Another Number
+                  Try another number
                 </Button>
               </div>
             )}
-          </div>
+        </div>
 
-          {/* Trust indicators */}
-          <div className="flex flex-wrap justify-center gap-4 mt-6">
-            {["No credit card required", "Call in under 30 seconds", "Real AI — not a recording"].map(t => (
-              <div key={t} className="flex items-center gap-1.5 text-xs" style={{ color: DIM2 }}>
-                <CheckCircle2 className="w-3 h-3" style={{ color: GREEN }} />
-                {t}
-              </div>
-            ))}
-          </div>
+        <div className="flex flex-wrap justify-center gap-x-6 gap-y-3 mt-8 px-2">
+          {["No credit card", "Usually under a minute", "Live conversation — not a recording"].map(t => (
+            <div key={t} className="flex items-center gap-2 text-xs sm:text-sm" style={{ color: "rgba(255,255,255,0.55)" }}>
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" style={{ color: GREEN }} />
+              {t}
+            </div>
+          ))}
         </div>
       </div>
-    </section>
+    </div>
   );
 }

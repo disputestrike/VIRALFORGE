@@ -22,13 +22,11 @@ const C = {
   blue3:  "#60a5fa",
   green:  "#22c55e",
   white:  "#ffffff",
-  gray:   "#f8f9fb",
   dim:    "rgba(255,255,255,0.62)",
   dim2:   "rgba(255,255,255,0.38)",
   dim3:   "rgba(255,255,255,0.07)",
   border: "rgba(29,111,244,0.2)",
   borderW:"rgba(255,255,255,0.07)",
-  borderL:"rgba(0,0,0,0.07)",
 };
 
 const testimonials = [
@@ -194,6 +192,8 @@ export default function LandingPage() {
         .cta-btn{transition:opacity 0.15s,transform 0.15s;cursor:pointer}
         .cta-btn:hover{opacity:0.9;transform:translateY(-1px)}
         @media(max-width:768px){.hide-mobile{display:none!important}.grid-2{grid-template-columns:1fr!important}.grid-3{grid-template-columns:1fr!important}.grid-4{grid-template-columns:repeat(2,1fr)!important}}
+        @media(max-width:900px){.how-works-grid{grid-template-columns:1fr!important;gap:14px!important}.how-works-arrow{display:none!important}}
+        @media(max-width:768px){.footer-cols{grid-template-columns:1fr!important;gap:28px!important}}
       `}</style>
 
       {/* TICKER */}
@@ -286,13 +286,13 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* LOGOS — white strip */}
-      <section style={{backgroundColor:C.gray,padding:"28px 24px",borderTop:`1px solid ${C.borderL}`,borderBottom:`1px solid ${C.borderL}`}}>
+      {/* LOGOS — dark strip */}
+      <section style={{backgroundColor:C.bg2,padding:"32px 24px",borderTop:`1px solid ${C.borderW}`,borderBottom:`1px solid ${C.borderW}`}}>
         <div style={{maxWidth:1100,margin:"0 auto"}}>
-          <p style={{color:"rgba(15,17,23,0.4)",fontSize:12,textAlign:"center",marginBottom:20,textTransform:"uppercase",letterSpacing:"0.08em",fontWeight:600}}>Trusted by fast-growing businesses</p>
-          <div style={{display:"flex",gap:24,justifyContent:"center",alignItems:"center",flexWrap:"wrap"}}>
+          <p style={{color:C.dim2,fontSize:12,textAlign:"center",marginBottom:20,textTransform:"uppercase",letterSpacing:"0.08em",fontWeight:600}}>Trusted by fast-growing businesses</p>
+          <div style={{display:"flex",gap:16,justifyContent:"center",alignItems:"center",flexWrap:"wrap"}}>
             {logos.map(l=>(
-              <div key={l} style={{color:"rgba(15,17,23,0.45)",fontSize:13,fontWeight:700,padding:"6px 14px",border:"1px solid rgba(0,0,0,0.1)",borderRadius:7,backgroundColor:C.white}}>
+              <div key={l} style={{color:C.dim,fontSize:13,fontWeight:600,padding:"8px 16px",border:`1px solid ${C.borderW}`,borderRadius:8,backgroundColor:C.bg3}}>
                 {l}
               </div>
             ))}
@@ -349,123 +349,122 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* HOW IT WORKS — white */}
-      <section style={{backgroundColor:C.gray,padding:"80px 24px"}}>
+      {/* HOW IT WORKS — dark, no vendor stack names */}
+      <section style={{backgroundColor:C.bg,padding:"80px 24px"}}>
         <div style={{maxWidth:1100,margin:"0 auto"}}>
           <div style={{textAlign:"center",marginBottom:52}}>
-            <div style={{color:C.blue,fontWeight:700,fontSize:13,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:16}}>How It Works</div>
-            <h2 style={{color:"#0a0c12",fontSize:"clamp(26px,4vw,44px)",fontWeight:800,marginBottom:16,letterSpacing:"-0.03em"}}>
-              Streaming end-to-end. No dead air.
+            <div style={{color:C.blue2,fontWeight:700,fontSize:13,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:16}}>How it works</div>
+            <h2 style={{color:C.white,fontSize:"clamp(26px,4vw,44px)",fontWeight:800,marginBottom:16,letterSpacing:"-0.03em"}}>
+              Real-time phone conversation — not a chatbot
             </h2>
-            <p style={{color:"rgba(10,12,18,0.55)",fontSize:17,maxWidth:500,margin:"0 auto"}}>
-              Every component streams in real time — AI hears the caller, AI responds in milliseconds, AI speaks before the full answer is even generated.
+            <p style={{color:C.dim,fontSize:17,maxWidth:560,margin:"0 auto",lineHeight:1.65}}>
+              Your caller talks naturally. The system listens, decides when they are done speaking, generates a reply, and speaks with a natural voice — while optional actions like calendar and SMS run in the background.
             </p>
           </div>
-          <div className="grid-4" style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:0,alignItems:"center"}}>
+          <div className="how-works-grid" style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:12,alignItems:"stretch"}}>
             {[
-              {icon:"📞",label:"Caller Speaks",sub:"Call audio streams instantly",color:C.blue},
-              {icon:"🎤",label:"AI Voice Recognition",sub:"Advanced voice model detects end of speech in 300ms",color:C.blue2},
-              {icon:"🧠",label:"Fast AI / Claude",sub:"Fast AI for speed. Claude for objections.",color:"#8b5cf6"},
-              {icon:"🔊",label:"AI Voice TTS",sub:"Speaks on first sentence. Zero dead air.",color:C.green},
-              {icon:"✅",label:"Action Taken",sub:"Booking, CRM, SMS — real tools, real results",color:"#f59e0b"},
+              {icon:"📞",label:"Caller speaks",sub:"Audio from the phone line is processed continuously.",color:C.blue},
+              {icon:"🎤",label:"Speech timing",sub:"Detects when the caller finishes so replies do not talk over them.",color:C.blue2},
+              {icon:"🧠",label:"Intelligent reply",sub:"Tuned for natural sales and support conversations on the phone.",color:"#a78bfa"},
+              {icon:"🔊",label:"Natural voice",sub:"Speaks as the answer is ready — minimal awkward silence.",color:C.green},
+              {icon:"✅",label:"Actions",sub:"Bookings, CRM updates, and text confirmations when you enable them.",color:"#f59e0b"},
             ].map(({icon,label,sub,color},i) => (
-              <div key={label} style={{display:"flex",alignItems:"center"}}>
-                <div className="hover-card" style={{backgroundColor:C.white,borderRadius:14,padding:"22px 16px",border:`1px solid ${C.borderL}`,textAlign:"center",flex:1,minHeight:150,display:"flex",flexDirection:"column",justifyContent:"center",gap:8}}>
-                  <div style={{fontSize:26}}>{icon}</div>
-                  <div style={{color,fontWeight:700,fontSize:13}}>{label}</div>
-                  <div style={{color:"rgba(10,12,18,0.5)",fontSize:12,lineHeight:1.5}}>{sub}</div>
+              <div key={label} style={{display:"flex",alignItems:"stretch",minWidth:0}}>
+                <div className="hover-card" style={{backgroundColor:C.bg3,borderRadius:14,padding:"20px 14px",border:`1px solid ${C.borderW}`,textAlign:"center",flex:1,minHeight:152,display:"flex",flexDirection:"column",justifyContent:"flex-start",gap:8}}>
+                  <div style={{fontSize:24}}>{icon}</div>
+                  <div style={{color,fontWeight:700,fontSize:12,lineHeight:1.3}}>{label}</div>
+                  <div style={{color:C.dim2,fontSize:11,lineHeight:1.5}}>{sub}</div>
                 </div>
-                {i<4 && <div style={{color:C.blue2,fontSize:20,padding:"0 3px",flexShrink:0}}>→</div>}
+                {i<4 && <div className="how-works-arrow" style={{color:C.blue2,fontSize:18,padding:"0 4px",flexShrink:0,display:"flex",alignItems:"center"}}>→</div>}
               </div>
             ))}
           </div>
-          <div className="grid-4" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16,marginTop:36}}>
+          <div className="grid-4" style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:14,marginTop:36}}>
             {[
-              {value:"< 1s",label:"Total perceived latency"},
-              {value:"300ms",label:"End-of-speech detect"},
-              {value:"~30ms",label:"Fast AI inference"},
-              {value:"ZERO",label:"Filler words — ever"},
+              {value:"Sub‑second",label:"Typical response start"},
+              {value:"Low latency",label:"Built for live calls"},
+              {value:"24/7",label:"Always answers"},
+              {value:"Human transfer",label:"Hand off anytime"},
             ].map(({value,label}) => (
-              <div key={label} style={{backgroundColor:C.white,border:`1px solid ${C.borderL}`,borderRadius:12,padding:"18px 16px",textAlign:"center"}}>
-                <div style={{color:C.blue,fontWeight:900,fontSize:22,letterSpacing:"-0.03em"}}>{value}</div>
-                <div style={{color:"rgba(10,12,18,0.5)",fontSize:12,marginTop:4}}>{label}</div>
+              <div key={label} style={{backgroundColor:C.bg3,border:`1px solid ${C.borderW}`,borderRadius:12,padding:"18px 14px",textAlign:"center"}}>
+                <div style={{color:C.blue3,fontWeight:800,fontSize:18,letterSpacing:"-0.02em"}}>{value}</div>
+                <div style={{color:C.dim2,fontSize:12,marginTop:6,lineHeight:1.4}}>{label}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* LIVE DEMO — dark, hero-level */}
-      <section id="demo" style={{backgroundColor:C.bg2,padding:"88px 24px"}}>
-        <div style={{maxWidth:680,margin:"0 auto",textAlign:"center"}}>
-          <div style={{color:C.blue2,fontWeight:700,fontSize:13,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:16}}>Live Demo</div>
-          <h2 style={{color:C.white,fontSize:"clamp(26px,4vw,44px)",fontWeight:800,marginBottom:16,letterSpacing:"-0.03em"}}>
-            Hear it for yourself.<br/><span style={{color:C.blue3}}>Right now.</span>
-          </h2>
-          <p style={{color:C.dim,fontSize:17,marginBottom:44,maxWidth:440,margin:"0 auto 44px"}}>
-            Enter your number and get called instantly by ApexAI. No signup. No credit card.
-          </p>
-          <div style={{backgroundColor:C.bg3,borderRadius:20,padding:"40px 36px",border:`1px solid ${C.border}`}}>
+      {/* LIVE DEMO */}
+      <section id="demo" style={{backgroundColor:C.bg2,padding:"80px 24px 96px",borderTop:`1px solid ${C.borderW}`}}>
+        <div style={{maxWidth:720,margin:"0 auto"}}>
+          <div style={{textAlign:"center",marginBottom:8}}>
+            <div style={{color:C.blue2,fontWeight:700,fontSize:13,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:16}}>Live demo</div>
+            <p style={{color:C.dim,fontSize:16,maxWidth:480,margin:"0 auto",lineHeight:1.6}}>
+              No signup. No credit card. We call you so you can hear the same experience your leads get.
+            </p>
+          </div>
+          <div style={{backgroundColor:C.bg3,borderRadius:20,padding:"28px 22px 36px",marginTop:36,border:`1px solid ${C.borderW}`}}>
             <DemoCallWidget />
           </div>
         </div>
       </section>
 
-      {/* INDUSTRY DEMOS — white */}
-      <section id="inbound" style={{backgroundColor:C.gray,padding:"80px 24px"}}>
+      {/* INDUSTRY DEMOS */}
+      <section id="inbound" style={{backgroundColor:C.bg,padding:"80px 24px",borderTop:`1px solid ${C.borderW}`}}>
         <div style={{maxWidth:1100,margin:"0 auto",textAlign:"center"}}>
-          <div style={{color:C.blue,fontWeight:700,fontSize:13,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:16}}>Industry Packs</div>
-          <h2 style={{color:"#0a0c12",fontSize:"clamp(26px,4vw,44px)",fontWeight:800,marginBottom:16,letterSpacing:"-0.03em"}}>
-            Pre-trained for your industry.
+          <div style={{color:C.blue2,fontWeight:700,fontSize:13,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:16}}>Industry packs</div>
+          <h2 style={{color:C.white,fontSize:"clamp(26px,4vw,44px)",fontWeight:800,marginBottom:16,letterSpacing:"-0.03em"}}>
+            Ready for your trade
           </h2>
-          <p style={{color:"rgba(10,12,18,0.55)",fontSize:17,maxWidth:480,margin:"0 auto 52px"}}>
-            Solar, roofing, HVAC, insurance, real estate — industry-specific scripts and qualification flows ready out of the box.
+          <p style={{color:C.dim,fontSize:17,maxWidth:520,margin:"0 auto 40px",lineHeight:1.65}}>
+            Solar, roofing, HVAC, insurance, real estate, and more — scripts and qualification flows you can customize.
           </p>
           <IndustryDemos />
         </div>
       </section>
 
-      {/* ROI CALCULATOR — dark */}
-      <section id="outbound" style={{backgroundColor:C.bg,padding:"80px 24px"}}>
-        <div style={{maxWidth:760,margin:"0 auto",textAlign:"center"}}>
-          <div style={{color:C.blue2,fontWeight:700,fontSize:13,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:16}}>ROI Calculator</div>
+      {/* ROI CALCULATOR */}
+      <section id="outbound" style={{backgroundColor:C.bg2,padding:"80px 24px",borderTop:`1px solid ${C.borderW}`}}>
+        <div style={{maxWidth:960,margin:"0 auto",textAlign:"center"}}>
+          <div style={{color:C.blue2,fontWeight:700,fontSize:13,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:16}}>Revenue calculator</div>
           <h2 style={{color:C.white,fontSize:"clamp(26px,4vw,44px)",fontWeight:800,marginBottom:16,letterSpacing:"-0.03em"}}>
-            See your actual numbers.
+            Model the gap
           </h2>
-          <p style={{color:C.dim,fontSize:17,marginBottom:44}}>
-            Enter your business details. See exactly what ApexAI is worth.
+          <p style={{color:C.dim,fontSize:17,marginBottom:40,maxWidth:520,marginLeft:"auto",marginRight:"auto",lineHeight:1.65}}>
+            Slide your current funnel metrics. See an illustrative comparison when more leads get contacted and booked.
           </p>
           <ROICalculator />
         </div>
       </section>
 
-      {/* TESTIMONIALS — white */}
-      <section id="results" style={{backgroundColor:C.gray,padding:"80px 24px"}}>
+      {/* TESTIMONIALS */}
+      <section id="results" style={{backgroundColor:C.bg,padding:"80px 24px",borderTop:`1px solid ${C.borderW}`}}>
         <div style={{maxWidth:1100,margin:"0 auto"}}>
           <div style={{textAlign:"center",marginBottom:52}}>
-            <div style={{color:C.blue,fontWeight:700,fontSize:13,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:16}}>Real Results</div>
-            <h2 style={{color:"#0a0c12",fontSize:"clamp(26px,4vw,44px)",fontWeight:800,letterSpacing:"-0.03em"}}>
-              Real businesses. Real revenue.
+            <div style={{color:C.blue2,fontWeight:700,fontSize:13,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:16}}>Results</div>
+            <h2 style={{color:C.white,fontSize:"clamp(26px,4vw,44px)",fontWeight:800,letterSpacing:"-0.03em"}}>
+              Teams using ApexAI
             </h2>
           </div>
           <div className="grid-3" style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:24}}>
             {testimonials.map(({name,co,quote,before,after,icon}) => (
-              <div key={name} className="hover-card" style={{backgroundColor:C.white,borderRadius:20,padding:28,border:`1px solid ${C.borderL}`}}>
+              <div key={name} className="hover-card" style={{backgroundColor:C.bg3,borderRadius:20,padding:28,border:`1px solid ${C.borderW}`}}>
                 <div style={{fontSize:32,marginBottom:16}}>{icon}</div>
-                <p style={{color:"#0a0c12",fontSize:15,lineHeight:1.65,marginBottom:20,fontStyle:"italic"}}>"{quote}"</p>
+                <p style={{color:C.white,fontSize:15,lineHeight:1.65,marginBottom:20,fontStyle:"italic",opacity:0.92}}>&ldquo;{quote}&rdquo;</p>
                 <div style={{display:"flex",gap:16,marginBottom:16}}>
-                  <div style={{flex:1,backgroundColor:"rgba(239,68,68,0.08)",borderRadius:8,padding:"8px 12px"}}>
-                    <div style={{color:"rgba(239,68,68,0.7)",fontSize:10,fontWeight:700,marginBottom:2}}>BEFORE</div>
-                    <div style={{color:"rgba(10,12,18,0.6)",fontSize:12}}>{before}</div>
+                  <div style={{flex:1,backgroundColor:"rgba(239,68,68,0.1)",borderRadius:8,padding:"8px 12px"}}>
+                    <div style={{color:"rgba(248,113,113,0.9)",fontSize:10,fontWeight:700,marginBottom:2}}>BEFORE</div>
+                    <div style={{color:C.dim2,fontSize:12}}>{before}</div>
                   </div>
-                  <div style={{flex:1,backgroundColor:"rgba(34,197,94,0.08)",borderRadius:8,padding:"8px 12px"}}>
+                  <div style={{flex:1,backgroundColor:"rgba(34,197,94,0.1)",borderRadius:8,padding:"8px 12px"}}>
                     <div style={{color:C.green,fontSize:10,fontWeight:700,marginBottom:2}}>AFTER</div>
-                    <div style={{color:"rgba(10,12,18,0.7)",fontSize:12,fontWeight:600}}>{after}</div>
+                    <div style={{color:C.dim,fontSize:12,fontWeight:600}}>{after}</div>
                   </div>
                 </div>
                 <div>
-                  <div style={{color:C.blue,fontWeight:700,fontSize:14}}>{name}</div>
-                  <div style={{color:"rgba(10,12,18,0.5)",fontSize:13}}>{co}</div>
+                  <div style={{color:C.blue3,fontWeight:700,fontSize:14}}>{name}</div>
+                  <div style={{color:C.dim2,fontSize:13}}>{co}</div>
                 </div>
               </div>
             ))}
@@ -483,7 +482,7 @@ export default function LandingPage() {
             {[
               {icon:"🔒",title:"SOC 2 Ready",desc:"Security controls aligned with enterprise standards. Data encrypted in transit and at rest."},
               {icon:"📋",title:"TCPA Compliant",desc:"Built-in compliance controls for outbound calling at scale. Stay legal."},
-              {icon:"⚡",title:"99.9% Uptime",desc:"Railway infrastructure with automatic failover. Never goes down during business hours."},
+              {icon:"⚡",title:"99.9% Uptime",desc:"Hosted on redundant cloud infrastructure with monitoring and failover."},
               {icon:"🤝",title:"Human Handoff",desc:"Instant live transfer anytime a caller needs a real person. Seamless."},
               {icon:"📼",title:"All Calls Recorded",desc:"Full transcripts and recordings for every conversation. Review anytime."},
               {icon:"🌍",title:"12 Languages",desc:"English, Spanish, French, German, Portuguese, and more. Global ready."},
@@ -526,25 +525,51 @@ export default function LandingPage() {
       </section>
 
       {/* FOOTER */}
-      <footer style={{backgroundColor:C.bg2,borderTop:`1px solid ${C.borderW}`,padding:"40px 24px"}}>
-        <div style={{maxWidth:1100,margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:16}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:28,height:28,borderRadius:7,background:C.blue,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <svg width="14" height="14" viewBox="0 0 18 18" fill="none"><path d="M9 2L15.5 14H2.5L9 2Z" fill="white"/></svg>
+      <footer style={{backgroundColor:"#07080d",borderTop:`1px solid ${C.borderW}`,padding:"48px 24px 32px"}}>
+        <div style={{maxWidth:1100,margin:"0 auto"}}>
+          <div className="grid-2 footer-cols" style={{display:"grid",gridTemplateColumns:"minmax(0,1.2fr) repeat(3,minmax(0,1fr))",gap:36,marginBottom:40}}>
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+                <div style={{width:30,height:30,borderRadius:8,background:C.blue,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <svg width="15" height="15" viewBox="0 0 18 18" fill="none"><path d="M9 2L15.5 14H2.5L9 2Z" fill="white"/></svg>
+                </div>
+                <span style={{color:C.white,fontWeight:800,fontSize:18}}>Apex<span style={{color:C.blue3}}>AI</span></span>
+              </div>
+              <p style={{color:C.dim2,fontSize:13,lineHeight:1.65,maxWidth:280}}>
+                AI phone agents for inbound and outbound. Book more calls without hiring a bigger floor.
+              </p>
+              <p style={{color:C.dim2,fontSize:12,marginTop:16}}>© {new Date().getFullYear()} Starlight Global</p>
             </div>
-            <span style={{color:C.white,fontWeight:800}}>Apex<span style={{color:C.blue3}}>AI</span></span>
-            <span style={{color:C.dim2,fontSize:13,marginLeft:8}}>© 2026 Starlight Global</span>
+            <div>
+              <div style={{color:C.white,fontSize:12,fontWeight:700,marginBottom:14,letterSpacing:"0.06em",textTransform:"uppercase"}}>Product</div>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <a href="#demo" className="nav-link" style={{fontSize:14}}>Live demo</a>
+                <a href="#inbound" className="nav-link" style={{fontSize:14}}>Industry samples</a>
+                <a href="/pricing" className="nav-link" style={{fontSize:14}}>Pricing</a>
+                <a href="/dashboard" className="nav-link" style={{fontSize:14}}>Dashboard</a>
+              </div>
+            </div>
+            <div>
+              <div style={{color:C.white,fontSize:12,fontWeight:700,marginBottom:14,letterSpacing:"0.06em",textTransform:"uppercase"}}>Company</div>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <a href="/about" className="nav-link" style={{fontSize:14}}>About us</a>
+                <a href="#results" className="nav-link" style={{fontSize:14}}>Case studies</a>
+                <a href="mailto:support@apexai.io" className="nav-link" style={{fontSize:14}}>Contact</a>
+              </div>
+            </div>
+            <div>
+              <div style={{color:C.white,fontSize:12,fontWeight:700,marginBottom:14,letterSpacing:"0.06em",textTransform:"uppercase"}}>Legal</div>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <a href="/privacy" className="nav-link" style={{fontSize:14}}>Privacy policy</a>
+                <a href="/terms" className="nav-link" style={{fontSize:14}}>Terms of service</a>
+                <a href="/security" className="nav-link" style={{fontSize:14}}>Security</a>
+              </div>
+            </div>
           </div>
-          <div style={{display:"flex",gap:28,flexWrap:"wrap"}}>
-            {[
-              {label:"Inbound AI",href:"#inbound"},
-              {label:"Outbound AI",href:"#outbound"},
-              {label:"Pricing",href:"/pricing"},
-              {label:"About",href:"/about"},
-              {label:"Dashboard",href:"/dashboard"},
-            ].map(({label,href}) => (
-              <a key={label} href={href} className="nav-link" style={{fontSize:14}}>{label}</a>
-            ))}
+          <div style={{borderTop:`1px solid ${C.borderW}`,paddingTop:24}}>
+            <p style={{color:C.dim2,fontSize:12,textAlign:"center",lineHeight:1.6}}>
+              Serving teams nationwide — Dallas · Phoenix · Tampa · Houston · Atlanta · Los Angeles · New York · Miami
+            </p>
           </div>
         </div>
       </footer>

@@ -3,7 +3,6 @@ import { Play, Pause, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const D2 = "#141820";
-const D3 = "#1a1e2a";
 const BLUE = "#1d6ff4";
 const BLUE_LIGHT = "#60a5fa";
 const GREEN = "#34d399";
@@ -106,29 +105,29 @@ export default function IndustryDemos() {
   };
 
   return (
-    <section id="demos" className="py-20 px-6" style={{ backgroundColor: D3 }}>
+    <div id="demos" className="w-full">
       <div className="max-w-5xl mx-auto">
-        <div className="text-center mb-12">
+        <div className="text-center mb-10 sm:mb-12">
           <div className="inline-block px-4 py-1.5 rounded-full text-xs font-semibold mb-4"
-            style={{ backgroundColor: `${BLUE}20`, border: `1px solid ${BLUE}40`, color: BLUE_LIGHT }}>
-            🎧 Listen Before You Commit
+            style={{ backgroundColor: `${BLUE}18`, border: `1px solid ${BLUE}35`, color: BLUE_LIGHT }}>
+            Industry samples
           </div>
-          <h2 className="text-4xl font-black text-white mb-4">
-            Hear the AI in Action — by Industry
+          <h2 className="text-3xl sm:text-4xl font-black text-white mb-4 tracking-tight">
+            Hear it by industry
           </h2>
-          <p className="text-lg max-w-2xl mx-auto" style={{ color: DIM2 }}>
-            Real AI conversations across 6+ industries. Play a sample, then let it call you.
+          <p className="text-base sm:text-lg max-w-2xl mx-auto leading-relaxed px-2" style={{ color: DIM2 }}>
+            Short recordings from real-style flows. Then get a live call to your phone.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {DEMOS.map((demo) => (
-            <div key={demo.id} className="group p-5 rounded-2xl transition-all duration-200"
+            <div key={demo.id} className="group p-5 sm:p-6 rounded-2xl transition-all duration-200"
               style={{ backgroundColor: D2, border: `1px solid ${DIM3}` }}
-              onMouseEnter={e => (e.currentTarget.style.borderColor = `${demo.color}40`)}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = `${demo.color}45`)}
               onMouseLeave={e => (e.currentTarget.style.borderColor = DIM3)}>
 
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-3 gap-2">
                 <div className="flex items-center gap-2">
                   <span className="text-2xl">{demo.emoji}</span>
                   <div>
@@ -136,20 +135,19 @@ export default function IndustryDemos() {
                     <p className="text-xs" style={{ color: DIM2 }}>{demo.duration}</p>
                   </div>
                 </div>
-                <span className="text-xs px-2 py-1 rounded-full font-medium"
-                  style={{ backgroundColor: `${demo.color}20`, color: demo.color }}>
-                  AI Demo
+                <span className="text-[10px] sm:text-xs px-2 py-1 rounded-full font-semibold shrink-0"
+                  style={{ backgroundColor: `${demo.color}18`, color: demo.color }}>
+                  Sample
                 </span>
               </div>
 
-              <p className="text-xs mb-4 leading-relaxed" style={{ color: DIM2 }}>{demo.tagline}</p>
+              <p className="text-xs mb-3 leading-relaxed min-h-[2.5rem]" style={{ color: DIM2 }}>{demo.tagline}</p>
 
-              {/* Sample script preview */}
-              <div className="p-3 rounded-xl mb-4 text-xs italic" style={{ backgroundColor: `${demo.color}10`, color: DIM2 }}>
-                "{demo.sampleScript}"
+              <div className="p-3 rounded-xl mb-4 text-xs italic leading-relaxed" style={{ backgroundColor: `${demo.color}0d`, color: DIM2 }}>
+                “{demo.sampleScript}”
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap sm:flex-nowrap">
                 <Button
                   onClick={() => togglePlay(demo.id, demo.audioUrl)}
                   className="flex-1 h-9 text-xs font-semibold"
@@ -163,8 +161,8 @@ export default function IndustryDemos() {
                     : <><Play className="w-3.5 h-3.5 mr-1.5" />Play Sample</>
                   }
                 </Button>
-                <a href="#try-it">
-                  <Button className="h-9 px-3 text-xs" style={{ backgroundColor: BLUE }}>
+                <a href="#demo">
+                  <Button className="h-9 px-3 text-xs shrink-0" style={{ backgroundColor: BLUE }} aria-label="Request call">
                     <Phone className="w-3.5 h-3.5" />
                   </Button>
                 </a>
@@ -173,18 +171,18 @@ export default function IndustryDemos() {
           ))}
         </div>
 
-        <div className="mt-10 text-center">
+        <div className="mt-12 text-center px-2">
           <p className="text-sm mb-4" style={{ color: DIM2 }}>
-            Want the AI to call <em>you</em> in your industry right now?
+            Want a live call on your phone?
           </p>
-          <a href="#try-it">
-            <Button size="lg" style={{ backgroundColor: BLUE }}>
+          <a href="#demo">
+            <Button size="lg" className="font-bold" style={{ backgroundColor: BLUE }}>
               <Phone className="w-4 h-4 mr-2" />
-              Get Called Now — Free Demo
+              Free demo call
             </Button>
           </a>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
