@@ -54,8 +54,9 @@ import { cerebrasModelCandidates, cerebrasPool } from "../_core/services/llmRout
 import { buildVoiceSystemPrompt } from "./dynamicPrompt";
 
 /**
- * Push LLM text to TTS as soon as it's speakable — not only on full sentence end.
- * Cuts time-to-first-audio and avoids the "robot waiting for a period" feel.
+ * Push LLM text to TTS sentence by sentence.
+ * Only splits on sentence endings (.!?) to avoid choppy comma-fragments.
+ * Waits for at least 40 chars before sending to avoid tiny fragments.
  */
 function drainSpeakableToTts(
   assembled: string,
@@ -67,32 +68,15 @@ function drainSpeakableToTts(
     const rest = assembled.slice(i);
     if (!rest.trim()) break;
 
-    const sent = rest.match(/^([^.!?]{1,}?[.!?]+\s*)/);
-    if (sent?.[1]?.trim() && sent[1].trim().length >= 2) {
-      sendClause(sent[1]);
-      i += sent[1].length;
+    // Only split on sentence boundaries — no comma splits
+    const sent = rest.match(/^(.{20,}?[.!?]+)\s*/);
+    if (sent?.[1]?.trim()) {
+      sendClause(sent[1].trim());
+      i += sent[0].length;
       continue;
     }
 
-    const comma = rest.match(/^([^,\n]{6,120},)/);
-    if (comma?.[1]?.trim()) {
-      sendClause(comma[1]);
-      i += comma[1].length;
-      continue;
-    }
-
-    // Slightly shorter thresholds than before → earlier TTS start (snappier feel on phone).
-    if (rest.length >= 46) {
-      const cut = rest.lastIndexOf(" ", 72);
-      if (cut >= 28) {
-        const frag = rest.slice(0, cut);
-        if (frag.trim().length >= 18) {
-          sendClause(frag);
-          i += frag.length;
-          continue;
-        }
-      }
-    }
+    // If we have a long chunk with no sentence end yet, wait for more tokens
     break;
   }
   return i;
@@ -326,9 +310,9 @@ export function createCallEngine(opts: EngineOptions): void {
       voice: {
         mode: "id",
         id: voiceId,
-        __experimental_controls: { speed: ttsSpeed },
       },
       transcript: text,
+      speed: ttsSpeed,
       output_format: {
         container: "raw",
         encoding: "pcm_s16le",
@@ -901,7 +885,7 @@ export function createCallEngine(opts: EngineOptions): void {
         }
         await new Promise((r) => setTimeout(r, 200));
         if (!isEnded) {
-          const greeting = `Hi, thanks for calling ${clientConfig.businessName}. How can I help you today?`;
+          const bname = clientConfig.businessName.replace("ApexAI","Apex A I").replace("Apex AI","Apex A I"); const greeting = `Hi, thanks for calling ${bname}. How can I help you today?`;
           await speak(greeting, generationEpoch);
           traceEvent(callId, "greeting_sent");
           log("[GREETING] Sent");

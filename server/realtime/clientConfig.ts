@@ -14,7 +14,7 @@ export type ClientConfig = {
 };
 
 export const DEFAULT_CLIENT: ClientConfig = {
-  businessName: "ApexAI",
+  businessName: "Apex A I",
   industry: "AI phone agent platform for revenue-driven businesses",
   serviceAreas: [],
   faqAnswers: {
