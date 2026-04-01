@@ -16,6 +16,7 @@ import { startSessionPersistenceInterval } from "./services/voiceSessionManager"
 // Live calls: realtimeVoiceEngine — Deepgram STT → Cerebras (fast) / Claude (smart) → Cartesia TTS (NOT Deepgram for TTS).
 import { createCallEngine } from "../realtime/realtimeVoiceEngine";
 import { getUsRingtoneWav } from "./telephony/usRingtoneWav";
+import { registerWebchatPublicRoutes } from "./webchatPublicApi";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -157,7 +158,7 @@ async function startServer() {
   console.log(`  Voice/SMS:   ${ENV.voiceEnabled ? "✅ SignalWire ready" : "⚠️  disabled (set SIGNALWIRE_PROJECT_ID)"}`);
   console.log(`  Email:       ${ENV.emailEnabled ? "✅ Resend ready" : "⚠️  disabled (set RESEND_API_KEY)"}`);
   console.log(`  STT:         ${ENV.sttEnabled ? "✅ Whisper ready" : "⚠️  disabled (set OPENAI_API_KEY)"}`);
-  console.log(`  TTS:         ${ENV.ttsEnabled ? "✅ ElevenLabs ready" : "⚠️  disabled (set ELEVENLABS_API_KEY)"}`);
+  console.log(`  TTS:         ${ENV.ttsEnabled ? "✅ Cartesia ready" : "⚠️  disabled (set CARTESIA_API_KEY)"}`);
   console.log(`  AI/LLM:      ${ENV.aiEnabled ? "✅ ready (Cerebras and/or Anthropic)" : "⚠️  disabled (CEREBRAS_API_KEY_* or ANTHROPIC_API_KEY)"}`);
   console.log("");
 
@@ -302,13 +303,16 @@ async function startServer() {
           const { Resend } = await import("resend");
           const resend = new Resend(ENV.resendApiKey);
 
-          const { email, type, leadName, scheduledTime, calendarLink } = job.data;
+          const { email, type, leadName, scheduledTime, calendarLink, customSubject, customHtml } = job.data;
           const SENDER_NAME = ENV.resendFromName;
 
           let subject = "";
           let html = "";
 
-          if (type === "appointment_confirmation") {
+          if (type === "sequence" && customSubject && customHtml) {
+            subject = customSubject;
+            html = customHtml;
+          } else if (type === "appointment_confirmation") {
             const formattedTime = new Date(scheduledTime || Date.now()).toLocaleString("en-US", {
               weekday: "long",
               month: "long",
@@ -418,6 +422,7 @@ async function startServer() {
   });
 
   app.use("/api/trpc", apiRateLimiter);
+  app.use("/api/public", apiRateLimiter);
   app.use("/api/auth", authRateLimiter);
   app.use("/api/trpc/voiceAI", aiRateLimiter);
   app.use("/api/trpc/leads.aiSearch", aiRateLimiter);
@@ -458,11 +463,13 @@ async function startServer() {
         sms:      ENV.smsEnabled    ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         email:    ENV.emailEnabled  ? "ready"  : "disabled — add RESEND_API_KEY",
         stt:      ENV.sttEnabled    ? "ready"  : "disabled — add OPENAI_API_KEY or DEEPGRAM_API_KEY",
-        tts:      ENV.ttsEnabled    ? "ready"  : "disabled — add ELEVENLABS_API_KEY or CARTESIA_API_KEY",
+        tts:      ENV.ttsEnabled    ? "ready"  : "disabled — add CARTESIA_API_KEY",
         ai:       ENV.aiEnabled     ? "ready"  : "disabled — add CEREBRAS_API_KEY_* or ANTHROPIC_API_KEY",
       },
     });
   });
+
+  registerWebchatPublicRoutes(app);
 
   // INTEGRATION: Voice webhook routes for SignalWire callbacks
   // ── SignalWire Webhook Signature Validation ───────────────────────────────────
@@ -531,7 +538,7 @@ async function startServer() {
           lead = await db.getLeadByPhone(From);
         }
         if (!lead) {
-          lead = await db.createLead({
+          const { insertId } = await db.createLead({
             firstName: "Inbound",
             lastName: From.slice(-4),
             phone: From,
@@ -540,7 +547,17 @@ async function startServer() {
             score: 60,
             segment: "warm",
             createdBy: ownerId ?? 1,
-          }) as any;
+          });
+          const { runEmailSequencesForLeadCreated } = await import("./services/emailSequenceTrigger");
+          void runEmailSequencesForLeadCreated(ownerId ?? 1, {
+            id: insertId,
+            firstName: "Inbound",
+            lastName: From.slice(-4),
+            phone: From,
+            email: null,
+            company: null,
+          }).catch((e) => console.warn("[EmailSequence] voice/inbound:", e));
+          lead = await db.getLeadById(insertId);
         }
         const vm = await import("./services/voiceSessionManager");
         const { getUserVoiceSettings } = await import("./services/voiceProfiles");
@@ -689,7 +706,21 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
     const { CallSid, From, To } = req.body;
     console.log(`[Inbound] Direct AI call from ${From}`);
 
-    // Spam filter
+    const dbMod = await import("../db");
+    const { normalizeToE164US } = await import("./phoneE164");
+    const fromNorm = From ? normalizeToE164US(String(From)) : "";
+    let ownerForBlock = 1;
+    if (To) {
+      const byLine = await dbMod.getUserIdByPhoneNumber(String(To));
+      if (byLine) ownerForBlock = byLine;
+    }
+    if (fromNorm && (await dbMod.isPhoneBlocked(ownerForBlock, fromNorm))) {
+      console.log(`[Inbound] Blocklist reject: ${From} (owner ${ownerForBlock})`);
+      res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?><Response><Reject reason="busy"/></Response>`);
+      return;
+    }
+
+    // Spam filter (toll-free solicitors)
     if (From) {
       const spamPrefixes = ["+1800","+1888","+1877","+1866","+1855","+1844","+1833"];
       const isSpam = spamPrefixes.some(p => From.replace(/\D/g,"").startsWith(p.replace(/\D/g,"")));
@@ -702,21 +733,32 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
 
     // Create lead and session (match /api/voice/start: tenant voice + language from called number)
     const sid = CallSid || `session_${Date.now()}`;
+    let inboundLeadId = "";
     try {
-      const db = await import("../db");
-      let lead = await db.getLeadByPhone(From);
-      if (!lead) {
-        const newLead = await db.createLead({
-          firstName: "Inbound", lastName: From.slice(-4),
-          phone: From, source: "inbound_call",
-          status: "new", score: 60, segment: "warm", createdBy: 1,
-        });
-        lead = newLead as any;
-      }
-      let ownerId = (lead as any)?.createdBy ?? 1;
+      let ownerId = 1;
       if (To) {
-        const byLine = await db.getUserIdByPhoneNumber(To);
+        const byLine = await dbMod.getUserIdByPhoneNumber(To);
         if (byLine) ownerId = byLine;
+      }
+      let lead = await dbMod.getLeadByPhone(From);
+      if (!lead) {
+        const { insertId } = await dbMod.createLead({
+          firstName: "Inbound", lastName: String(From).slice(-4),
+          phone: From, source: "inbound_call",
+          status: "new", score: 60, segment: "warm", createdBy: ownerId,
+        });
+        const { runEmailSequencesForLeadCreated } = await import("./services/emailSequenceTrigger");
+        void runEmailSequencesForLeadCreated(ownerId, {
+          id: insertId,
+          firstName: "Inbound",
+          lastName: String(From).slice(-4),
+          phone: From,
+          email: null,
+          company: null,
+        }).catch((e) => console.warn("[EmailSequence] voice/stream:", e));
+        lead = await dbMod.getLeadById(insertId);
+      } else {
+        ownerId = (lead as { createdBy?: number })?.createdBy ?? ownerId;
       }
       let language = "en";
       try {
@@ -737,7 +779,8 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
         voiceProfileId: voiceSettings.voiceProfileId,
       });
       voiceSessionManager.startSessionPersistenceInterval(sid);
-      console.log(`[Inbound] Session ${sid} created for lead ${(lead as any)?.id}`);
+      inboundLeadId = String((lead as any)?.id ?? "");
+      console.log(`[Inbound] Session ${sid} created for lead ${inboundLeadId}`);
     } catch (error) {
       console.error("[Inbound] Session setup error:", error);
     }
@@ -758,7 +801,7 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
 ${ringXml}  <Connect action="${statusCallback}" method="POST">
     <Stream url="${streamUrl}" track="inbound_track">
       <Parameter name="sessionId" value="${sid}" />
-      <Parameter name="leadId" value="" />
+      <Parameter name="leadId" value="${inboundLeadId}" />
     </Stream>
   </Connect>
   <Pause length="300" />
@@ -925,20 +968,28 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
     console.log(`[SMS] Inbound from ${From}: "${Body}"`);
 
     try {
-      // Store message in DB
+      // Store message in DB — tenant from called number (To), same as voice
       const db = await import("../db");
+      let ownerId = 1;
+      if (To) {
+        const uid = await db.getUserIdByPhoneNumber(String(To));
+        if (uid) ownerId = uid;
+      }
       let lead = await db.getLeadByPhone(From);
       if (!lead) {
-        lead = await db.createLead({
+        const { insertId } = await db.createLead({
           firstName: "SMS",
-          lastName: From.slice(-4),
+          lastName: String(From).slice(-4),
           phone: From,
           source: "inbound_sms",
           status: "new",
           score: 50,
           segment: "warm",
-          createdBy: 1, // System: assigned to account owner of this number
-        }) as any;
+          createdBy: ownerId,
+        });
+        lead = await db.getLeadById(insertId);
+      } else {
+        ownerId = (lead as { createdBy?: number | null }).createdBy ?? ownerId;
       }
 
       // Save message
@@ -948,6 +999,7 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
         direction: "inbound",
         body: Body,
         status: "delivered",
+        createdBy: ownerId,
       });
 
       console.log(`[SMS] Saved inbound message from lead ${(lead as any).id}`);

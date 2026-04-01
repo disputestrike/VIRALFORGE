@@ -100,12 +100,15 @@ export async function addSmsJob(data: {
 export async function addEmailJob(data: {
   leadId: number;
   email: string;
-  type: "appointment_confirmation" | "appointment_reminder" | "follow_up";
+  type: "appointment_confirmation" | "appointment_reminder" | "follow_up" | "sequence";
   leadName?: string;
   scheduledTime?: string;
   calendarLink?: string;
   delay?: number;
   msgId?: number;
+  /** When type is `sequence`, worker sends this HTML (already escaped/safe). */
+  customSubject?: string;
+  customHtml?: string;
 }): Promise<{ jobId: string; status: string }> {
   const queues = await getQueues();
   const jobId = `email_${data.leadId}_${Date.now()}`;

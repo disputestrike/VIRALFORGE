@@ -493,6 +493,27 @@ export class VoiceRealtimePipeline {
   private async onFinalTranscript(transcript: string): Promise<void> {
     if (!this.sessionId || this.isProcessing) return;
 
+    const sessionEarly = voiceSessionManager.getSession(this.sessionId);
+    if (sessionEarly?.userId) {
+      const { findEscalationMatch } = await import("./escalationRulesService");
+      const match = await findEscalationMatch(sessionEarly.userId, transcript);
+      if (match) {
+        const callSid = (this.socket as any)._callSid || this.sessionId;
+        let target = match.transferNumber?.trim() || null;
+        if (!target) target = await this.getTransferNumber();
+        if (target && callSid) {
+          try {
+            const { transferCallToHuman } = await import("./signalwireService");
+            await transferCallToHuman(callSid, target);
+            this.logger.log(`[Escalation] keyword matched → ${target}`);
+          } catch (e) {
+            this.logger.error("[Escalation] transfer failed", e);
+          }
+          return;
+        }
+      }
+    }
+
     this.isProcessing = true;
     const epoch = ++this.generationEpoch;
 

@@ -9,7 +9,7 @@ import {
 } from "recharts";
 import {
   Activity, BarChart3, Calendar, DollarSign, MessageSquare,
-  RefreshCw, TrendingUp, Users,
+  Phone, RefreshCw, Smile, TrendingUp, Users,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -51,7 +51,9 @@ export default function Analytics() {
   const utils = trpc.useUtils();
 
   const { data: metrics, isLoading: metricsLoading } = trpc.analytics.globalMetrics.useQuery();
+  const { data: breakdown } = trpc.analytics.dashboardBreakdown.useQuery();
   const { data: snapshots } = trpc.analytics.snapshots.useQuery({ limit: 12 });
+  const { data: sentimentSum } = trpc.analytics.sentimentSummary.useQuery();
   const { data: campaignsData } = trpc.campaigns.list.useQuery({});
 
   const recordSnapshotMutation = trpc.analytics.recordSnapshot.useMutation({
@@ -157,6 +159,103 @@ export default function Analytics() {
           </Card>
         ))}
       </div>
+
+      {/* Live data: leads by segment + calls by outcome */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Users className="w-4 h-4 text-primary" /> Your leads by segment
+            </CardTitle>
+            <p className="text-xs text-muted-foreground font-normal">Counts from leads you created in ApexAI</p>
+          </CardHeader>
+          <CardContent>
+            {(breakdown?.leadSegments?.length ?? 0) === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">No lead segment data yet.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={breakdown!.leadSegments.map((s, i) => ({
+                      name: s.segment,
+                      value: s.count,
+                      color: COLORS[i % COLORS.length],
+                    }))}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={72}
+                    label={({ name, value }) => `${name}: ${value}`}
+                  >
+                    {breakdown!.leadSegments.map((_, i) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Phone className="w-4 h-4 text-primary" /> Your calls by outcome
+            </CardTitle>
+            <p className="text-xs text-muted-foreground font-normal">From call recordings tied to your account</p>
+          </CardHeader>
+          <CardContent>
+            {(breakdown?.callsByOutcome?.length ?? 0) === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">No call outcomes yet.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={breakdown!.callsByOutcome}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.2 0.012 260)" />
+                  <XAxis dataKey="outcome" tick={{ fill: "oklch(0.55 0.01 260)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "oklch(0.55 0.01 260)", fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Bar dataKey="count" fill="#6366f1" name="Calls" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Call sentiment (from recordings) — Part 1 #13 */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <Smile className="w-4 h-4 text-primary" /> Call sentiment
+          </CardTitle>
+          <p className="text-xs text-muted-foreground font-normal">
+            Aggregated from <span className="font-mono">call_recordings.sentiment</span> for your account
+          </p>
+        </CardHeader>
+        <CardContent>
+          {(sentimentSum?.total ?? 0) === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No sentiment labels on recordings yet.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart
+                data={(sentimentSum?.bySentiment ?? []).map((r) => ({
+                  label: r.sentiment,
+                  count: r.count,
+                }))}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.2 0.012 260)" />
+                <XAxis dataKey="label" tick={{ fill: "oklch(0.55 0.01 260)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "oklch(0.55 0.01 260)", fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Bar dataKey="count" fill="#22c55e" name="Calls" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Trend + Channel Performance */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

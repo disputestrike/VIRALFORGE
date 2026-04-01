@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { and, desc, eq, isNull, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import type { MySql2Database } from "drizzle-orm/mysql2";
@@ -17,6 +18,22 @@ import {
   templates,
   testimonials,
   users,
+  zapierWebhooks,
+  leadScoringRules,
+  blockedPhoneNumbers,
+  escalationRules,
+  crmConnections,
+  workflows,
+  customerMemories,
+  supportTickets,
+  emailSequences,
+  mobileDevices,
+  socialConnections,
+  webchatWidgets,
+  rcsRegistrations,
+  userPhoneNumbers,
+  type InsertUserPhoneNumber,
+  type UserPhoneNumber,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -358,6 +375,44 @@ export async function getGlobalMetrics(userId?: number) {
   };
 }
 
+export type DashboardBreakdown = {
+  totalCalls: number;
+  callsByOutcome: Array<{ outcome: string; count: number }>;
+  leadSegments: Array<{ segment: string; count: number }>;
+};
+
+export async function getDashboardBreakdown(userId: number): Promise<DashboardBreakdown> {
+  const db = await getDb();
+  if (!db) {
+    return { totalCalls: 0, callsByOutcome: [], leadSegments: [] };
+  }
+  const [callTotal] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(callRecordings)
+    .where(eq(callRecordings.createdBy, userId));
+  const outcomes = await db
+    .select({ outcome: callRecordings.outcome, count: sql<number>`count(*)` })
+    .from(callRecordings)
+    .where(eq(callRecordings.createdBy, userId))
+    .groupBy(callRecordings.outcome);
+  const segments = await db
+    .select({ segment: leads.segment, count: sql<number>`count(*)` })
+    .from(leads)
+    .where(eq(leads.createdBy, userId))
+    .groupBy(leads.segment);
+  return {
+    totalCalls: Number(callTotal?.n ?? 0),
+    callsByOutcome: outcomes.map((o) => ({
+      outcome: String(o.outcome ?? "unknown"),
+      count: Number(o.count),
+    })),
+    leadSegments: segments.map((s) => ({
+      segment: String(s.segment ?? "cold"),
+      count: Number(s.count),
+    })),
+  };
+}
+
 export async function createAnalyticsSnapshot(data: typeof analyticsSnapshots.$inferInsert) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -513,6 +568,39 @@ export async function createManualAppointment(data: { leadId: number; scheduledT
 
 // ── Local Number Pool (SignalWire local presence) ─────────────────────────
 // Look up which user owns a given phone number (for inbound call routing)
+export type { UserPhoneNumber };
+
+export async function listUserPhoneNumbers(userId: number): Promise<UserPhoneNumber[]> {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    return await db
+      .select()
+      .from(userPhoneNumbers)
+      .where(eq(userPhoneNumbers.userId, userId))
+      .orderBy(desc(userPhoneNumbers.createdAt));
+  } catch (e) {
+    console.warn("[DB] listUserPhoneNumbers:", e);
+    return [];
+  }
+}
+
+export async function insertUserPhoneNumber(data: InsertUserPhoneNumber): Promise<{ insertId: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const insertId = await insertAndGetId(db, userPhoneNumbers, data);
+  return { insertId };
+}
+
+export async function setUserPhoneNumberActive(id: number, userId: number, isActive: boolean): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(userPhoneNumbers)
+    .set({ isActive })
+    .where(and(eq(userPhoneNumbers.id, id), eq(userPhoneNumbers.userId, userId)));
+}
+
 export async function getUserIdByPhoneNumber(phoneNumber: string): Promise<number | null> {
   const db = await getDb();
   if (!db) return null;
@@ -565,6 +653,643 @@ export async function updateLocalNumberLastUsed(phoneNumber: string): Promise<vo
   } finally {
     await connection.end();
   }
+}
+
+// ─── Zapier + lead scoring (integrations) ───────────────────────────────────
+export async function getZapierWebhook(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(zapierWebhooks).where(eq(zapierWebhooks.userId, userId)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function upsertZapierWebhook(
+  userId: number,
+  data: { targetUrl: string; events?: string | null; isActive?: boolean }
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .insert(zapierWebhooks)
+    .values({
+      userId,
+      targetUrl: data.targetUrl,
+      events: data.events ?? null,
+      isActive: data.isActive ?? true,
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        targetUrl: data.targetUrl,
+        events: data.events ?? null,
+        isActive: data.isActive ?? true,
+        updatedAt: new Date(),
+      },
+    });
+  return getZapierWebhook(userId);
+}
+
+export async function listLeadScoringRules(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(leadScoringRules)
+    .where(eq(leadScoringRules.userId, userId))
+    .orderBy(desc(leadScoringRules.updatedAt));
+}
+
+export async function getDefaultLeadScoringRule(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select()
+    .from(leadScoringRules)
+    .where(and(eq(leadScoringRules.userId, userId), eq(leadScoringRules.isDefault, true)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function listBlockedPhones(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(blockedPhoneNumbers)
+    .where(eq(blockedPhoneNumbers.userId, userId))
+    .orderBy(desc(blockedPhoneNumbers.createdAt));
+}
+
+export async function addBlockedPhone(userId: number, phoneE164: string, note?: string | null) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .insert(blockedPhoneNumbers)
+    .values({ userId, phoneE164, note: note ?? null })
+    .onDuplicateKeyUpdate({
+      set: { note: note ?? null },
+    });
+}
+
+export async function removeBlockedPhone(userId: number, id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(blockedPhoneNumbers).where(and(eq(blockedPhoneNumbers.id, id), eq(blockedPhoneNumbers.userId, userId)));
+}
+
+export async function isPhoneBlocked(userId: number, phoneE164: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .select({ id: blockedPhoneNumbers.id })
+    .from(blockedPhoneNumbers)
+    .where(and(eq(blockedPhoneNumbers.userId, userId), eq(blockedPhoneNumbers.phoneE164, phoneE164)))
+    .limit(1);
+  return rows.length > 0;
+}
+
+export async function listEscalationRules(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(escalationRules)
+    .where(eq(escalationRules.userId, userId))
+    .orderBy(desc(escalationRules.updatedAt));
+}
+
+export async function upsertEscalationRule(
+  userId: number,
+  input: {
+    id?: number;
+    name: string;
+    keyword: string;
+    transferNumber?: string | null;
+    isActive?: boolean;
+  }
+): Promise<{ insertId?: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const isActive = input.isActive ?? true;
+  if (input.id) {
+    await db
+      .update(escalationRules)
+      .set({
+        name: input.name,
+        keyword: input.keyword,
+        transferNumber: input.transferNumber?.trim() || null,
+        isActive,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(escalationRules.id, input.id), eq(escalationRules.userId, userId)));
+    return {};
+  }
+  const insertId = await insertAndGetId(db, escalationRules, {
+    userId,
+    name: input.name,
+    keyword: input.keyword,
+    transferNumber: input.transferNumber?.trim() || null,
+    isActive,
+  });
+  return { insertId };
+}
+
+export async function deleteEscalationRule(userId: number, id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(escalationRules).where(and(eq(escalationRules.id, id), eq(escalationRules.userId, userId)));
+}
+
+export async function listCrmConnections(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(crmConnections)
+    .where(eq(crmConnections.userId, userId))
+    .orderBy(desc(crmConnections.updatedAt));
+}
+
+export async function upsertCrmConnectionStub(
+  userId: number,
+  provider: "salesforce" | "hubspot" | "pipedrive"
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const label = provider.charAt(0).toUpperCase() + provider.slice(1);
+  await db
+    .insert(crmConnections)
+    .values({
+      userId,
+      provider,
+      status: "pending_oauth",
+      displayName: `${label} (OAuth pending)`,
+      meta: JSON.stringify({ stub: true }),
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        status: "pending_oauth",
+        displayName: `${label} (OAuth pending)`,
+        updatedAt: new Date(),
+      },
+    });
+}
+
+export async function setCrmDisconnected(
+  userId: number,
+  provider: "salesforce" | "hubspot" | "pipedrive"
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(crmConnections)
+    .set({ status: "disconnected", updatedAt: new Date() })
+    .where(and(eq(crmConnections.userId, userId), eq(crmConnections.provider, provider)));
+}
+
+export async function listWorkflows(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(workflows).where(eq(workflows.userId, userId)).orderBy(desc(workflows.updatedAt));
+}
+
+export async function upsertWorkflow(
+  userId: number,
+  input: { id?: number; name: string; definition: unknown; isActive?: boolean }
+): Promise<{ insertId?: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const isActive = input.isActive ?? true;
+  if (input.id) {
+    await db
+      .update(workflows)
+      .set({
+        name: input.name,
+        definition: input.definition as Record<string, unknown>,
+        isActive,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(workflows.id, input.id), eq(workflows.userId, userId)));
+    return {};
+  }
+  const insertId = await insertAndGetId(db, workflows, {
+    userId,
+    name: input.name,
+    definition: input.definition as Record<string, unknown>,
+    isActive,
+  });
+  return { insertId };
+}
+
+export async function deleteWorkflow(userId: number, id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(workflows).where(and(eq(workflows.id, id), eq(workflows.userId, userId)));
+}
+
+export async function listCustomerMemories(userId: number, leadId?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const where =
+    leadId != null
+      ? and(eq(customerMemories.userId, userId), eq(customerMemories.leadId, leadId))
+      : eq(customerMemories.userId, userId);
+  return db.select().from(customerMemories).where(where).orderBy(desc(customerMemories.createdAt));
+}
+
+export async function addCustomerMemory(
+  userId: number,
+  data: { leadId?: number; content: string; source?: string }
+): Promise<{ insertId: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  if (data.leadId != null) {
+    const lead = await getLeadById(data.leadId);
+    if (!lead || lead.createdBy !== userId) throw new Error("Lead not found");
+  }
+  const insertId = await insertAndGetId(db, customerMemories, {
+    userId,
+    leadId: data.leadId ?? null,
+    content: data.content,
+    source: data.source ?? "manual",
+  });
+  return { insertId };
+}
+
+export async function listSupportTickets(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(supportTickets)
+    .where(eq(supportTickets.userId, userId))
+    .orderBy(desc(supportTickets.updatedAt));
+}
+
+export async function createSupportTicket(
+  userId: number,
+  data: { leadId?: number; subject: string; body: string }
+): Promise<{ insertId: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  if (data.leadId != null) {
+    const lead = await getLeadById(data.leadId);
+    if (!lead || lead.createdBy !== userId) throw new Error("Lead not found");
+  }
+  const insertId = await insertAndGetId(db, supportTickets, {
+    userId,
+    leadId: data.leadId ?? null,
+    subject: data.subject,
+    body: data.body,
+    status: "open",
+  });
+  return { insertId };
+}
+
+export async function updateSupportTicketStatus(
+  userId: number,
+  id: number,
+  status: "open" | "in_progress" | "closed"
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(supportTickets)
+    .set({ status, updatedAt: new Date() })
+    .where(and(eq(supportTickets.id, id), eq(supportTickets.userId, userId)));
+}
+
+export async function listEmailSequences(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(emailSequences)
+    .where(eq(emailSequences.userId, userId))
+    .orderBy(desc(emailSequences.updatedAt));
+}
+
+export async function upsertEmailSequence(
+  userId: number,
+  input: { id?: number; name: string; triggerEvent: string; bodyTemplate: string; isActive?: boolean }
+): Promise<{ insertId?: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const isActive = input.isActive ?? true;
+  if (input.id) {
+    await db
+      .update(emailSequences)
+      .set({
+        name: input.name,
+        triggerEvent: input.triggerEvent,
+        bodyTemplate: input.bodyTemplate,
+        isActive,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(emailSequences.id, input.id), eq(emailSequences.userId, userId)));
+    return {};
+  }
+  const insertId = await insertAndGetId(db, emailSequences, {
+    userId,
+    name: input.name,
+    triggerEvent: input.triggerEvent,
+    bodyTemplate: input.bodyTemplate,
+    isActive,
+  });
+  return { insertId };
+}
+
+export async function deleteEmailSequence(userId: number, id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(emailSequences).where(and(eq(emailSequences.id, id), eq(emailSequences.userId, userId)));
+}
+
+export async function listActiveEmailSequencesByTrigger(userId: number, triggerEvent: string) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(emailSequences)
+    .where(
+      and(
+        eq(emailSequences.userId, userId),
+        eq(emailSequences.triggerEvent, triggerEvent),
+        eq(emailSequences.isActive, true)
+      )
+    );
+}
+
+export async function listMobileDevices(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(mobileDevices)
+    .where(eq(mobileDevices.userId, userId))
+    .orderBy(desc(mobileDevices.lastSeenAt));
+}
+
+export async function registerMobileDevice(
+  userId: number,
+  input: {
+    platform: "ios" | "android";
+    deviceKey: string;
+    displayName?: string;
+    pushToken?: string;
+    appVersion?: string;
+  }
+): Promise<{ insertId?: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const key = input.deviceKey.trim();
+  if (!key) throw new Error("deviceKey is required");
+
+  const existing = await db
+    .select({ id: mobileDevices.id })
+    .from(mobileDevices)
+    .where(and(eq(mobileDevices.userId, userId), eq(mobileDevices.deviceKey, key)))
+    .limit(1);
+
+  const now = new Date();
+  if (existing.length) {
+    await db
+      .update(mobileDevices)
+      .set({
+        displayName: input.displayName ?? null,
+        pushToken: input.pushToken ?? null,
+        appVersion: input.appVersion ?? null,
+        lastSeenAt: now,
+      })
+      .where(eq(mobileDevices.id, existing[0]!.id));
+    return {};
+  }
+
+  const insertId = await insertAndGetId(db, mobileDevices, {
+    userId,
+    platform: input.platform,
+    deviceKey: key,
+    displayName: input.displayName ?? null,
+    pushToken: input.pushToken ?? null,
+    appVersion: input.appVersion ?? null,
+    lastSeenAt: now,
+  });
+  return { insertId };
+}
+
+export async function removeMobileDevice(userId: number, id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(mobileDevices).where(and(eq(mobileDevices.id, id), eq(mobileDevices.userId, userId)));
+}
+
+export async function listSocialConnections(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(socialConnections)
+    .where(eq(socialConnections.userId, userId))
+    .orderBy(desc(socialConnections.updatedAt));
+}
+
+export async function upsertSocialConnectionStub(
+  userId: number,
+  provider: "linkedin" | "facebook" | "instagram" | "x"
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const label = provider === "x" ? "X" : provider.charAt(0).toUpperCase() + provider.slice(1);
+  await db
+    .insert(socialConnections)
+    .values({
+      userId,
+      provider,
+      status: "pending_oauth",
+      displayName: `${label} (OAuth pending)`,
+      meta: JSON.stringify({ stub: true }),
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        status: "pending_oauth",
+        displayName: `${label} (OAuth pending)`,
+        updatedAt: new Date(),
+      },
+    });
+}
+
+export async function setSocialDisconnected(
+  userId: number,
+  provider: "linkedin" | "facebook" | "instagram" | "x"
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(socialConnections)
+    .set({ status: "disconnected", updatedAt: new Date() })
+    .where(and(eq(socialConnections.userId, userId), eq(socialConnections.provider, provider)));
+}
+
+export async function listWebchatWidgets(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(webchatWidgets)
+    .where(eq(webchatWidgets.userId, userId))
+    .orderBy(desc(webchatWidgets.updatedAt));
+}
+
+export async function createWebchatWidget(
+  userId: number,
+  input: { name: string; welcomeMessage?: string; allowedOrigins?: string }
+): Promise<{ insertId: number; publicKey: string }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const publicKey = randomBytes(32).toString("hex");
+  const insertId = await insertAndGetId(db, webchatWidgets, {
+    userId,
+    name: input.name,
+    publicKey,
+    welcomeMessage: input.welcomeMessage ?? null,
+    allowedOrigins: input.allowedOrigins ?? null,
+    isActive: true,
+  });
+  return { insertId, publicKey };
+}
+
+export async function updateWebchatWidget(
+  userId: number,
+  id: number,
+  input: {
+    name?: string;
+    welcomeMessage?: string | null;
+    allowedOrigins?: string | null;
+    isActive?: boolean;
+  }
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const patch: Record<string, unknown> = { updatedAt: new Date() };
+  if (input.name !== undefined) patch.name = input.name;
+  if (input.welcomeMessage !== undefined) patch.welcomeMessage = input.welcomeMessage;
+  if (input.allowedOrigins !== undefined) patch.allowedOrigins = input.allowedOrigins;
+  if (input.isActive !== undefined) patch.isActive = input.isActive;
+  await db
+    .update(webchatWidgets)
+    .set(patch as Record<string, unknown>)
+    .where(and(eq(webchatWidgets.id, id), eq(webchatWidgets.userId, userId)));
+}
+
+export async function deleteWebchatWidget(userId: number, id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(webchatWidgets).where(and(eq(webchatWidgets.id, id), eq(webchatWidgets.userId, userId)));
+}
+
+/** Public embed: resolve active widget by `publicKey` (64-char hex). */
+export async function getWebchatWidgetByPublicKey(publicKey: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const key = publicKey.trim();
+  if (key.length < 64) return null;
+  const rows = await db
+    .select()
+    .from(webchatWidgets)
+    .where(and(eq(webchatWidgets.publicKey, key), eq(webchatWidgets.isActive, true)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function getRcsRegistration(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select()
+    .from(rcsRegistrations)
+    .where(eq(rcsRegistrations.userId, userId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function upsertRcsRegistration(
+  userId: number,
+  input: { brandName: string; agentId?: string; status?: "draft" | "submitted" | "verified" }
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const status = input.status ?? "draft";
+  await db
+    .insert(rcsRegistrations)
+    .values({
+      userId,
+      brandName: input.brandName,
+      agentId: input.agentId ?? null,
+      status,
+      meta: JSON.stringify({ stub: true }),
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        brandName: input.brandName,
+        agentId: input.agentId ?? null,
+        status,
+        updatedAt: new Date(),
+      },
+    });
+}
+
+export async function getSentimentSummary(userId: number) {
+  const db = await getDb();
+  if (!db) return { total: 0, bySentiment: [] as { sentiment: string; count: number }[] };
+  const rows = await db
+    .select({ sentiment: callRecordings.sentiment, count: sql<number>`count(*)` })
+    .from(callRecordings)
+    .where(eq(callRecordings.createdBy, userId))
+    .groupBy(callRecordings.sentiment);
+  const total = rows.reduce((a, r) => a + Number(r.count), 0);
+  return {
+    total,
+    bySentiment: rows.map((r) => ({
+      sentiment: String(r.sentiment ?? "neutral"),
+      count: Number(r.count),
+    })),
+  };
+}
+
+export async function upsertLeadScoringRule(
+  userId: number,
+  input: { id?: number; name: string; rules: unknown; isDefault?: boolean }
+): Promise<{ insertId?: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const isDefault = input.isDefault ?? false;
+
+  if (input.id) {
+    if (isDefault) {
+      await db.update(leadScoringRules).set({ isDefault: false }).where(eq(leadScoringRules.userId, userId));
+    }
+    await db
+      .update(leadScoringRules)
+      .set({
+        name: input.name,
+        rules: input.rules as Record<string, unknown>,
+        isDefault,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(leadScoringRules.id, input.id), eq(leadScoringRules.userId, userId)));
+    return {};
+  }
+
+  if (isDefault) {
+    await db.update(leadScoringRules).set({ isDefault: false }).where(eq(leadScoringRules.userId, userId));
+  }
+  const insertId = await insertAndGetId(db, leadScoringRules, {
+    userId,
+    name: input.name,
+    rules: input.rules as Record<string, unknown>,
+    isDefault,
+  });
+
+  return { insertId };
 }
 
 function isMissingCreatedByColumnError(error: unknown): boolean {

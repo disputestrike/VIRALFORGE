@@ -74,7 +74,7 @@ You help users:
 - Understand how AI calls, appointments, campaigns, and leads work
 
 Key facts about ApexAI:
-- AI calls need: SIGNALWIRE_PROJECT_ID, SIGNALWIRE_TOKEN, SIGNALWIRE_SPACE_URL, SIGNALWIRE_PHONE_NUMBER, plus ELEVENLABS_API_KEY or CARTESIA_API_KEY for AI voice
+- AI calls need: SIGNALWIRE_PROJECT_ID, SIGNALWIRE_TOKEN, SIGNALWIRE_SPACE_URL, SIGNALWIRE_PHONE_NUMBER, CARTESIA_API_KEY for TTS, DEEPGRAM_API_KEY (or OPENAI_API_KEY for Whisper), and CEREBRAS_API_KEY_* for replies
 - Script generation uses: ANTHROPIC_API_KEY (already set if AI features work)
 - Email needs: RESEND_API_KEY
 - Voice transcription uses: OPENAI_API_KEY (Whisper)

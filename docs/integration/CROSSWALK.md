@@ -1,0 +1,141 @@
+# ApexAI — Integration crosswalk & QC (living document)
+
+**Purpose:** Every change is checked against **four parts** of the master deliverable. **Status** is evidence-based — not “done” until **DB + API + UI (where applicable) + test** are verified.
+
+**Legend:**
+
+| Status | Meaning |
+|--------|---------|
+| ⬜ | Not started |
+| 🟡 | In progress |
+| ✅ | Implemented in this repo |
+| 🔗 | Exists in reference folder only — not merged |
+| ♻️ | Already in ApexAI — verify/crosswalk only |
+
+**Compliance (quick):** TCPA/consent for outbound; minimize PII in logs; retention policy for transcripts/KB — review each feature row before release.
+
+---
+
+## Where this file lives (your “20 features” crosswalk)
+
+| What | Location |
+|------|----------|
+| **Living crosswalk (source of truth for ApexAI repo)** | `docs/integration/CROSSWALK.md` (this file) |
+| **Original “complete deliverables” bundle** (reference TS/SQL/md — merge targets, not automatic production code) | `Can you duplicate and improve a landing page_ (1)/` (e.g. `02_TRPC_ROUTERS_PART1.ts`, `01_DATABASE_SCHEMAS.sql`, `07_BACKGROUND_JOBS.ts`) |
+
+The **Part 1 table below** (rows **1–20**) is the same numbering as your **“PART 1: 20 MISSING FEATURES”** master checklist. Status here is **evidence in this repo** (migrations, tRPC, UI, tests). A row marked **🔗** means the bundle has reference code; **✅** means it is wired in ApexAI’s app code.
+
+### How to drive “keep going” implementation (for you + the AI)
+
+- **You do not need magic words.** Say **“continue from CROSSWALK Part 1 row N”** (or “next open row”) so each session picks up without re-explaining.
+- **One session cannot run forever** (context and tooling limits). For maximum throughput: **prioritize 2–3 rows**, accept the diff, then **“continue”** with the next rows.
+- **For “live / real / integrated”:** apply **SQL migrations** on Railway (`0011`, `0012`, …), set **env vars** (Cartesia, Cerebras, SignalWire, Deepgram), and treat **🔗 rows** as merge work until they show **✅** here.
+- **Optional but powerful:** paste **Railway `DATABASE_URL`** only if you want migration verification from this environment (security: rotate after).
+
+---
+
+## Where we are (checkpoint)
+
+| Checked | What |
+|--------|------|
+| ✅ | `pnpm exec tsc --noEmit` |
+| ✅ | `pnpm exec vitest run` (full server suite; last run **209 tests** passed) |
+| ⚠️ | **Railway MySQL:** run `0011`–`0017`, plus **`0018_user_phone_numbers_align.sql`** if `user_phone_numbers` predates full columns |
+| ✅ | Zapier **emit** — `call.completed` (after recording persist), `lead.created` (after lead create); respects Settings filter |
+| ✅ | Call summary UI — `aiSummary` on Voice AI → Call Recordings + Summary dialog |
+
+**Stack focus (product):** Cartesia (TTS) + Cerebras (LLM) + SignalWire + Deepgram (live STT in realtime pipeline).
+
+---
+
+## Part 1 — Twenty features (competitive parity)
+
+| # | Feature | Phase | DB | API (tRPC) | App UI | QC / evidence |
+|---|---------|-------|-----|------------|--------|----------------|
+| 1 | Dedicated phone **management** | 1 | ✅ `user_phone_numbers` (Drizzle + migrations) | ✅ `onboarding.provisionNumber` (persists row) + `settings.listPhoneNumbers` / `setPhoneNumberActive` | ✅ Settings card | Voice + inbound SMS resolve tenant via `getUserIdByPhoneNumber(To)` |
+| 2 | Knowledge base (crawl + docs) | 1 | ✅ `knowledge_bases` + sources + chunks (0011) | ✅ `knowledgeBase.*` | ✅ Settings | Run migration; list/create/addWebsite |
+| 3 | Built-in CRM / lead capture | 1 | ✅ `leads` + tenant `createdBy` | ✅ `leads.*` | ✅ `/leads` (`Leads.tsx`) | Optional bundle `crm_leads` merge later — core CRM list/create/import in app |
+| 4 | Call summaries | 1 | ✅ `call_recordings.aiSummary` | ✅ `callSummaryService` + persist in `voiceSessionManager` | ✅ Voice AI recordings | Cerebras/LLM summary on session end |
+| 5 | Lead scoring | 1 | ✅ `lead_scoring_rules` (0012) | ✅ `leadScoring.list` / `upsert` | ✅ Settings | Default rules → bonus on `leads.create` via `leadScoringApply` |
+| 6 | Multiple voice options | 1 | ✅ `system_config` key `user:{id}:voice_profile_id` + catalog `VOICE_PROFILES` in `voiceProfiles.ts` | ✅ `settings.voiceProfiles` + `settings.update` (`setUserVoiceProfileId`) | ✅ Settings | Cartesia voices; per-tenant selection persisted |
+| 7 | Spam filtering | 2 | ✅ `blocked_phone_numbers` (0013) | ✅ `phoneBlocklist.*` | ✅ Settings | Inbound reject + toll-free heuristics (`index.ts`) |
+| 8 | Intelligent escalation | 2 | ✅ `escalation_rules` (0013) | ✅ `escalationRules.*` | ✅ Settings | Keyword match → `transferCallToHuman` in `voiceRealtimePipeline` |
+| 9 | Zapier | 2 | ✅ `zapier_webhooks` (0012) | ✅ `zapier.*` + `zapierEmit` on lead create & call persist | ✅ Settings | `call.completed`, `lead.created` POST to hook |
+| 10 | CRM sync (SF/HubSpot/Pipedrive) | 2 | ✅ `crm_connections` (0014) | ✅ `crm.list` / `startConnect` / `disconnect` | ✅ Settings | OAuth + sync workers TBD |
+| 11 | Workflow builder | 3 | ✅ `workflows` (0015) | ✅ `workflows.*` | ✅ Settings | JSON draft graph; runner TBD |
+| 12 | Persistent memory | 3 | ✅ `customer_memories` (0015) | ✅ `memory.*` | ✅ Settings | Optional `leadId`; RAG workers TBD |
+| 13 | Sentiment (product) | 3 | ✅ `call_recordings.sentiment` | ✅ `analytics.sentimentSummary` | ✅ Analytics | On persist: `inferSentimentFromTranscript` if session unset (`sentimentInfer.test.ts`); optional future real-time API |
+| 14 | Ticketing | 3 | ✅ `support_tickets` (0015) | ✅ `tickets.*` | ✅ Settings | Status open / in_progress / closed |
+| 15 | Mobile backend | 3 | ✅ `mobile_devices` (0016) | ✅ `mobile.*` | ✅ Settings | Device registry + optional push token; delivery TBD |
+| 16 | Social | 4 | ✅ `social_connections` (0017) | ✅ `social.*` | ✅ Settings | OAuth + posting TBD |
+| 17 | Email automation | 4 | ✅ `email_sequences` (0015) | ✅ `emailSequences.*` + queue on `lead.created` | ✅ Settings | Active sequences with trigger `lead.created` → BullMQ email job (Resend) |
+| 18 | RCS | 4 | ✅ `rcs_registrations` (0017) | ✅ `rcs.*` | ✅ Settings | Carrier / Jibe send path TBD |
+| 19 | Webchat | 4 | ✅ `webchat_widgets` (0017) | ✅ `webchat.*` + **`GET/POST /api/public/webchat/*`** | ✅ Settings | Config + lead capture; CORS via allowed origins |
+| 20 | Analytics dashboard | 4 | ✅ `call_recordings` + `leads` aggregates in `getDashboardBreakdown` + `analytics_snapshots` | ✅ `analytics.dashboardBreakdown` + `recordSnapshot` + tenant `snapshots` | ✅ Analytics page | Leads by segment + calls by outcome charts |
+
+---
+
+## Part 2 — Premium voice agent (5 modules)
+
+| Module | File (reference) | Merge target | Status |
+|--------|------------------|--------------|--------|
+| Orchestrator | `01_PREMIUM_VOICE_ORCHESTRATOR.ts` | `server/realtime/realtimeVoiceEngine.ts` (Cerebras + tools + session) | ♻️ |
+| Dynamic prompt | `02_DYNAMIC_PROMPT_ENGINE.ts` | `server/realtime/dynamicPrompt.ts` (`buildVoiceSystemPrompt`) + `callPolicy` | ✅ |
+| Sentiment | `03_SENTIMENT_AND_EMOTION.ts` | `sentimentInfer.ts` + `voiceSessionManager` persist; `sentimentInfer.test.ts` | ♻️ Heuristic aggregate; bundle = per-turn API |
+| Realtime streaming | `04_REALTIME_STREAMING.ts` | `voiceRealtimePipeline` + Deepgram/Cartesia streaming | ♻️ |
+| Conversion | `05_CONVERSION_OPTIMIZATION.ts` | `analytics.*` + `recordSnapshot` / funnel metrics | ♻️ |
+
+---
+
+## Part 3 — Supporting infrastructure
+
+| Item | Reference | Status |
+|------|-----------|--------|
+| SQL | `01_DATABASE_SCHEMAS.sql` | ♻️ ApexAI uses **`users`** + Drizzle (`drizzle/schema.ts`, `drizzle/*.sql`); bundle may say `accounts` |
+| Routers | `02–04_TRPC_*` | ✅ `server/routers.ts` + `server/routers/*Router.ts` |
+| Services | `05–06_SERVICE_LOGIC_*` | ✅ `server/_core/services/*` + `server/db.ts` |
+| Jobs | `07_BACKGROUND_JOBS.ts` | ✅ `server/_core/services/queue.ts` (BullMQ); workers in `server/_core/index.ts` (`calls`, `sms`, `email` queues); **`REDIS_URL`** or in-memory fallback (tests / dev) |
+| Webhooks | `08_WEBHOOK_HANDLERS.ts` | ✅ `server/routers/webhooksRouter.ts` (`omniAiLead`); `webhooksRouter.test.ts`; rate limits on `/webhooks` + `/api/trpc/webhooks`; optional **`WEBHOOK_SECRET`** |
+
+---
+
+## Part 4 — Website / marketing
+
+**Frozen per product owner request** — no landing changes unless explicitly approved.
+
+---
+
+## Roadmap Phases (execution)
+
+| Phase | Weeks (estimate) | Scope |
+|-------|------------------|-------|
+| **A** | 1–2 | Crosswalk + KB DB + API + Settings + migration proof |
+| **B** | 3–6 | Summaries + scoring + spam + escalation + Zapier stubs |
+| **C** | 7–12 | Workflows, memory, sentiment product, ticketing |
+| **D** | 13+ | Social, RCS, webchat, advanced analytics |
+
+---
+
+## Verification log (append on each release)
+
+| Date | Change | Verified by |
+|------|--------|-------------|
+| 2026-03-31 | `drizzle/0011_knowledge_base.sql` + Drizzle schema + `server/routers/knowledgeBaseRouter.ts` + Settings UI + `appRouter.knowledgeBase` | `pnpm exec tsc --noEmit` pass; run SQL on Railway before using UI |
+| 2026-03-31 | Cartesia-only `ttsService`; `callSummaryService` + voice session persist; `drizzle/0012_zapier_lead_scoring.sql` + `zapier` + `leadScoring` routers | `pnpm exec tsc --noEmit`; `vitest run server/tts.service.test.ts`; run 0012 on Railway |
+| 2026-03-31 | Settings UI: Zapier + lead scoring; `leadScoringApply` + `getDefaultLeadScoringRule` on `leads.create`; crosswalk checkpoint section | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` (192 tests) |
+| 2026-03-31 | `zapierEmit.ts` — `call.completed` + `lead.created`; Voice AI shows `aiSummary`; vitest `createLead` mock returns `{ insertId }` | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` |
+| 2026-03-31 | `0013` blocklist + escalation; inbound blocklist + `leadId` on stream; keyword escalation in pipeline | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` |
+| 2026-03-31 | `0014` CRM stubs; `analytics.dashboardBreakdown`; snapshots scoped by `userId`; `recordSnapshot` sets `createdBy` | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` (192 tests) |
+| 2026-03-31 | `0015` workflows / memory / tickets / email sequences; `workflows`, `memory`, `tickets`, `emailSequences` routers; `analytics.sentimentSummary`; Settings + Analytics UI | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` |
+| 2026-03-31 | `0016` `mobile_devices`; `mobile` router (`list` / `register` / `remove`); Settings “Mobile app devices” | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` |
+| 2026-03-31 | `0017` social / webchat / RCS tables; `social`, `webchat`, `rcs` routers; Settings cards | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` (192 tests) |
+| 2026-03-31 | Public webchat HTTP: `GET /api/public/webchat/config`, `POST /api/public/webchat/lead`; `getWebchatWidgetByPublicKey` | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` |
+| 2026-03-31 | Email sequences: `lead.created` → `listActiveEmailSequencesByTrigger` + `addEmailJob` type `sequence`; hooks on lead create (tRPC, webchat, GHL, demo, webhooks, voice inbound) | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` (196 tests) |
+| 2026-03-31 | Crosswalk rows 3–4 verified; inbound SMS `createdBy` + message `createdBy` from `getUserIdByPhoneNumber(To)`; `createLead` → `getLeadById` for new SMS lead | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` |
+| 2026-03-31 | `sentimentInfer.ts` — keyword heuristic for `call_recordings.sentiment` on session persist; Part 2 Sentiment row ♻️ | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` (200 tests) |
+| 2026-04-01 | Part 2 Dynamic prompt: `dynamicPrompt.ts` — `buildVoiceSystemPrompt` extracted from `realtimeVoiceEngine`; `dynamicPrompt.test.ts` | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` (201 tests) |
+| 2026-04-01 | Row 1 dedicated phones: `listUserPhoneNumbers` / `insertUserPhoneNumber` / `setUserPhoneNumberActive`; `onboarding.provisionNumber` inserts `user_phone_numbers`; Settings UI + `settings.listPhoneNumbers` / `setPhoneNumberActive`; Part 2 Orchestrator / Realtime / Conversion ♻️; row 20 analytics DB ✅ | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` (201 tests) |
+| 2026-04-01 | Row 6 voice options: crosswalk DB ✅ (`system_config` + `voiceProfiles`); `0018_user_phone_numbers_align.sql` for legacy `user_phone_numbers` DDL | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` (201 tests) |
+| 2026-04-01 | Part 3 Jobs + Webhooks crosswalk ✅; `voiceProfiles.test.ts` (`listVoiceProfiles`, `getVoiceProfileById`) | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` (204 tests) |
+| 2026-04-01 | `sentimentInfer`: dedupe POS keyword; skip counting `interested` when phrase `not interested`; tests for weighted negatives; Part 2 Sentiment row cites `sentimentInfer.test.ts` | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` (206 tests) |
+| 2026-04-01 | `webhooksRouter.test.ts` — `omniAiLead` open vs `WEBHOOK_SECRET` + `x-webhook-secret`; Part 3 Webhooks row cites test file | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` (209 tests) |

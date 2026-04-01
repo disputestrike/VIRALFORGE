@@ -135,14 +135,16 @@ function generateFollowUpEmail(
 export const emailWorker = new Worker(
   "email",
   async (job) => {
-    const { email, type, leadName, scheduledTime, calendarLink } = job.data;
+    const { email, type, leadName, scheduledTime, calendarLink, customSubject, customHtml } = job.data;
 
     console.log(`[Email Worker] Processing job ${job.id}: ${type} to ${email}`);
 
     try {
       let emailContent: { subject: string; html: string };
 
-      if (type === "appointment_confirmation") {
+      if (type === "sequence" && customSubject && customHtml) {
+        emailContent = { subject: customSubject, html: customHtml };
+      } else if (type === "appointment_confirmation") {
         emailContent = generateAppointmentConfirmationEmail(
           leadName || "there",
           scheduledTime || new Date().toISOString(),

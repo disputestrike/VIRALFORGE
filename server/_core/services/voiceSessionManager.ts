@@ -167,6 +167,19 @@ export async function persistSessionToDatabase(sessionId: string): Promise<void>
       ? Math.floor((session.endTime - session.startTime) / 1000)
       : Math.floor((Date.now() - session.startTime) / 1000);
 
+    let aiSummary: string | null = null;
+    if (session.transcript?.trim()) {
+      const { generateCallSummaryFromTranscript } = await import("./callSummaryService");
+      aiSummary = await generateCallSummaryFromTranscript(session.transcript, session.outcome ?? undefined);
+    }
+    if (!aiSummary && session.conversationHistory.length > 0) {
+      aiSummary = `${session.conversationHistory.length} turns. Outcome: ${session.outcome ?? "unknown"}`;
+    }
+
+    const { inferSentimentFromTranscript } = await import("./sentimentInfer");
+    const sentiment =
+      session.sentiment ?? inferSentimentFromTranscript(session.transcript);
+
     const result = await db.createCallRecording({
       leadId: session.leadId,
       campaignId: session.campaignId ? parseInt(session.campaignId) || undefined : undefined,
@@ -174,16 +187,28 @@ export async function persistSessionToDatabase(sessionId: string): Promise<void>
       status: session.status === "completed" ? "completed" : "failed",
       outcome: session.outcome ?? "no_answer",
       transcript: session.transcript || null,
-      aiSummary: session.conversationHistory.length > 0
-        ? `${session.conversationHistory.length} turns. Outcome: ${session.outcome ?? "unknown"}`
-        : null,
-      sentiment: session.sentiment ?? "neutral",
+      aiSummary,
+      sentiment,
       scheduledAppointment: session.appointmentBooked,
       createdBy: session.userId ?? undefined,
       calledAt: new Date(session.startTime),
     });
 
     sessionRecordingIds.set(sessionId, result.insertId);
+
+    if (session.userId) {
+      const { emitZapierEvent } = await import("./zapierEmit");
+      void emitZapierEvent(session.userId, "call.completed", {
+        recordingId: result.insertId,
+        leadId: session.leadId,
+        campaignId: session.campaignId ? parseInt(session.campaignId, 10) || undefined : undefined,
+        durationSeconds,
+        outcome: session.outcome ?? "no_answer",
+        status: session.status,
+        aiSummary: aiSummary ?? undefined,
+        scheduledAppointment: !!session.appointmentBooked,
+      });
+    }
 
     // Update lead status if outcome is known
     if (session.outcome === "scheduled" || session.appointmentBooked) {

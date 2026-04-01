@@ -32,6 +32,7 @@ let _activityLogs: Record<string, unknown>[] = [];
 let _systemConfig: Record<string, unknown>[] = [];
 let _campaignContacts: Record<string, unknown>[] = [];
 let _users: Record<string, unknown>[] = [];
+let _userPhoneNumbers: Record<string, unknown>[] = [];
 let _idCounters: Record<string, number> = {};
 
 function nextId(table: string) {
@@ -52,6 +53,7 @@ function resetStores() {
   _systemConfig = [];
   _campaignContacts = [];
   _idCounters = {};
+  _userPhoneNumbers = [];
   _users = [
     { id: 1, openId: "test-user-open-id", name: "Test User", email: "test@apexai.com", role: "user", loginMethod: "manus", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
     { id: 99, openId: "admin-open-id", name: "Admin User", email: "admin@apexai.com", role: "admin", loginMethod: "manus", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
@@ -110,7 +112,7 @@ function buildMock() {
       const id = nextId("leads");
       const lead = { id, status: "new", verificationStatus: "pending", score: 0, segment: "cold", createdAt: new Date(), updatedAt: new Date(), ...data };
       _leads.push(lead);
-      return [{ insertId: id }];
+      return { insertId: id };
     }),
 
     updateLead: vi.fn().mockImplementation(async (id: number, data: Record<string, unknown>) => {
@@ -297,6 +299,83 @@ function buildMock() {
       if (idx !== -1) _systemConfig[idx] = { ..._systemConfig[idx], value, category, updatedAt: new Date() };
       else _systemConfig.push({ id: nextId("systemConfig"), key, value, category, updatedAt: new Date() });
     }),
+
+    // ─── Integrations (Zapier / lead scoring) ─────────────────────────────────
+    getDefaultLeadScoringRule: vi.fn().mockResolvedValue(null),
+    getZapierWebhook: vi.fn().mockResolvedValue(null),
+    upsertZapierWebhook: vi.fn().mockResolvedValue(null),
+    listLeadScoringRules: vi.fn().mockResolvedValue([]),
+    upsertLeadScoringRule: vi.fn().mockResolvedValue({}),
+
+    listBlockedPhones: vi.fn().mockResolvedValue([]),
+    addBlockedPhone: vi.fn().mockResolvedValue(undefined),
+    removeBlockedPhone: vi.fn().mockResolvedValue(undefined),
+    isPhoneBlocked: vi.fn().mockResolvedValue(false),
+
+    listEscalationRules: vi.fn().mockResolvedValue([]),
+    upsertEscalationRule: vi.fn().mockResolvedValue({}),
+    deleteEscalationRule: vi.fn().mockResolvedValue(undefined),
+
+    getDashboardBreakdown: vi.fn().mockResolvedValue({
+      totalCalls: 0,
+      callsByOutcome: [],
+      leadSegments: [],
+    }),
+
+    listUserPhoneNumbers: vi.fn().mockImplementation(async (userId: number) =>
+      _userPhoneNumbers.filter((r) => Number(r.userId) === userId)
+    ),
+    insertUserPhoneNumber: vi.fn().mockImplementation(async (data: Record<string, unknown>) => {
+      const id = nextId("userPhoneNumbers");
+      _userPhoneNumbers.push({ id, createdAt: new Date(), ...data });
+      return { insertId: id };
+    }),
+    setUserPhoneNumberActive: vi.fn().mockImplementation(async (id: number, userId: number, isActive: boolean) => {
+      const idx = _userPhoneNumbers.findIndex((r) => r.id === id && Number(r.userId) === userId);
+      if (idx !== -1) _userPhoneNumbers[idx] = { ..._userPhoneNumbers[idx], isActive };
+    }),
+
+    listCrmConnections: vi.fn().mockResolvedValue([]),
+    upsertCrmConnectionStub: vi.fn().mockResolvedValue(undefined),
+    setCrmDisconnected: vi.fn().mockResolvedValue(undefined),
+
+    listWorkflows: vi.fn().mockResolvedValue([]),
+    upsertWorkflow: vi.fn().mockResolvedValue({ insertId: 1 }),
+    deleteWorkflow: vi.fn().mockResolvedValue(undefined),
+
+    listCustomerMemories: vi.fn().mockResolvedValue([]),
+    addCustomerMemory: vi.fn().mockResolvedValue({ insertId: 1 }),
+
+    listSupportTickets: vi.fn().mockResolvedValue([]),
+    createSupportTicket: vi.fn().mockResolvedValue({ insertId: 1 }),
+    updateSupportTicketStatus: vi.fn().mockResolvedValue(undefined),
+
+    listEmailSequences: vi.fn().mockResolvedValue([]),
+    listActiveEmailSequencesByTrigger: vi.fn().mockResolvedValue([]),
+    upsertEmailSequence: vi.fn().mockResolvedValue({ insertId: 1 }),
+    deleteEmailSequence: vi.fn().mockResolvedValue(undefined),
+
+    getSentimentSummary: vi.fn().mockResolvedValue({
+      total: 0,
+      bySentiment: [] as { sentiment: string; count: number }[],
+    }),
+
+    listMobileDevices: vi.fn().mockResolvedValue([]),
+    registerMobileDevice: vi.fn().mockResolvedValue({ insertId: 1 }),
+    removeMobileDevice: vi.fn().mockResolvedValue(undefined),
+
+    listSocialConnections: vi.fn().mockResolvedValue([]),
+    upsertSocialConnectionStub: vi.fn().mockResolvedValue(undefined),
+    setSocialDisconnected: vi.fn().mockResolvedValue(undefined),
+
+    listWebchatWidgets: vi.fn().mockResolvedValue([]),
+    createWebchatWidget: vi.fn().mockResolvedValue({ insertId: 1, publicKey: "a".repeat(64) }),
+    updateWebchatWidget: vi.fn().mockResolvedValue(undefined),
+    deleteWebchatWidget: vi.fn().mockResolvedValue(undefined),
+    getWebchatWidgetByPublicKey: vi.fn().mockResolvedValue(null),
+
+    getRcsRegistration: vi.fn().mockResolvedValue(null),
+    upsertRcsRegistration: vi.fn().mockResolvedValue(undefined),
   };
 }
 

@@ -4,7 +4,7 @@ import { getDb, getLeadById, getCampaignById } from "../../db";
 
 export type VoiceProfile = {
   id: string;
-  provider: "cartesia" | "elevenlabs" | "other";
+  provider: "cartesia" | "other";
   label: string;
   externalVoiceId: string;
   useCase: "default" | "sales" | "support" | "luxury" | "urgent";
@@ -83,33 +83,6 @@ export const VOICE_PROFILES: VoiceProfile[] = [
     style: "authoritative",
     presentation: "male",
     latencyProfile: "fast",
-  },
-  // ── ElevenLabs voices (premium quality, slightly higher latency) ─────────
-  {
-    id: "elevenlabs-bella-premium",
-    provider: "elevenlabs",
-    label: "Bella — Premium Female",
-    externalVoiceId: "21m00Tcm4TlvDq8ikWAM",
-    useCase: "luxury",
-    telephonyOptimized: true,
-    style: "premium",
-    presentation: "female",
-    latencyProfile: "premium",
-    speed: 1,
-    stability: 0.8,
-  },
-  {
-    id: "elevenlabs-adam-direct",
-    provider: "elevenlabs",
-    label: "Adam — Direct Male",
-    externalVoiceId: "pNInz6obpgDQGcFmaJgB",
-    useCase: "urgent",
-    telephonyOptimized: true,
-    style: "direct",
-    presentation: "male",
-    latencyProfile: "balanced",
-    speed: 1.05,
-    stability: 0.7,
   },
 ];
 

@@ -274,7 +274,7 @@ function buildSystemPrompt(
 Mode: ${responseMode}. Stage: ${state.stage}.${activeQ}${noBook}
 ${areas} ${offers}
 ${langInstruction}
-Rules: Max 2 short sentences. Answer what caller just said. Natural speech. No lists.
+Rules: Sound like a real rep — usually 2–4 short sentences. Answer what caller just said. Natural speech. No lists.
 Never jump to booking while a question is unresolved. If the caller is just checking identity or saying hello, answer directly and invite the next question.
 Reply ONLY with JSON: {"response":"...","action":"follow_up|book_appointment|propose_times|transfer|end_call","confidence":0.9}`;
 }

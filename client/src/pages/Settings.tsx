@@ -4,8 +4,32 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Phone, Globe, Building2, Mic, CheckCircle2, Save, Play, Loader2 } from "lucide-react";
+import {
+  Phone,
+  Globe,
+  Building2,
+  Mic,
+  CheckCircle2,
+  Save,
+  Loader2,
+  BookOpen,
+  Link2,
+  Webhook,
+  Gauge,
+  Plus,
+  Trash2,
+  ShieldBan,
+  ArrowUpRight,
+  Cloud,
+  GitBranch,
+  Brain,
+  Ticket,
+  Mail,
+  Smartphone,
+  Share2,
+  MessageCircle,
+  Radio,
+} from "lucide-react";
 import { toast } from "sonner";
 
 const LANGUAGES = [
@@ -22,6 +46,22 @@ const STYLE_COLORS: Record<string, string> = {
   confident: "#f59e0b", friendly: "#c084fc", authoritative: "#f87171",
   premium: "#fbbf24", direct: "#fb923c",
 };
+
+const SCORE_FIELDS = [
+  "email",
+  "phone",
+  "company",
+  "industry",
+  "title",
+  "linkedinUrl",
+  "website",
+  "firstName",
+  "lastName",
+] as const;
+
+type ScoreOp = "present" | "contains" | "eq";
+
+type ScoreRow = { field: string; op: ScoreOp; value: string; points: number };
 
 export default function Settings() {
   const utils = trpc.useUtils();
@@ -54,6 +94,249 @@ export default function Settings() {
     onError: (e: any) => { toast.error(e.message); setSavingVoice(false); },
   });
 
+  const { data: kbList, isLoading: kbLoading } = trpc.knowledgeBase.list.useQuery();
+  const kbCreate = trpc.knowledgeBase.create.useMutation({
+    onSuccess: () => { utils.knowledgeBase.list.invalidate(); toast.success("Knowledge base created"); },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+  const kbAddSite = trpc.knowledgeBase.addWebsiteSource.useMutation({
+    onSuccess: () => { utils.knowledgeBase.list.invalidate(); toast.success("Website queued for training"); },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+  const [kbName, setKbName] = useState("");
+  const [kbWebsite, setKbWebsite] = useState("https://");
+  const [selectedKbId, setSelectedKbId] = useState<number | null>(null);
+
+  const { data: zapierRow } = trpc.zapier.get.useQuery();
+  const [zapierUrl, setZapierUrl] = useState("");
+  const [zapierEvents, setZapierEvents] = useState("");
+  useEffect(() => {
+    if (zapierRow) {
+      setZapierUrl(zapierRow.targetUrl ?? "");
+      setZapierEvents(zapierRow.events ?? "");
+    }
+  }, [zapierRow]);
+
+  const zapierSave = trpc.zapier.save.useMutation({
+    onSuccess: () => {
+      utils.zapier.get.invalidate();
+      toast.success("Zapier webhook saved");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+  const zapierTest = trpc.zapier.test.useMutation({
+    onSuccess: (r) => toast.success(`Test POST returned HTTP ${r.status}`),
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Test failed"),
+  });
+
+  const { data: scoringList } = trpc.leadScoring.list.useQuery();
+  const [scoreRuleId, setScoreRuleId] = useState<number | undefined>(undefined);
+  const [scoreRows, setScoreRows] = useState<ScoreRow[]>([
+    { field: "email", op: "present", value: "", points: 10 },
+  ]);
+  useEffect(() => {
+    const def = scoringList?.find((r: { isDefault?: boolean }) => r.isDefault);
+    if (!def?.rules || !Array.isArray(def.rules)) return;
+    const parsed = (def.rules as unknown[]).map((row: unknown) => {
+      const o = row as Record<string, unknown>;
+      return {
+        field: String(o.field ?? "email"),
+        op: (o.op === "contains" || o.op === "eq" ? o.op : "present") as ScoreOp,
+        value: typeof o.value === "string" ? o.value : "",
+        points: typeof o.points === "number" ? o.points : 0,
+      };
+    });
+    if (parsed.length) {
+      setScoreRuleId(def.id);
+      setScoreRows(parsed);
+    }
+  }, [scoringList]);
+
+  const leadScoringUpsert = trpc.leadScoring.upsert.useMutation({
+    onSuccess: (data: { insertId?: number }) => {
+      utils.leadScoring.list.invalidate();
+      if (typeof data?.insertId === "number") setScoreRuleId(data.insertId);
+      toast.success("Lead scoring rules saved");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+
+  const { data: blockedList } = trpc.phoneBlocklist.list.useQuery();
+  const [blockPhoneInput, setBlockPhoneInput] = useState("");
+  const blockAddMut = trpc.phoneBlocklist.add.useMutation({
+    onSuccess: () => {
+      utils.phoneBlocklist.list.invalidate();
+      setBlockPhoneInput("");
+      toast.success("Number blocked");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+  const blockRemoveMut = trpc.phoneBlocklist.remove.useMutation({
+    onSuccess: () => utils.phoneBlocklist.list.invalidate(),
+  });
+
+  const { data: escList } = trpc.escalationRules.list.useQuery();
+  const [escName, setEscName] = useState("");
+  const [escKeyword, setEscKeyword] = useState("");
+  const [escTransfer, setEscTransfer] = useState("");
+  const escUpsertMut = trpc.escalationRules.upsert.useMutation({
+    onSuccess: () => {
+      utils.escalationRules.list.invalidate();
+      setEscName("");
+      setEscKeyword("");
+      setEscTransfer("");
+      toast.success("Escalation rule added");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+  const escRemoveMut = trpc.escalationRules.remove.useMutation({
+    onSuccess: () => utils.escalationRules.list.invalidate(),
+  });
+
+  const { data: crmList } = trpc.crm.list.useQuery();
+  const crmStart = trpc.crm.startConnect.useMutation({
+    onSuccess: () => {
+      utils.crm.list.invalidate();
+      toast.success("CRM connection queued — OAuth coming soon");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+  const crmDisconnect = trpc.crm.disconnect.useMutation({
+    onSuccess: () => {
+      utils.crm.list.invalidate();
+      toast.success("CRM disconnected");
+    },
+  });
+
+  const { data: wfList } = trpc.workflows.list.useQuery();
+  const [wfName, setWfName] = useState("");
+  const wfUpsert = trpc.workflows.upsert.useMutation({
+    onSuccess: () => {
+      utils.workflows.list.invalidate();
+      setWfName("");
+      toast.success("Workflow saved");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+  const wfDelete = trpc.workflows.remove.useMutation({
+    onSuccess: () => utils.workflows.list.invalidate(),
+  });
+
+  const { data: memList } = trpc.memory.list.useQuery();
+  const [memContent, setMemContent] = useState("");
+  const [memLeadId, setMemLeadId] = useState("");
+  const memAdd = trpc.memory.add.useMutation({
+    onSuccess: () => {
+      utils.memory.list.invalidate();
+      setMemContent("");
+      setMemLeadId("");
+      toast.success("Memory added");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+
+  const { data: ticketList } = trpc.tickets.list.useQuery();
+  const [tkSubject, setTkSubject] = useState("");
+  const [tkBody, setTkBody] = useState("");
+  const [tkLeadId, setTkLeadId] = useState("");
+  const tkCreate = trpc.tickets.create.useMutation({
+    onSuccess: () => {
+      utils.tickets.list.invalidate();
+      setTkSubject("");
+      setTkBody("");
+      setTkLeadId("");
+      toast.success("Ticket created");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+  const tkStatus = trpc.tickets.setStatus.useMutation({
+    onSuccess: () => utils.tickets.list.invalidate(),
+  });
+
+  const { data: seqList } = trpc.emailSequences.list.useQuery();
+  const [seqName, setSeqName] = useState("");
+  const [seqTrigger, setSeqTrigger] = useState("lead.created");
+  const [seqBody, setSeqBody] = useState("Hi {{firstName}}, …");
+  const seqUpsert = trpc.emailSequences.upsert.useMutation({
+    onSuccess: () => {
+      utils.emailSequences.list.invalidate();
+      setSeqName("");
+      toast.success("Sequence saved");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+  const seqDelete = trpc.emailSequences.remove.useMutation({
+    onSuccess: () => utils.emailSequences.list.invalidate(),
+  });
+
+  const { data: mobileList } = trpc.mobile.list.useQuery();
+  const [mobPlatform, setMobPlatform] = useState<"ios" | "android">("ios");
+  const [mobDeviceKey, setMobDeviceKey] = useState("");
+  const [mobDisplay, setMobDisplay] = useState("");
+  const [mobPush, setMobPush] = useState("");
+  const [mobVer, setMobVer] = useState("");
+  const mobReg = trpc.mobile.register.useMutation({
+    onSuccess: () => {
+      utils.mobile.list.invalidate();
+      toast.success("Device registered");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+  const mobRemove = trpc.mobile.remove.useMutation({
+    onSuccess: () => utils.mobile.list.invalidate(),
+  });
+
+  const { data: socialList } = trpc.social.list.useQuery();
+  const socialStart = trpc.social.startConnect.useMutation({
+    onSuccess: () => {
+      utils.social.list.invalidate();
+      toast.success("Social connection queued — OAuth coming soon");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+  const socialDisconnect = trpc.social.disconnect.useMutation({
+    onSuccess: () => {
+      utils.social.list.invalidate();
+      toast.success("Disconnected");
+    },
+  });
+
+  const { data: wcList } = trpc.webchat.list.useQuery();
+  const [wcName, setWcName] = useState("");
+  const [wcWelcome, setWcWelcome] = useState("Hi! How can we help?");
+  const [wcOrigins, setWcOrigins] = useState("");
+  const wcCreate = trpc.webchat.create.useMutation({
+    onSuccess: () => {
+      utils.webchat.list.invalidate();
+      setWcName("");
+      toast.success("Webchat widget created");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+  const wcUpdate = trpc.webchat.update.useMutation({
+    onSuccess: () => utils.webchat.list.invalidate(),
+  });
+  const wcRemove = trpc.webchat.remove.useMutation({
+    onSuccess: () => utils.webchat.list.invalidate(),
+  });
+
+  const { data: rcsRow } = trpc.rcs.get.useQuery();
+  const [rcsBrand, setRcsBrand] = useState("");
+  const [rcsAgent, setRcsAgent] = useState("");
+  useEffect(() => {
+    if (rcsRow) {
+      setRcsBrand(rcsRow.brandName ?? "");
+      setRcsAgent(rcsRow.agentId ?? "");
+    }
+  }, [rcsRow]);
+  const rcsUpsert = trpc.rcs.upsert.useMutation({
+    onSuccess: () => {
+      utils.rcs.get.invalidate();
+      toast.success("RCS registration saved");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+
   const handleSave = () => {
     setSaving(true);
     updateMutation.mutate({
@@ -68,12 +351,1246 @@ export default function Settings() {
     voiceMutation.mutate({ voiceProfileId: selectedVoice });
   };
 
+  const { data: phoneNumbers, isLoading: phoneNumsLoading } = trpc.settings.listPhoneNumbers.useQuery();
+  const phoneActiveMut = trpc.settings.setPhoneNumberActive.useMutation({
+    onSuccess: () => {
+      utils.settings.listPhoneNumbers.invalidate();
+      toast.success("Phone number updated");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+
   return (
-    <div className="p-4 sm:p-6 space-y-6 max-w-2xl">
+    <div className="p-4 sm:p-6 space-y-6 max-w-3xl">
       <div>
         <h1 className="text-2xl font-bold">Account Settings</h1>
         <p className="text-muted-foreground text-sm mt-1">Configure your AI assistant behavior</p>
       </div>
+
+      {/* ── DEDICATED PHONE NUMBERS — Part 1 #1 ─────────────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Phone className="w-4 h-4 text-primary" />
+            Dedicated phone numbers
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Numbers purchased during onboarding are stored here for inbound voice and SMS routing. Inbound calls and texts to these lines resolve your tenant via the number&apos;s owner.
+          </p>
+          {phoneNumsLoading ? (
+            <p className="text-xs text-muted-foreground">Loading…</p>
+          ) : (phoneNumbers?.length ?? 0) === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No dedicated numbers yet. Complete the onboarding step to provision a SignalWire line, or your account may use a legacy pool.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {(phoneNumbers ?? []).map((row: { id: number; phoneNumber: string; friendlyName?: string | null; isActive: boolean; isPrimary: boolean; industry?: string | null }) => (
+                <li
+                  key={row.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm"
+                >
+                  <div>
+                    <span className="font-mono">{row.phoneNumber}</span>
+                    {row.isPrimary ? (
+                      <span className="ml-2 text-[10px] uppercase tracking-wide text-primary">Primary</span>
+                    ) : null}
+                    {row.friendlyName ? (
+                      <p className="text-xs text-muted-foreground mt-0.5">{row.friendlyName}</p>
+                    ) : null}
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={row.isActive ? "secondary" : "default"}
+                    disabled={phoneActiveMut.isPending}
+                    onClick={() =>
+                      phoneActiveMut.mutate({ id: row.id, isActive: !row.isActive })
+                    }
+                  >
+                    {row.isActive ? "Deactivate" : "Activate"}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── KNOWLEDGE BASE (website + docs) — Part 1 #2 ───────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-primary" />
+            Knowledge base
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Add your public website URL so we can crawl and train the AI on your content. Document upload and embeddings are processed in the background once the worker pipeline is connected.
+          </p>
+          <div className="flex flex-wrap gap-2 items-end">
+            <div className="flex-1 min-w-[160px] space-y-1.5">
+              <Label className="text-xs">New knowledge base name</Label>
+              <Input
+                placeholder="e.g. Main site"
+                value={kbName}
+                onChange={(e) => setKbName(e.target.value)}
+                className="bg-secondary border-border"
+              />
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!kbName.trim() || kbCreate.isPending}
+              onClick={() => kbCreate.mutate({ name: kbName.trim() })}
+              style={{ backgroundColor: "#1d6ff4" }}
+            >
+              {kbCreate.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Create"}
+            </Button>
+          </div>
+          {kbLoading ? (
+            <p className="text-xs text-muted-foreground">Loading knowledge bases…</p>
+          ) : (kbList?.length ?? 0) === 0 ? (
+            <p className="text-xs text-muted-foreground">No knowledge bases yet. Create one, then add a website URL.</p>
+          ) : (
+            <div className="space-y-3">
+              <Label className="text-xs">Active knowledge base</Label>
+              <select
+                className="w-full px-3 py-2 rounded-lg text-sm bg-secondary border border-border"
+                value={selectedKbId ?? ""}
+                onChange={(e) => setSelectedKbId(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">Select…</option>
+                {(kbList ?? []).map((k: { id: number; name: string }) => (
+                  <option key={k.id} value={k.id}>
+                    {k.name} (ID {k.id})
+                  </option>
+                ))}
+              </select>
+              <div className="flex flex-wrap gap-2 items-end">
+                <div className="flex-1 min-w-[200px] space-y-1.5">
+                  <Label className="text-xs flex items-center gap-1">
+                    <Link2 className="w-3 h-3" /> Website to crawl
+                  </Label>
+                  <Input
+                    type="url"
+                    placeholder="https://yourcompany.com"
+                    value={kbWebsite}
+                    onChange={(e) => setKbWebsite(e.target.value)}
+                    className="bg-secondary border-border"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={!selectedKbId || kbAddSite.isPending}
+                  onClick={() => {
+                    if (!selectedKbId) return;
+                    try {
+                      new URL(kbWebsite);
+                    } catch {
+                      toast.error("Enter a valid URL");
+                      return;
+                    }
+                    kbAddSite.mutate({ knowledgeBaseId: selectedKbId, url: kbWebsite.trim() });
+                  }}
+                >
+                  {kbAddSite.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Add website"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── ZAPIER (catch hook URL) — Part 1 #9 ───────────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Webhook className="w-4 h-4 text-primary" />
+            Zapier
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Paste your Zapier catch hook URL. Event delivery from ApexAI jobs is still being wired — this stores the target and lets you verify it responds.
+          </p>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Webhook URL</Label>
+            <Input
+              type="url"
+              placeholder="https://hooks.zapier.com/hooks/catch/…"
+              value={zapierUrl}
+              onChange={(e) => setZapierUrl(e.target.value)}
+              className="bg-secondary border-border font-mono text-xs"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Events filter (optional, comma-separated)</Label>
+            <p className="text-[11px] text-muted-foreground">
+              Leave blank to receive all. Emitted today: <span className="font-mono">call.completed</span>,{" "}
+              <span className="font-mono">lead.created</span>.
+            </p>
+            <Input
+              placeholder="call.completed, lead.created"
+              value={zapierEvents}
+              onChange={(e) => setZapierEvents(e.target.value)}
+              className="bg-secondary border-border text-sm"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={!zapierUrl.trim() || zapierSave.isPending}
+              onClick={() => {
+                try {
+                  new URL(zapierUrl.trim());
+                } catch {
+                  toast.error("Enter a valid URL");
+                  return;
+                }
+                zapierSave.mutate({
+                  targetUrl: zapierUrl.trim(),
+                  events: zapierEvents.trim() || undefined,
+                  isActive: true,
+                });
+              }}
+              style={{ backgroundColor: "#1d6ff4" }}
+            >
+              {zapierSave.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save webhook"}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={!zapierUrl.trim() || zapierTest.isPending}
+              onClick={() => zapierTest.mutate()}
+            >
+              {zapierTest.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Send test"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── LEAD SCORING RULES — Part 1 #5 ─────────────────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Gauge className="w-4 h-4 text-primary" />
+            Lead scoring (bonus)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Rules marked as default add bonus points on top of the built-in score when you create a lead. Cap is 100; segment stays hot / warm / cold from the total.
+          </p>
+          <div className="space-y-2">
+            {scoreRows.map((row, i) => (
+              <div key={i} className="flex flex-wrap gap-2 items-end p-2 rounded-lg bg-secondary/40 border border-border/60">
+                <div className="space-y-1 min-w-[120px]">
+                  <Label className="text-[10px] uppercase text-muted-foreground">Field</Label>
+                  <select
+                    className="w-full px-2 py-1.5 rounded text-xs bg-secondary border border-border"
+                    value={row.field}
+                    onChange={(e) => {
+                      const next = [...scoreRows];
+                      next[i] = { ...next[i]!, field: e.target.value };
+                      setScoreRows(next);
+                    }}
+                  >
+                    {SCORE_FIELDS.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1 min-w-[100px]">
+                  <Label className="text-[10px] uppercase text-muted-foreground">Match</Label>
+                  <select
+                    className="w-full px-2 py-1.5 rounded text-xs bg-secondary border border-border"
+                    value={row.op}
+                    onChange={(e) => {
+                      const next = [...scoreRows];
+                      next[i] = { ...next[i]!, op: e.target.value as ScoreOp };
+                      setScoreRows(next);
+                    }}
+                  >
+                    <option value="present">Has value</option>
+                    <option value="contains">Contains</option>
+                    <option value="eq">Equals</option>
+                  </select>
+                </div>
+                {(row.op === "contains" || row.op === "eq") && (
+                  <div className="space-y-1 flex-1 min-w-[120px]">
+                    <Label className="text-[10px] uppercase text-muted-foreground">Value</Label>
+                    <Input
+                      className="h-8 text-xs bg-secondary border-border"
+                      value={row.value}
+                      onChange={(e) => {
+                        const next = [...scoreRows];
+                        next[i] = { ...next[i]!, value: e.target.value };
+                        setScoreRows(next);
+                      }}
+                    />
+                  </div>
+                )}
+                <div className="space-y-1 w-20">
+                  <Label className="text-[10px] uppercase text-muted-foreground">Pts</Label>
+                  <Input
+                    type="number"
+                    className="h-8 text-xs bg-secondary border-border"
+                    value={row.points}
+                    onChange={(e) => {
+                      const next = [...scoreRows];
+                      next[i] = { ...next[i]!, points: Number(e.target.value) || 0 };
+                      setScoreRows(next);
+                    }}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => setScoreRows(scoreRows.filter((_, j) => j !== i))}
+                  disabled={scoreRows.length <= 1}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full border-dashed"
+              onClick={() =>
+                setScoreRows([...scoreRows, { field: "phone", op: "present", value: "", points: 10 }])
+              }
+            >
+              <Plus className="w-3 h-3 mr-1" /> Add rule
+            </Button>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            disabled={leadScoringUpsert.isPending}
+            onClick={() => {
+              for (const r of scoreRows) {
+                if ((r.op === "contains" || r.op === "eq") && !r.value.trim()) {
+                  toast.error(`Rule on "${r.field}" needs a value for ${r.op}`);
+                  return;
+                }
+              }
+              const payload = scoreRows.map(({ field, op, value, points }) => ({
+                field,
+                op,
+                ...(op === "present" ? {} : { value: value.trim() }),
+                points,
+              }));
+              leadScoringUpsert.mutate({
+                id: scoreRuleId,
+                name: "Default",
+                rules: payload,
+                isDefault: true,
+              });
+            }}
+            style={{ backgroundColor: "#1d6ff4" }}
+          >
+            {leadScoringUpsert.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save scoring rules"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* ── BLOCKED NUMBERS — Part 1 #7 ─────────────────────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ShieldBan className="w-4 h-4 text-primary" />
+            Blocked callers
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Inbound calls from these numbers get a busy signal. Applies to calls to your ApexAI line (tenant-scoped). Toll-free solicitors are also rejected globally.
+          </p>
+          <div className="flex flex-wrap gap-2 items-end">
+            <div className="flex-1 min-w-[160px] space-y-1.5">
+              <Label className="text-xs">Phone to block</Label>
+              <Input
+                placeholder="+1 555 000 0000"
+                value={blockPhoneInput}
+                onChange={(e) => setBlockPhoneInput(e.target.value)}
+                className="bg-secondary border-border"
+              />
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              disabled={blockAddMut.isPending}
+              onClick={() => blockAddMut.mutate({ phone: blockPhoneInput.trim() })}
+              style={{ backgroundColor: "#1d6ff4" }}
+            >
+              {blockAddMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Block"}
+            </Button>
+          </div>
+          {!blockedList?.length ? (
+            <p className="text-xs text-muted-foreground">No numbers blocked.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {blockedList.map((b: { id: number; phoneE164: string; note: string | null }) => (
+                <li
+                  key={b.id}
+                  className="flex items-center justify-between text-sm py-1.5 px-2 rounded-md bg-secondary/50"
+                >
+                  <span className="font-mono text-xs">{b.phoneE164}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => blockRemoveMut.mutate({ id: b.id })}
+                  >
+                    Remove
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── ESCALATION RULES — Part 1 #8 ────────────────────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ArrowUpRight className="w-4 h-4 text-primary" />
+            Escalation (keyword → transfer)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            When the caller&apos;s speech contains a keyword (case-insensitive), the live call transfers immediately. Leave transfer blank to use your Live Transfer Number below.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Rule name</Label>
+              <Input
+                placeholder="e.g. Ask for manager"
+                value={escName}
+                onChange={(e) => setEscName(e.target.value)}
+                className="bg-secondary border-border text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Keyword in speech</Label>
+              <Input
+                placeholder="e.g. speak to a human"
+                value={escKeyword}
+                onChange={(e) => setEscKeyword(e.target.value)}
+                className="bg-secondary border-border text-sm"
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs">Transfer to (optional)</Label>
+              <Input
+                placeholder="Leave empty = use Live Transfer Number"
+                value={escTransfer}
+                onChange={(e) => setEscTransfer(e.target.value)}
+                className="bg-secondary border-border text-sm"
+              />
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            disabled={escUpsertMut.isPending || !escName.trim() || !escKeyword.trim()}
+            onClick={() =>
+              escUpsertMut.mutate({
+                name: escName.trim(),
+                keyword: escKeyword.trim(),
+                transferNumber: escTransfer.trim() || undefined,
+                isActive: true,
+              })
+            }
+            style={{ backgroundColor: "#1d6ff4" }}
+          >
+            {escUpsertMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Add rule"}
+          </Button>
+          {!escList?.length ? (
+            <p className="text-xs text-muted-foreground">No escalation rules yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {escList.map(
+                (r: {
+                  id: number;
+                  name: string;
+                  keyword: string;
+                  transferNumber: string | null;
+                  isActive: boolean;
+                }) => (
+                  <li
+                    key={r.id}
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-2 rounded-lg bg-secondary/50 text-xs"
+                  >
+                    <div>
+                      <span className="font-medium text-foreground">{r.name}</span>
+                      <span className="text-muted-foreground"> — “{r.keyword}”</span>
+                      {r.transferNumber ? (
+                        <span className="block font-mono text-[10px] mt-0.5">→ {r.transferNumber}</span>
+                      ) : (
+                        <span className="block text-muted-foreground mt-0.5">→ default transfer #</span>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 shrink-0"
+                      onClick={() => escRemoveMut.mutate({ id: r.id })}
+                    >
+                      Delete
+                    </Button>
+                  </li>
+                )
+              )}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── CRM INTEGRATIONS — Part 1 #10 ───────────────────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Cloud className="w-4 h-4 text-primary" />
+            CRM connections
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Register Salesforce, HubSpot, or Pipedrive. Full OAuth and bi-directional sync are on the roadmap — this stores your intent and status.
+          </p>
+          <div className="space-y-2">
+            {(["salesforce", "hubspot", "pipedrive"] as const).map((p) => {
+              const row = crmList?.find((c: { provider: string }) => c.provider === p);
+              const label = p.charAt(0).toUpperCase() + p.slice(1);
+              return (
+                <div
+                  key={p}
+                  className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 rounded-lg bg-secondary/40 border border-border/60"
+                >
+                  <span className="text-sm font-medium">{label}</span>
+                  <div className="flex items-center gap-2">
+                    {row && (
+                      <span className="text-[11px] text-muted-foreground">
+                        {row.status}
+                        {row.displayName ? ` · ${row.displayName}` : ""}
+                      </span>
+                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={crmStart.isPending}
+                      onClick={() => crmStart.mutate({ provider: p })}
+                      style={{ backgroundColor: "#1d6ff4" }}
+                    >
+                      {crmStart.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Register"}
+                    </Button>
+                    {row && row.status !== "disconnected" && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={crmDisconnect.isPending}
+                        onClick={() => crmDisconnect.mutate({ provider: p })}
+                      >
+                        Disconnect
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── WORKFLOWS — Part 1 #11 (execution TBD) ───────────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <GitBranch className="w-4 h-4 text-primary" />
+            Workflow builder
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Store draft graph definitions (JSON). Execution engine hooks in later.
+          </p>
+          <div className="flex flex-wrap gap-2 items-end">
+            <div className="flex-1 min-w-[160px] space-y-1.5">
+              <Label className="text-xs">New workflow name</Label>
+              <Input
+                placeholder="e.g. After-hours"
+                value={wfName}
+                onChange={(e) => setWfName(e.target.value)}
+                className="bg-secondary border-border"
+              />
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!wfName.trim() || wfUpsert.isPending}
+              onClick={() =>
+                wfUpsert.mutate({
+                  name: wfName.trim(),
+                  definition: { version: 1, nodes: [], edges: [] },
+                  isActive: true,
+                })
+              }
+              style={{ backgroundColor: "#1d6ff4" }}
+            >
+              {wfUpsert.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Create draft"}
+            </Button>
+          </div>
+          {!wfList?.length ? (
+            <p className="text-xs text-muted-foreground">No workflows yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {wfList.map((w: { id: number; name: string; isActive: boolean }) => (
+                <li
+                  key={w.id}
+                  className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-secondary/50 text-xs"
+                >
+                  <span>
+                    <span className="font-medium">{w.name}</span>
+                    <span className="text-muted-foreground"> · {w.isActive ? "active" : "off"}</span>
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7"
+                    onClick={() => wfDelete.mutate({ id: w.id })}
+                  >
+                    Delete
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── CUSTOMER MEMORY — Part 1 #12 ────────────────────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Brain className="w-4 h-4 text-primary" />
+            Customer memory
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Short snippets for RAG / context. Optional lead ID must be one of your leads.
+          </p>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Lead ID (optional)</Label>
+            <Input
+              type="number"
+              placeholder="e.g. 42"
+              value={memLeadId}
+              onChange={(e) => setMemLeadId(e.target.value)}
+              className="bg-secondary border-border"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Content</Label>
+            <textarea
+              className="w-full min-h-[80px] px-3 py-2 rounded-lg text-sm bg-secondary border border-border"
+              placeholder="Prefers morning calls, decision-maker is Sarah…"
+              value={memContent}
+              onChange={(e) => setMemContent(e.target.value)}
+            />
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!memContent.trim() || memAdd.isPending}
+            onClick={() =>
+              memAdd.mutate({
+                content: memContent.trim(),
+                leadId: memLeadId.trim() ? Number(memLeadId) : undefined,
+                source: "manual",
+              })
+            }
+            style={{ backgroundColor: "#1d6ff4" }}
+          >
+            {memAdd.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Add memory"}
+          </Button>
+          {!memList?.length ? (
+            <p className="text-xs text-muted-foreground">No memories yet.</p>
+          ) : (
+            <ul className="space-y-2 max-h-48 overflow-y-auto">
+              {memList.map((m: { id: number; content: string; leadId: number | null }) => (
+                <li key={m.id} className="text-xs p-2 rounded bg-secondary/40 border border-border/60">
+                  {m.leadId != null && <span className="font-mono text-[10px] text-muted-foreground">lead {m.leadId} · </span>}
+                  {m.content}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── SUPPORT TICKETS — Part 1 #14 ────────────────────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Ticket className="w-4 h-4 text-primary" />
+            Support tickets
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Track issues from calls or manual entry. CRM sync optional later.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs">Subject</Label>
+              <Input
+                value={tkSubject}
+                onChange={(e) => setTkSubject(e.target.value)}
+                className="bg-secondary border-border"
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs">Body</Label>
+              <textarea
+                className="w-full min-h-[72px] px-3 py-2 rounded-lg text-sm bg-secondary border border-border"
+                value={tkBody}
+                onChange={(e) => setTkBody(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Lead ID (optional)</Label>
+              <Input
+                type="number"
+                value={tkLeadId}
+                onChange={(e) => setTkLeadId(e.target.value)}
+                className="bg-secondary border-border"
+              />
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!tkSubject.trim() || !tkBody.trim() || tkCreate.isPending}
+            onClick={() =>
+              tkCreate.mutate({
+                subject: tkSubject.trim(),
+                body: tkBody.trim(),
+                leadId: tkLeadId.trim() ? Number(tkLeadId) : undefined,
+              })
+            }
+            style={{ backgroundColor: "#1d6ff4" }}
+          >
+            {tkCreate.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Create ticket"}
+          </Button>
+          {!ticketList?.length ? (
+            <p className="text-xs text-muted-foreground">No tickets yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {ticketList.map(
+                (t: {
+                  id: number;
+                  subject: string;
+                  status: "open" | "in_progress" | "closed";
+                }) => (
+                  <li
+                    key={t.id}
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-2 rounded-lg bg-secondary/50 text-xs"
+                  >
+                    <div>
+                      <span className="font-medium">{t.subject}</span>
+                      <span className="text-muted-foreground ml-2">({t.status})</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {(["open", "in_progress", "closed"] as const).map((s) => (
+                        <Button
+                          key={s}
+                          type="button"
+                          size="sm"
+                          variant={t.status === s ? "default" : "outline"}
+                          className="h-7 text-[10px]"
+                          disabled={tkStatus.isPending || t.status === s}
+                          onClick={() => tkStatus.mutate({ id: t.id, status: s })}
+                        >
+                          {s.replace("_", " ")}
+                        </Button>
+                      ))}
+                    </div>
+                  </li>
+                )
+              )}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── EMAIL SEQUENCES — Part 1 #17 ───────────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Mail className="w-4 h-4 text-primary" />
+            Email automation
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Use trigger <span className="font-mono">lead.created</span> (exact match) to queue an email when a new lead has an address. Body supports{" "}
+            <span className="font-mono">{"{{firstName}}"}</span>, <span className="font-mono">{"{{lastName}}"}</span>,{" "}
+            <span className="font-mono">{"{{company}}"}</span>, <span className="font-mono">{"{{email}}"}</span>, <span className="font-mono">{"{{phone}}"}</span>. Subject line is the sequence name. Requires{" "}
+            <span className="font-mono">REDIS_URL</span> + email worker + Resend on the server.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Sequence name</Label>
+              <Input
+                value={seqName}
+                onChange={(e) => setSeqName(e.target.value)}
+                className="bg-secondary border-border"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Trigger event</Label>
+              <Input
+                value={seqTrigger}
+                onChange={(e) => setSeqTrigger(e.target.value)}
+                className="bg-secondary border-border font-mono text-xs"
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs">Body template</Label>
+              <textarea
+                className="w-full min-h-[80px] px-3 py-2 rounded-lg text-sm bg-secondary border border-border font-mono"
+                value={seqBody}
+                onChange={(e) => setSeqBody(e.target.value)}
+              />
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!seqName.trim() || !seqTrigger.trim() || !seqBody.trim() || seqUpsert.isPending}
+            onClick={() =>
+              seqUpsert.mutate({
+                name: seqName.trim(),
+                triggerEvent: seqTrigger.trim(),
+                bodyTemplate: seqBody,
+                isActive: true,
+              })
+            }
+            style={{ backgroundColor: "#1d6ff4" }}
+          >
+            {seqUpsert.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save sequence"}
+          </Button>
+          {!seqList?.length ? (
+            <p className="text-xs text-muted-foreground">No sequences yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {seqList.map(
+                (s: { id: number; name: string; triggerEvent: string; isActive: boolean }) => (
+                  <li
+                    key={s.id}
+                    className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-secondary/50 text-xs"
+                  >
+                    <div>
+                      <span className="font-medium">{s.name}</span>
+                      <span className="text-muted-foreground font-mono ml-2">{s.triggerEvent}</span>
+                      <span className="text-muted-foreground ml-2">{s.isActive ? "on" : "off"}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7"
+                      onClick={() => seqDelete.mutate({ id: s.id })}
+                    >
+                      Delete
+                    </Button>
+                  </li>
+                )
+              )}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── MOBILE APP DEVICES — Part 1 #15 ─────────────────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Smartphone className="w-4 h-4 text-primary" />
+            Mobile app devices
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Register iOS/Android installs (stable <span className="font-mono">deviceKey</span> from the app). Push delivery hooks in later.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Platform</Label>
+              <select
+                className="w-full px-3 py-2 rounded-lg text-sm bg-secondary border border-border"
+                value={mobPlatform}
+                onChange={(e) => setMobPlatform(e.target.value as "ios" | "android")}
+              >
+                <option value="ios">iOS</option>
+                <option value="android">Android</option>
+              </select>
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs">Device key (8+ chars)</Label>
+              <Input
+                className="bg-secondary border-border font-mono text-xs"
+                placeholder="from Keychain / Keystore"
+                value={mobDeviceKey}
+                onChange={(e) => setMobDeviceKey(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Display name (optional)</Label>
+              <Input
+                className="bg-secondary border-border"
+                value={mobDisplay}
+                onChange={(e) => setMobDisplay(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">App version (optional)</Label>
+              <Input
+                className="bg-secondary border-border"
+                placeholder="1.0.0"
+                value={mobVer}
+                onChange={(e) => setMobVer(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs">Push token (optional)</Label>
+              <Input
+                className="bg-secondary border-border font-mono text-xs"
+                value={mobPush}
+                onChange={(e) => setMobPush(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                const bytes = new Uint8Array(16);
+                crypto.getRandomValues(bytes);
+                setMobDeviceKey(Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(""));
+              }}
+            >
+              Generate test key
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={mobDeviceKey.trim().length < 8 || mobReg.isPending}
+              onClick={() =>
+                mobReg.mutate({
+                  platform: mobPlatform,
+                  deviceKey: mobDeviceKey.trim(),
+                  displayName: mobDisplay.trim() || undefined,
+                  pushToken: mobPush.trim() || undefined,
+                  appVersion: mobVer.trim() || undefined,
+                })
+              }
+              style={{ backgroundColor: "#1d6ff4" }}
+            >
+              {mobReg.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Register device"}
+            </Button>
+          </div>
+          {!mobileList?.length ? (
+            <p className="text-xs text-muted-foreground">No devices registered.</p>
+          ) : (
+            <ul className="space-y-2">
+              {mobileList.map(
+                (d: {
+                  id: number;
+                  platform: string;
+                  deviceKey: string;
+                  displayName: string | null;
+                  lastSeenAt: Date | string;
+                }) => (
+                  <li
+                    key={d.id}
+                    className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-secondary/50 text-xs"
+                  >
+                    <div>
+                      <span className="font-medium uppercase">{d.platform}</span>
+                      {d.displayName ? (
+                        <span className="text-muted-foreground"> · {d.displayName}</span>
+                      ) : null}
+                      <span className="block font-mono text-[10px] text-muted-foreground truncate max-w-[280px] mt-0.5">
+                        {d.deviceKey}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        last seen {new Date(d.lastSeenAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7"
+                      onClick={() => mobRemove.mutate({ id: d.id })}
+                    >
+                      Revoke
+                    </Button>
+                  </li>
+                )
+              )}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── SOCIAL — Part 1 #16 ────────────────────────────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Share2 className="w-4 h-4 text-primary" />
+            Social channels
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Register LinkedIn, Meta, Instagram, or X. OAuth and posting workers are on the roadmap.
+          </p>
+          <div className="space-y-2">
+            {(["linkedin", "facebook", "instagram", "x"] as const).map((p) => {
+              const row = socialList?.find((c: { provider: string }) => c.provider === p);
+              const label = p === "x" ? "X" : p.charAt(0).toUpperCase() + p.slice(1);
+              return (
+                <div
+                  key={p}
+                  className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 rounded-lg bg-secondary/40 border border-border/60"
+                >
+                  <span className="text-sm font-medium">{label}</span>
+                  <div className="flex items-center gap-2">
+                    {row && (
+                      <span className="text-[11px] text-muted-foreground">
+                        {row.status}
+                        {row.displayName ? ` · ${row.displayName}` : ""}
+                      </span>
+                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={socialStart.isPending}
+                      onClick={() => socialStart.mutate({ provider: p })}
+                      style={{ backgroundColor: "#1d6ff4" }}
+                    >
+                      {socialStart.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Register"}
+                    </Button>
+                    {row && row.status !== "disconnected" && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={socialDisconnect.isPending}
+                        onClick={() => socialDisconnect.mutate({ provider: p })}
+                      >
+                        Disconnect
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── WEBCHAT — Part 1 #19 ─────────────────────────────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <MessageCircle className="w-4 h-4 text-primary" />
+            Webchat widgets
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Create embed keys for site widgets. Public chat API and script host ship next.
+          </p>
+          <div className="grid grid-cols-1 gap-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Widget name</Label>
+              <Input
+                value={wcName}
+                onChange={(e) => setWcName(e.target.value)}
+                className="bg-secondary border-border"
+                placeholder="e.g. Main site"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Welcome message</Label>
+              <Input
+                value={wcWelcome}
+                onChange={(e) => setWcWelcome(e.target.value)}
+                className="bg-secondary border-border"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Allowed origins (optional)</Label>
+              <Input
+                value={wcOrigins}
+                onChange={(e) => setWcOrigins(e.target.value)}
+                className="bg-secondary border-border font-mono text-xs"
+                placeholder="https://yoursite.com, https://www.yoursite.com"
+              />
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!wcName.trim() || wcCreate.isPending}
+            onClick={() =>
+              wcCreate.mutate({
+                name: wcName.trim(),
+                welcomeMessage: wcWelcome.trim() || undefined,
+                allowedOrigins: wcOrigins.trim() || undefined,
+              })
+            }
+            style={{ backgroundColor: "#1d6ff4" }}
+          >
+            {wcCreate.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Create widget"}
+          </Button>
+          {!wcList?.length ? (
+            <p className="text-xs text-muted-foreground">No widgets yet.</p>
+          ) : (
+            <ul className="space-y-3">
+              {wcList.map(
+                (w: {
+                  id: number;
+                  name: string;
+                  publicKey: string;
+                  isActive: boolean;
+                  welcomeMessage: string | null;
+                }) => (
+                  <li
+                    key={w.id}
+                    className="p-3 rounded-lg bg-secondary/50 border border-border/60 text-xs space-y-2"
+                  >
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <span className="font-medium">{w.name}</span>
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7"
+                          onClick={() =>
+                            wcUpdate.mutate({ id: w.id, isActive: !w.isActive })
+                          }
+                        >
+                          {w.isActive ? "Disable" : "Enable"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7"
+                          onClick={() => wcRemove.mutate({ id: w.id })}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground break-all font-mono">
+                      publicKey: {w.publicKey}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground break-all">
+                      GET{" "}
+                      <span className="font-mono">
+                        {typeof window !== "undefined" ? window.location.origin : ""}
+                        /api/public/webchat/config?key={w.publicKey.slice(0, 12)}…
+                      </span>
+                    </p>
+                  </li>
+                )
+              )}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── RCS — Part 1 #18 ─────────────────────────────────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Radio className="w-4 h-4 text-primary" />
+            RCS messaging
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Brand and agent IDs for verified RCS (carrier / Google Jibe). Sending pipeline is not live yet.
+          </p>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Brand name</Label>
+            <Input
+              value={rcsBrand}
+              onChange={(e) => setRcsBrand(e.target.value)}
+              className="bg-secondary border-border"
+              placeholder="Your business name"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Agent ID (optional)</Label>
+            <Input
+              value={rcsAgent}
+              onChange={(e) => setRcsAgent(e.target.value)}
+              className="bg-secondary border-border font-mono text-xs"
+            />
+          </div>
+          {rcsRow && (
+            <p className="text-[11px] text-muted-foreground">
+              Status: <span className="font-medium text-foreground">{rcsRow.status}</span>
+            </p>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            disabled={!rcsBrand.trim() || rcsUpsert.isPending}
+            onClick={() =>
+              rcsUpsert.mutate({
+                brandName: rcsBrand.trim(),
+                agentId: rcsAgent.trim() || undefined,
+                status: "draft",
+              })
+            }
+            style={{ backgroundColor: "#1d6ff4" }}
+          >
+            {rcsUpsert.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save RCS profile"}
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* ── VOICE SELECTOR ──────────────────────────────────────────── */}
       <Card className="bg-card border-border">
@@ -85,7 +1602,7 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Choose the voice your AI uses on every call. Cartesia voices are faster and better for live calls. ElevenLabs voices are higher quality but slightly slower.
+            Choose the Cartesia voice your AI uses on every live call.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

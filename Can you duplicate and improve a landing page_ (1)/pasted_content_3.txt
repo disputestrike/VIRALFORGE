@@ -1,0 +1,180 @@
+
+
+APEX AI - CALEB
+
+production
+
+
+8
+
+Agent
+
+
+
+
+
+
+
+
+
+
+
+ApexAI
+Deployments
+Variables
+Metrics
+Settings
+apexai-production-d567.up.railway.app
+us-west2
+1 Replica
+
+
+
+
+History
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ApexAI
+/
+ef2e5174
+Active
+
+Mar 31, 2026, 9:48 PM EDT
+apexai-production-d567.up.railway.app
+Details
+Build Logs
+Deploy Logs
+HTTP Logs
+Network Flow Logs
+Filter and search logs
+
+[Server] Starting BullMQ workers...
+[Server] Job queue and call worker initialized
+[Server] SMS and Email workers initialized
+Server running on http://0.0.0.0:3000/
+[Google Auth] Login success | openId: 100357825773658066977 | email: benxpeter@gmail.com
+Wed, 01 Apr 2026 02:09:40 GMT express deprecated res.clearCookie: Passing "options.maxAge" is deprecated. In v5.0.0 of Express, this option will be ignored, as res.clearCookie will automatically set cookies to expire immediately. Please update your code to omit this option. at file:/app/dist/index.js:4316:15
+[VOICE-TRACE] call_1775009780925 | ws_connected | +11ms {"phase":"ws_connected","msSinceCallStart":11}
+[VOICE-TRACE] call_1775009780925 | stream_start | +14ms {"phase":"stream_start","msSinceCallStart":14,"streamSid":"b20a94bf-c448-4b1e-9ae1-bbe9b349f7e6","callSid":"9802665d-470f-464e-b3aa-ffc42057046d","sessionId":"9802665d-470f-464e-b3aa-ffc42057046d"}
+[Voice] Call started: 9802665d-470f-464e-b3aa-ffc42057046d from +14696578558
+[VoiceSession] Created session 9802665d-470f-464e-b3aa-ffc42057046d for lead 15
+[call_1775009780925] Stream started: b20a94bf-c448-4b1e-9ae1-bbe9b349f7e6 session=9802665d-470f-464e-b3aa-ffc42057046d lead=undefined
+[Voice] Stream URL: wss://apexai-production-d567.up.railway.app/api/voice-stream
+[Voice] Session ID: 9802665d-470f-464e-b3aa-ffc42057046d
+[WS-UPGRADE] incoming {
+  url: '/api/voice-stream',
+  host: 'apexai-production-d567.up.railway.app',
+  upgrade: 'websocket',
+  connection: 'Upgrade',
+  userAgent: undefined
+}
+[WS-UPGRADE] voice-stream matched — handling upgrade
+[WS-UPGRADE] handleUpgrade success — WebSocket connected { sessionId: null }
+[Voice] WebSocket connected: null
+[VOICE-WS] connected { sessionId: null, leadId: null, isInbound: false }
+[VOICE-TRACE] call_1775009780925 | engine_init | +0ms {"phase":"engine_init","msSinceCallStart":0}
+[call_1775009780925] SignalWire connected
+[VOICE-TRACE] call_1775009780925 | first_media_in | +51ms {"phase":"first_media_in","msSinceCallStart":51}
+[call_1775009780925] Deepgram error: Unexpected server response: 400
+[call_1775009780925] Deepgram closed
+[call_1775009780925] Cartesia connected
+[VOICE-TRACE] call_1775009780925 | cartesia_ready | +183ms {"phase":"cartesia_ready","msSinceCallStart":183}
+[call_1775009780925] speak() called: "Hi, thanks for calling ApexAI. How can I help you " cartesiaWs=1
+[call_1775009780925] cartesiaSend: "Hi, thanks for calling ApexAI. How can I" voiceId=694f9389-aac1-45b6-b726-9d9369183238 speed=0.8190000000000001
+[VOICE-TRACE] call_1775009780925 | greeting_sent | +419ms {"phase":"greeting_sent","msSinceCallStart":419}
+[call_1775009780925] [GREETING] Sent
+[call_1775009780925] Cartesia error: {"type":"error","context_id":"ctx_1775009781343_ajp8cd49","status_code":400,"done":true,"error":"Invalid request: Your request was invalid: invalid voice specification: unable to infer voice mode: neither embedding nor ID provided"}
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +600ms {"phase":"tts_first_chunk","msSinceCallStart":600,"bytes":693}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +646ms {"phase":"tts_first_chunk","msSinceCallStart":646,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +689ms {"phase":"tts_first_chunk","msSinceCallStart":689,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +733ms {"phase":"tts_first_chunk","msSinceCallStart":733,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +990ms {"phase":"tts_first_chunk","msSinceCallStart":990,"bytes":836}
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +775ms {"phase":"tts_first_chunk","msSinceCallStart":775,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +818ms {"phase":"tts_first_chunk","msSinceCallStart":818,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +862ms {"phase":"tts_first_chunk","msSinceCallStart":862,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1033ms {"phase":"tts_first_chunk","msSinceCallStart":1033,"bytes":835}
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +904ms {"phase":"tts_first_chunk","msSinceCallStart":904,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +948ms {"phase":"tts_first_chunk","msSinceCallStart":948,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1249ms {"phase":"tts_first_chunk","msSinceCallStart":1249,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1291ms {"phase":"tts_first_chunk","msSinceCallStart":1291,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1334ms {"phase":"tts_first_chunk","msSinceCallStart":1334,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1376ms {"phase":"tts_first_chunk","msSinceCallStart":1376,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1077ms {"phase":"tts_first_chunk","msSinceCallStart":1077,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1118ms {"phase":"tts_first_chunk","msSinceCallStart":1118,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1164ms {"phase":"tts_first_chunk","msSinceCallStart":1164,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1205ms {"phase":"tts_first_chunk","msSinceCallStart":1205,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1594ms {"phase":"tts_first_chunk","msSinceCallStart":1594,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1640ms {"phase":"tts_first_chunk","msSinceCallStart":1640,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1682ms {"phase":"tts_first_chunk","msSinceCallStart":1682,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1726ms {"phase":"tts_first_chunk","msSinceCallStart":1726,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1419ms {"phase":"tts_first_chunk","msSinceCallStart":1419,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1462ms {"phase":"tts_first_chunk","msSinceCallStart":1462,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1505ms {"phase":"tts_first_chunk","msSinceCallStart":1505,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1550ms {"phase":"tts_first_chunk","msSinceCallStart":1550,"bytes":835}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1900ms {"phase":"tts_first_chunk","msSinceCallStart":1900,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1942ms {"phase":"tts_first_chunk","msSinceCallStart":1942,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1986ms {"phase":"tts_first_chunk","msSinceCallStart":1986,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +2029ms {"phase":"tts_first_chunk","msSinceCallStart":2029,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +2072ms {"phase":"tts_first_chunk","msSinceCallStart":2072,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1769ms {"phase":"tts_first_chunk","msSinceCallStart":1769,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1812ms {"phase":"tts_first_chunk","msSinceCallStart":1812,"bytes":836}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +1856ms {"phase":"tts_first_chunk","msSinceCallStart":1856,"bytes":836}
+[call_1775009780925] [GREETING] Barge-in enabled
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +2081ms {"phase":"tts_first_chunk","msSinceCallStart":2081,"bytes":142}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+[VOICE-TRACE] call_1775009780925 | tts_first_chunk | +2093ms {"phase":"tts_first_chunk","msSinceCallStart":2093,"bytes":743}
+[call_1775009780925] Sent audio to SignalWire (mulaw)
+
+

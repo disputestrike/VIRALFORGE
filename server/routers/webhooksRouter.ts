@@ -47,9 +47,19 @@ export const webhooksRouter = router({
           score: 75,
           segment: 'hot',
           status: 'new',
+          createdBy: 1,
         });
 
         const insertId = result.insertId;
+        const { runEmailSequencesForLeadCreated } = await import('../_core/services/emailSequenceTrigger');
+        void runEmailSequencesForLeadCreated(1, {
+          id: insertId,
+          firstName: input.firstName,
+          lastName: input.lastName,
+          email: input.email,
+          phone: input.phone,
+          company: input.company,
+        }).catch((e) => console.warn('[EmailSequence] omni:', e));
         console.log(`[Webhooks] Lead ingested → insertId: ${insertId} | source: omniAiLead`);
         return { success: true, leadId: insertId };
       } catch (error) {

@@ -51,6 +51,7 @@ import {
   lookupServiceAreaSpoken,
 } from "./toolLayer";
 import { cerebrasModelCandidates } from "../_core/services/llmRouter";
+import { buildVoiceSystemPrompt } from "./dynamicPrompt";
 
 /**
  * Push LLM text to TTS as soon as it's speakable — not only on full sentence end.
@@ -158,67 +159,6 @@ function estimateMulawEnergy(mulawBuf: Buffer): number {
     sum += distFromSilence;
   }
   return mulawBuf.length > 0 ? Math.round(sum / mulawBuf.length) : 0;
-}
-
-// ── System prompt builder ─────────────────────────────────────────────────────
-function buildPrompt(
-  state: CallState,
-  businessName: string,
-  industry: string,
-  client: ClientConfig
-): string {
-  const modeInstructions = {
-    answer: "Answer the caller's question directly. Then ask one follow-up.",
-    qualify: "Find out what they need. Ask ONE qualifying question.",
-    recommend: "Explain how we solve their specific problem. Be concrete.",
-    book: "Get their name, phone, and preferred time. Confirm clearly.",
-    close: 'Say exactly: "No problem, thanks for calling, have a great day." Nothing else.',
-  };
-
-  const bookingLocked = !canOfferBooking(state);
-  const bookingRule = bookingLocked
-    ? "DO NOT offer appointment times or calendar slots. Answer the question or offer one next step that is NOT scheduling."
-    : "You may offer specific times only if the caller is ready to book.";
-
-  return `You are a high-performance AI phone agent for ${businessName}.
-Industry: ${industry}
-
-CURRENT MODE: ${state.mode.toUpperCase()}
-INSTRUCTION: ${modeInstructions[state.mode]}
-BOOKING POLICY: ${bookingRule}
-
-CONFIG FACTS (prefer these over guessing):
-- Service areas / ZIPs: ${client.serviceAreas.length ? client.serviceAreas.join(", ") : "not listed — do not claim coverage without verification"}
-- Discounts: ${client.discountsLine || "say promotions vary by eligibility"}
-
-VOICE & PACE (sound human, not a script):
-- You're a sharp human on the phone — warm, confident, brief. Never stiff or robotic.
-- Max 2 short sentences per turn; ~16 words per sentence max. Keep it tight.
-- Skip long filler ("um", "uh", "one moment", "let me check", "as an AI"). Short natural nods are OK: "Yeah," "Okay," "Sure —" before the answer.
-- If the caller is frustrated or blunt: one calm acknowledgment ("I hear you —" / "Got it —") then answer directly. No lecturing, no arguing.
-- One question per turn max unless they asked two things.
-- Answer what they asked first; then one clear next step if needed.
-- If caller declines: say "No problem, thanks for calling, have a great day." then TOOL: end_call {}
-- Never say "as an AI", "language model", "connection issue", or name any technology. Do not repeat the same apology line twice in one call.
-- Spoken words only — no markdown, bullets, or lists.
-
-STT / TRANSCRIPTION (phone line is noisy):
-- If a word sounds slightly wrong but context is clear (e.g. "solar" vs "so lar", "no" vs "go"), assume the caller's intended meaning and respond naturally. Do not say "What did you say?" unless the transcript is empty or completely unintelligible.
-
-RESPONSE SHAPE: [optional 1–4 word nod] → [direct answer] → [optional one short follow-up]
-
-Vary wording each turn — don't repeat the same opener every time.
-
-EXAMPLE PERFECT RESPONSES:
-"Got it. We handle solar inbound calls and book appointments directly to your calendar. Are you getting a lot of inbound leads right now?"
-"Absolutely. For HVAC companies we qualify homeowners and book service appointments automatically. Want me to show you how?"
-"Sure. I can set that up for Tuesday at 2 PM — does that work for you?"
-"No problem, thanks for calling, have a great day."
-
-TOOLS (use exact format):
-TOOL: book_appointment {"name": "...", "phone": "...", "date": "...", "time": "..."}
-TOOL: save_lead {"firstName": "...", "phone": "...", "email": "..."}
-TOOL: end_call {}`;
 }
 
 // ── Main engine per call ──────────────────────────────────────────────────────
@@ -485,9 +425,20 @@ export function createCallEngine(opts: EngineOptions): void {
 
           if (!transcript.trim()) return;
 
-          // Text backup if energy path missed (avoid double epoch if interruptRequested already set)
-          if (isSpeaking && greetingDone && transcript.trim().length >= 2 && !turnCtl.interruptRequested) {
-            log(`[BARGE-IN] STT: "${transcript}"`);
+          /**
+           * STT backup barge-in only on **finalized** text chunks.
+           * Interim results (interim_results=true) often contain noise, "uh", coughs, or 1–2 chars —
+           * those were cancelling TTS and bumping generationEpoch, which felt like lost context and
+           * "any small sound throws the AI off". Energy-based barge-in still handles fast interrupts.
+           */
+          const sttBackupBarge =
+            isSpeaking &&
+            greetingDone &&
+            isFinal &&
+            transcript.trim().length >= 3 &&
+            !turnCtl.interruptRequested;
+          if (sttBackupBarge) {
+            log(`[BARGE-IN] STT (final): "${transcript}"`);
             turnCtl = onUserSpeechStart(turnCtl);
             generationEpoch++;
             stopSpeaking();
@@ -622,7 +573,7 @@ export function createCallEngine(opts: EngineOptions): void {
 
   async function respondCerebras(epoch: number): Promise<void> {
     const client = cerebrasPool.getClient();
-    const prompt = buildPrompt(callState, businessName, industry, clientConfig);
+    const prompt = buildVoiceSystemPrompt(callState, businessName, industry, clientConfig);
     const messages = [
       { role: "system" as const, content: prompt },
       ...historyForLlm(),
@@ -665,7 +616,7 @@ export function createCallEngine(opts: EngineOptions): void {
   async function respondAnthropicFallback(epoch: number): Promise<void> {
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-    const prompt = buildPrompt(callState, businessName, industry, clientConfig);
+    const prompt = buildVoiceSystemPrompt(callState, businessName, industry, clientConfig);
     const messages = historyForLlm().map(m => ({
       role: m.role as "user" | "assistant",
       content: m.content,

@@ -322,3 +322,255 @@ export const agencyClients = mysqlTable("agency_clients", {
 
 export type AgencyClient = typeof agencyClients.$inferSelect;
 export type InsertAgencyClient = typeof agencyClients.$inferInsert;
+
+// ─── Knowledge base (website crawl + document ingestion) — Part 1 feature #2 ─
+export const knowledgeBases = mysqlTable("knowledge_bases", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  status: mysqlEnum("status", ["training", "active", "failed"]).default("training").notNull(),
+  trainingProgress: int("trainingProgress").default(0).notNull(),
+  lastTrainedAt: timestamp("lastTrainedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type KnowledgeBase = typeof knowledgeBases.$inferSelect;
+export type InsertKnowledgeBase = typeof knowledgeBases.$inferInsert;
+
+export const knowledgeBaseSources = mysqlTable("knowledge_base_sources", {
+  id: int("id").autoincrement().primaryKey(),
+  knowledgeBaseId: int("knowledgeBaseId").notNull(),
+  sourceType: mysqlEnum("sourceType", [
+    "website",
+    "pdf",
+    "word",
+    "txt",
+    "html",
+    "markdown",
+    "faq",
+  ]).notNull(),
+  sourceUrl: varchar("sourceUrl", { length: 2048 }),
+  fileName: varchar("fileName", { length: 255 }),
+  filePath: varchar("filePath", { length: 2048 }),
+  fileSize: int("fileSize"),
+  contentHash: varchar("contentHash", { length: 64 }),
+  status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type KnowledgeBaseSource = typeof knowledgeBaseSources.$inferSelect;
+export type InsertKnowledgeBaseSource = typeof knowledgeBaseSources.$inferInsert;
+
+export const knowledgeBaseChunks = mysqlTable("knowledge_base_chunks", {
+  id: int("id").autoincrement().primaryKey(),
+  knowledgeBaseId: int("knowledgeBaseId").notNull(),
+  sourceId: int("sourceId"),
+  content: text("content").notNull(),
+  /** Embedding blob or serialized vector — optional until ingestion worker runs */
+  embedding: text("embedding"),
+  metadata: text("metadata"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type KnowledgeBaseChunk = typeof knowledgeBaseChunks.$inferSelect;
+export type InsertKnowledgeBaseChunk = typeof knowledgeBaseChunks.$inferInsert;
+
+// ─── Zapier outbound webhooks (stub — worker emits events later) ─────────────
+export const zapierWebhooks = mysqlTable("zapier_webhooks", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  targetUrl: varchar("targetUrl", { length: 2048 }).notNull(),
+  events: varchar("events", { length: 500 }),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ZapierWebhook = typeof zapierWebhooks.$inferSelect;
+export type InsertZapierWebhook = typeof zapierWebhooks.$inferInsert;
+
+// ─── Lead scoring rules (JSON ruleset per tenant) ────────────────────────────
+export const leadScoringRules = mysqlTable("lead_scoring_rules", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 200 }).notNull(),
+  rules: json("rules").notNull(),
+  isDefault: boolean("isDefault").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type LeadScoringRuleRow = typeof leadScoringRules.$inferSelect;
+export type InsertLeadScoringRule = typeof leadScoringRules.$inferInsert;
+
+// ─── Blocked numbers (spam / DNC per tenant) — Part 1 #7 ─────────────────────
+export const blockedPhoneNumbers = mysqlTable("blocked_phone_numbers", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  phoneE164: varchar("phoneE164", { length: 24 }).notNull(),
+  note: varchar("note", { length: 500 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type BlockedPhoneNumber = typeof blockedPhoneNumbers.$inferSelect;
+export type InsertBlockedPhoneNumber = typeof blockedPhoneNumbers.$inferInsert;
+
+// ─── Escalation rules (keyword → transfer) — Part 1 #8 ───────────────────────
+export const escalationRules = mysqlTable("escalation_rules", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 200 }).notNull(),
+  keyword: varchar("keyword", { length: 200 }).notNull(),
+  /** If empty, uses account transfer number from Settings */
+  transferNumber: varchar("transferNumber", { length: 24 }),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type EscalationRule = typeof escalationRules.$inferSelect;
+export type InsertEscalationRule = typeof escalationRules.$inferInsert;
+
+// ─── CRM external connections (OAuth + sync — stub metadata) — Part 1 #10 ───
+export const crmConnections = mysqlTable("crm_connections", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  provider: mysqlEnum("provider", ["salesforce", "hubspot", "pipedrive"]).notNull(),
+  status: mysqlEnum("status", ["disconnected", "pending_oauth", "connected"]).default("pending_oauth").notNull(),
+  displayName: varchar("displayName", { length: 200 }),
+  externalAccountId: varchar("externalAccountId", { length: 200 }),
+  lastSyncAt: timestamp("lastSyncAt"),
+  /** JSON: scopes, instance URL, etc. — no raw tokens in logs */
+  meta: text("meta"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CrmConnection = typeof crmConnections.$inferSelect;
+export type InsertCrmConnection = typeof crmConnections.$inferInsert;
+
+// ─── Workflows (no-code definitions — engine TBD) — Part 1 #11 ───────────────
+export const workflows = mysqlTable("workflows", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 200 }).notNull(),
+  definition: json("definition").notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Workflow = typeof workflows.$inferSelect;
+export type InsertWorkflow = typeof workflows.$inferInsert;
+
+// ─── Customer memory (per-tenant notes / RAG slice — Part 1 #12) ───────────
+export const customerMemories = mysqlTable("customer_memories", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  leadId: int("leadId"),
+  content: text("content").notNull(),
+  source: varchar("source", { length: 64 }).default("manual"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type CustomerMemory = typeof customerMemories.$inferSelect;
+export type InsertCustomerMemory = typeof customerMemories.$inferInsert;
+
+// ─── Support tickets — Part 1 #14 ────────────────────────────────────────────
+export const supportTickets = mysqlTable("support_tickets", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  leadId: int("leadId"),
+  subject: varchar("subject", { length: 300 }).notNull(),
+  body: text("body").notNull(),
+  status: mysqlEnum("status", ["open", "in_progress", "closed"]).default("open").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SupportTicket = typeof supportTickets.$inferSelect;
+export type InsertSupportTicket = typeof supportTickets.$inferInsert;
+
+// ─── Email automation sequences — Part 1 #17 ─────────────────────────────────
+export const emailSequences = mysqlTable("email_sequences", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 200 }).notNull(),
+  triggerEvent: varchar("triggerEvent", { length: 64 }).notNull(),
+  bodyTemplate: text("bodyTemplate").notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type EmailSequence = typeof emailSequences.$inferSelect;
+export type InsertEmailSequence = typeof emailSequences.$inferInsert;
+
+// ─── Mobile app devices — Part 1 #15 (push + client identity) ───────────────
+export const mobileDevices = mysqlTable("mobile_devices", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  platform: mysqlEnum("platform", ["ios", "android"]).notNull(),
+  /** Stable ID generated by the mobile client (Keychain / Keystore). */
+  deviceKey: varchar("deviceKey", { length: 128 }).notNull(),
+  displayName: varchar("displayName", { length: 200 }),
+  pushToken: varchar("pushToken", { length: 512 }),
+  appVersion: varchar("appVersion", { length: 32 }),
+  lastSeenAt: timestamp("lastSeenAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type MobileDevice = typeof mobileDevices.$inferSelect;
+export type InsertMobileDevice = typeof mobileDevices.$inferInsert;
+
+// ─── Social channel connections — Part 1 #16 (OAuth + posting TBD) ───────────
+export const socialConnections = mysqlTable("social_connections", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  provider: mysqlEnum("provider", ["linkedin", "facebook", "instagram", "x"]).notNull(),
+  status: mysqlEnum("status", ["disconnected", "pending_oauth", "connected"]).default("pending_oauth").notNull(),
+  displayName: varchar("displayName", { length: 200 }),
+  meta: text("meta"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SocialConnection = typeof socialConnections.$inferSelect;
+export type InsertSocialConnection = typeof socialConnections.$inferInsert;
+
+// ─── Embeddable webchat widgets — Part 1 #19 (public script TBD) ────────────
+export const webchatWidgets = mysqlTable("webchat_widgets", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 200 }).notNull(),
+  /** Public token for `/api/webchat/...` embed (no session secret). */
+  publicKey: varchar("publicKey", { length: 64 }).notNull().unique(),
+  welcomeMessage: text("welcomeMessage"),
+  /** Comma-separated origins or JSON string — validated when worker ships. */
+  allowedOrigins: text("allowedOrigins"),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type WebchatWidget = typeof webchatWidgets.$inferSelect;
+export type InsertWebchatWidget = typeof webchatWidgets.$inferInsert;
+
+// ─── RCS brand / agent registration stub — Part 1 #18 (carrier pipeline TBD) ─
+export const rcsRegistrations = mysqlTable("rcs_registrations", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  brandName: varchar("brandName", { length: 200 }).notNull(),
+  agentId: varchar("agentId", { length: 200 }),
+  status: mysqlEnum("status", ["draft", "submitted", "verified"]).default("draft").notNull(),
+  meta: text("meta"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type RcsRegistration = typeof rcsRegistrations.$inferSelect;
+export type InsertRcsRegistration = typeof rcsRegistrations.$inferInsert;

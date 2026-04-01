@@ -72,6 +72,7 @@ export default function VoiceAI() {
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [scriptForm, setScriptForm] = useState<ScriptForm>(defaultScriptForm);
   const [showTranscript, setShowTranscript] = useState<string | null>(null);
+  const [showSummary, setShowSummary] = useState<string | null>(null);
 
   const { data: leadsData } = trpc.leads.list.useQuery({ limit: 100 });
   const { data: recordings } = trpc.messages.getCallRecordings.useQuery({});
@@ -324,23 +325,43 @@ export default function VoiceAI() {
           ) : (
             <div className="space-y-2">
               {recordings.map((r) => (
-                <div key={r.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                <div
+                  key={r.id}
+                  className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
+                >
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                       <Phone className="w-4 h-4 text-primary" />
                     </div>
-                    <div>
+                    <div className="min-w-0 space-y-1">
                       <p className="text-sm font-medium">Lead #{r.leadId}</p>
                       <p className="text-xs text-muted-foreground">
                         {new Date(r.calledAt!).toLocaleString()} · {Math.floor((r.duration ?? 0) / 60)}m {(r.duration ?? 0) % 60}s
                       </p>
+                      {r.aiSummary ? (
+                        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed border-l-2 border-primary/40 pl-2 mt-1">
+                          <span className="text-primary/90 font-medium">Summary: </span>
+                          {r.aiSummary}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-shrink-0 flex-wrap sm:justify-end">
                     {r.sentiment && sentimentIcons[r.sentiment]}
                     <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${outcomeColors[r.outcome ?? ""] ?? "text-gray-400 bg-gray-500/10 border-gray-500/30"}`}>
                       {r.outcome}
                     </span>
+                    {r.aiSummary && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setShowSummary(r.aiSummary!)}
+                      >
+                        <Sparkles className="w-3 h-3 mr-1" />
+                        Summary
+                      </Button>
+                    )}
                     {r.transcript && (
                       <Button
                         variant="ghost" size="sm"
@@ -715,6 +736,18 @@ export default function VoiceAI() {
           <div className="text-sm text-muted-foreground leading-relaxed">
             {showTranscript && <Streamdown>{showTranscript}</Streamdown>}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Summary Dialog */}
+      <Dialog open={!!showSummary} onOpenChange={() => setShowSummary(null)}>
+        <DialogContent className="max-w-2xl bg-card border-border max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-primary" /> AI call summary
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{showSummary}</p>
         </DialogContent>
       </Dialog>
     </div>

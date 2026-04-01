@@ -14,7 +14,22 @@ import * as twilioService from "./_core/services/signalwireService";
 import * as voiceSessionManager from "./_core/services/voiceSessionManager";
 import * as followUpEngine from "./_core/services/followUpEngine";
 import { saasRouter } from "./routers/saasRouter";
+import { knowledgeBaseRouter } from "./routers/knowledgeBaseRouter";
+import { zapierRouter } from "./routers/zapierRouter";
+import { leadScoringRouter } from "./routers/leadScoringRouter";
+import { phoneBlocklistRouter } from "./routers/phoneBlocklistRouter";
+import { escalationRouter } from "./routers/escalationRouter";
+import { crmRouter } from "./routers/crmRouter";
+import { workflowRouter } from "./routers/workflowRouter";
+import { memoryRouter } from "./routers/memoryRouter";
+import { ticketsRouter } from "./routers/ticketsRouter";
+import { emailSequencesRouter } from "./routers/emailSequencesRouter";
+import { mobileRouter } from "./routers/mobileRouter";
+import { socialRouter } from "./routers/socialRouter";
+import { webchatRouter } from "./routers/webchatRouter";
+import { rcsRouter } from "./routers/rcsRouter";
 import { ENV } from "./_core/env";
+import { scoreFromRules, type RuleEntry } from "./_core/services/leadScoringApply";
 
 // ─── Admin guard ──────────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -55,10 +70,49 @@ const leadsRouter = router({
       tags: z.array(z.string()).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      const score = calculateLeadScore(input);
+      let score = calculateLeadScore(input);
+      const custom = await db.getDefaultLeadScoringRule(ctx.user.id);
+      if (custom?.rules && Array.isArray(custom.rules)) {
+        const flat: Record<string, string | undefined> = {
+          firstName: input.firstName,
+          lastName: input.lastName,
+          email: input.email,
+          phone: input.phone,
+          company: input.company,
+          industry: input.industry,
+          title: input.title,
+          linkedinUrl: input.linkedinUrl,
+          website: input.website,
+          city: input.city,
+          state: input.state,
+          country: input.country,
+          source: input.source,
+        };
+        const bonus = scoreFromRules(flat, custom.rules as RuleEntry[]);
+        score = Math.min(100, Math.max(0, score + bonus));
+      }
       const segment = score >= 70 ? "hot" : score >= 40 ? "warm" : "cold";
-      await db.createLead({ ...input, score, segment, tags: input.tags ? JSON.stringify(input.tags) : undefined , createdBy: ctx.user.id });
+      const { insertId: leadId } = await db.createLead({ ...input, score, segment, tags: input.tags ? JSON.stringify(input.tags) : undefined , createdBy: ctx.user.id });
       await db.logActivity({ userId: ctx.user.id, entityType: "lead", action: "created", description: `Created lead: ${input.firstName} ${input.lastName}` });
+      const { emitZapierEvent } = await import("./_core/services/zapierEmit");
+      void emitZapierEvent(ctx.user.id, "lead.created", {
+        leadId,
+        score,
+        segment,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        company: input.company ?? undefined,
+        source: input.source ?? undefined,
+      });
+      const { runEmailSequencesForLeadCreated } = await import("./_core/services/emailSequenceTrigger");
+      void runEmailSequencesForLeadCreated(ctx.user.id, {
+        id: leadId,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        email: input.email,
+        company: input.company,
+        phone: input.phone,
+      }).catch((e) => console.warn("[EmailSequence] lead.created:", e));
       return { success: true };
     }),
 
@@ -163,10 +217,19 @@ const leadsRouter = router({
     .input(z.array(z.object({ firstName: z.string(), lastName: z.string(), email: z.string().optional(), phone: z.string().optional(), company: z.string().optional(), industry: z.string().optional(), title: z.string().optional() })))
     .mutation(async ({ input, ctx }) => {
       let created = 0;
+      const { runEmailSequencesForLeadCreated } = await import("./_core/services/emailSequenceTrigger");
       for (const lead of input) {
         const score = calculateLeadScore(lead);
         const segment = score >= 70 ? "hot" : score >= 40 ? "warm" : "cold";
-        await db.createLead({ ...lead, score, segment , createdBy: ctx.user.id });
+        const { insertId } = await db.createLead({ ...lead, score, segment, createdBy: ctx.user.id });
+        void runEmailSequencesForLeadCreated(ctx.user.id, {
+          id: insertId,
+          firstName: lead.firstName,
+          lastName: lead.lastName,
+          email: lead.email,
+          company: lead.company,
+          phone: lead.phone,
+        }).catch((e) => console.warn("[EmailSequence] bulk:", e));
         created++;
       }
       await db.logActivity({ userId: ctx.user.id, entityType: "lead", action: "bulk_import", description: `Imported ${created} leads` });
@@ -569,7 +632,7 @@ const voiceAIRouter = router({
         sms: !!(process.env.SIGNALWIRE_PROJECT_ID && process.env.SIGNALWIRE_TOKEN),
         email: !!(process.env.RESEND_API_KEY),
         stt: !!(process.env.OPENAI_API_KEY),
-        tts: !!(process.env.ELEVENLABS_API_KEY || process.env.CARTESIA_API_KEY),
+        tts: !!(process.env.CARTESIA_API_KEY ?? "").trim(),
         ai: !!(process.env.ANTHROPIC_API_KEY),
         gcal: !!(process.env.VITE_GCAL_BOOKING_URL),
       };
@@ -591,12 +654,12 @@ ${features.stt ? "✅ Voice transcription (Whisper) — working" : "❌ STT — 
 ${features.voice ? "✅ Outbound calls — working" : "❌ Calls — add SIGNALWIRE_PROJECT_ID, SIGNALWIRE_TOKEN, SIGNALWIRE_SPACE_URL, SIGNALWIRE_PHONE_NUMBER"}
 ${features.sms ? "✅ SMS — working" : "❌ SMS — add SIGNALWIRE_PROJECT_ID, SIGNALWIRE_TOKEN, SIGNALWIRE_PHONE_NUMBER"}
 ${features.email ? "✅ Email — working" : "❌ Email — add RESEND_API_KEY"}
-${features.tts ? "✅ AI Voice — working" : "❌ AI Voice — add ELEVENLABS_API_KEY or CARTESIA_API_KEY"}
+${features.tts ? "✅ AI Voice — working" : "❌ AI Voice — add CARTESIA_API_KEY"}
 ${features.gcal ? "✅ Google Calendar booking — working" : "❌ Google Calendar — add VITE_GCAL_BOOKING_URL"}
 
 HOW APEXAI WORKS:
 - Leads flow: new → contacted → qualified → converted
-- AI calls need: SignalWire (dial/stream) + ElevenLabs or Cartesia (speak) + OpenAI Whisper (transcribe) + Anthropic (respond)
+- AI calls need: SignalWire (dial/stream) + Cartesia (speak) + Deepgram or Whisper (transcribe) + Cerebras (respond)
 - Appointments are auto-booked when AI detects prospect agreeing to a time during a call
 - Bulk send queues SMS/email jobs via BullMQ/Redis — processes even without Twilio (fails gracefully with reason)
 - Script generator uses Anthropic to write personalized scripts per industry
@@ -754,9 +817,14 @@ const templatesRouter = router({
 const analyticsRouter = router({
   globalMetrics: protectedProcedure.query(async ({ ctx }) => db.getGlobalMetrics(ctx.user.id)),
 
+  dashboardBreakdown: protectedProcedure.query(async ({ ctx }) => db.getDashboardBreakdown(ctx.user.id)),
+
+  /** Aggregates `call_recordings.sentiment` for this tenant (no extra table). */
+  sentimentSummary: protectedProcedure.query(async ({ ctx }) => db.getSentimentSummary(ctx.user.id)),
+
   snapshots: protectedProcedure
     .input(z.object({ campaignId: z.number().optional(), channel: z.string().optional(), limit: z.number().optional() }).optional())
-    .query(async ({ input }) => db.getAnalyticsSnapshots(input ?? {})),
+    .query(async ({ input, ctx }) => db.getAnalyticsSnapshots({ ...(input ?? {}), userId: ctx.user.id })),
 
   campaignFunnel: protectedProcedure.input(z.object({ campaignId: z.number() })).query(async ({ input }) => {
     const campaign = await db.getCampaignById(input.campaignId);
@@ -794,6 +862,7 @@ const analyticsRouter = router({
         showRate: metrics.showRate,
         conversionRate: metrics.salesIncrease,
         revenueGenerated: metrics.totalRevenue,
+        createdBy: ctx.user.id,
       });
       return { success: true };
     }),
@@ -923,6 +992,21 @@ const onboardingRouter = router({
           description: `Provisioned number ${numberToBuy} for user ${ctx.user.id}`,
           metadata: { phoneNumber: numberToBuy, sid: purchased.sid, industry: input.industry }
         });
+
+        const existingNums = await db.listUserPhoneNumbers(ctx.user.id);
+        try {
+          await db.insertUserPhoneNumber({
+            userId: ctx.user.id,
+            phoneNumber: numberToBuy,
+            signalwireSid: purchased.sid ?? null,
+            friendlyName: (purchased as { friendlyName?: string }).friendlyName ?? `ApexAI - ${ctx.user.name || ctx.user.email}`,
+            isActive: true,
+            isPrimary: existingNums.length === 0,
+            industry: input.industry ?? null,
+          });
+        } catch (e) {
+          console.warn("[Onboarding] user_phone_numbers insert failed (schema mismatch or duplicate):", e);
+        }
 
         console.log(`[Onboarding] Provisioned ${numberToBuy} for user ${ctx.user.id}`);
         return {
@@ -1096,6 +1180,23 @@ const settingsRouter = router({
         entityType: "user_settings",
         action: "updated",
         description: `Settings updated: ${JSON.stringify(input)}`,
+      });
+      return { success: true };
+    }),
+
+  /** Dedicated SignalWire numbers linked to this tenant (inbound routing via `getUserIdByPhoneNumber`). */
+  listPhoneNumbers: protectedProcedure.query(async ({ ctx }) => db.listUserPhoneNumbers(ctx.user.id)),
+
+  setPhoneNumberActive: protectedProcedure
+    .input(z.object({ id: z.number(), isActive: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      await db.setUserPhoneNumberActive(input.id, ctx.user.id, input.isActive);
+      await db.logActivity({
+        userId: ctx.user.id,
+        entityType: "phone_number",
+        entityId: input.id,
+        action: input.isActive ? "activated" : "deactivated",
+        description: `Phone ${input.id} isActive=${input.isActive}`,
       });
       return { success: true };
     }),
@@ -1330,6 +1431,15 @@ const demoCallRouter = router({
           industry: input.industry,
           createdBy: 1, // system account — demo leads
         });
+        const { runEmailSequencesForLeadCreated } = await import("./_core/services/emailSequenceTrigger");
+        void runEmailSequencesForLeadCreated(1, {
+          id: leadResult.insertId,
+          firstName: input.firstName,
+          lastName: "Demo",
+          email: input.email,
+          phone: input.phone,
+          company: null,
+        }).catch((e) => console.warn("[EmailSequence] demo:", e));
 
         // Trigger outbound call immediately
         const { initiateCall } = await import("./_core/services/signalwireService");
@@ -1396,6 +1506,15 @@ const ghlRouter = router({
             createdBy: 1,
           });
           lead = { id: result.insertId } as any;
+          const { runEmailSequencesForLeadCreated } = await import("./_core/services/emailSequenceTrigger");
+          void runEmailSequencesForLeadCreated(1, {
+            id: result.insertId,
+            firstName: input.firstName || "GHL",
+            lastName: input.lastName || "Lead",
+            email: input.email,
+            phone: input.phone,
+            company: null,
+          }).catch((e) => console.warn("[EmailSequence] ghl:", e));
         }
 
         // Queue outbound call
@@ -1442,6 +1561,20 @@ export const appRouter = router({
   extractor: extractorRouter,
   demoCall: demoCallRouter,
   ghl: ghlRouter,
+  knowledgeBase: knowledgeBaseRouter,
+  zapier: zapierRouter,
+  leadScoring: leadScoringRouter,
+  phoneBlocklist: phoneBlocklistRouter,
+  escalationRules: escalationRouter,
+  crm: crmRouter,
+  workflows: workflowRouter,
+  memory: memoryRouter,
+  tickets: ticketsRouter,
+  emailSequences: emailSequencesRouter,
+  mobile: mobileRouter,
+  social: socialRouter,
+  webchat: webchatRouter,
+  rcs: rcsRouter,
 });
 
 export type AppRouter = typeof appRouter;
