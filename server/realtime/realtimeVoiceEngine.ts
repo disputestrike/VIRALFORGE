@@ -562,9 +562,7 @@ export function createCallEngine(opts: EngineOptions): void {
 
   async function buildSystemPromptWithTenant(userTranscript: string): Promise<string> {
     const sentimentNote = currentSentiment !== "neutral"
-      ? `
-
-CALLER SENTIMENT: ${currentSentiment.toUpperCase()} — adjust your tone accordingly. If frustrated: be direct and factual. If confused: simplify. If positive: keep momentum.`
+      ? `\n\nCALLER SENTIMENT: ${currentSentiment.toUpperCase()} — adjust tone. Frustrated: direct/factual. Confused: simplify. Positive: maintain momentum.`
       : "";
     const base = buildVoiceSystemPrompt(callState, businessName, industry, clientConfig) + sentimentNote;
     if (!activeUserId) return base;
