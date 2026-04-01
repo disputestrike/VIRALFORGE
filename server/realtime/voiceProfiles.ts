@@ -20,7 +20,7 @@ export const VOICE_PROFILES: VoiceProfile[] = [
     name: "Sarah — Professional",
     description: "Clear, confident, professional female voice",
     cartesiaId: "694f9389-aac1-45b6-b726-9d9369183238",  // Cartesia: Sophie
-    speed: 0.9,
+    speed: 0.94,
     gender: "female",
   },
   {
@@ -28,7 +28,7 @@ export const VOICE_PROFILES: VoiceProfile[] = [
     name: "Emma — Warm",
     description: "Warm, friendly, approachable female voice",
     cartesiaId: "a0e99841-438c-4a64-b679-ae501e7d6091",  // Cartesia: Friendly Female
-    speed: 0.9,
+    speed: 0.94,
     gender: "female",
   },
   {
@@ -36,7 +36,7 @@ export const VOICE_PROFILES: VoiceProfile[] = [
     name: "Aria — Energetic",
     description: "Upbeat, energetic female — great for sales",
     cartesiaId: "79a125e8-cd45-4c13-8a67-188112f4dd22",  // Cartesia: Energetic Female
-    speed: 0.95,
+    speed: 0.94,
     gender: "female",
   },
   {
@@ -44,7 +44,7 @@ export const VOICE_PROFILES: VoiceProfile[] = [
     name: "Victoria — Authoritative",
     description: "Confident, authoritative female voice",
     cartesiaId: "b7d50908-b17c-442d-ad8d-810c63997ed9",  // Cartesia: Professional Female
-    speed: 0.9,
+    speed: 0.94,
     gender: "female",
   },
   {
@@ -52,7 +52,7 @@ export const VOICE_PROFILES: VoiceProfile[] = [
     name: "James — Professional",
     description: "Deep, professional, trustworthy male voice",
     cartesiaId: "421b3369-f63f-4b03-8980-37a44df1d4e8",  // Cartesia: Professional Male
-    speed: 0.9,
+    speed: 0.94,
     gender: "male",
   },
   {
@@ -60,7 +60,7 @@ export const VOICE_PROFILES: VoiceProfile[] = [
     name: "Marcus — Friendly",
     description: "Friendly, conversational male voice",
     cartesiaId: "5c42302c-194b-4d0c-ba1a-8cb485c84ab9",  // Cartesia: Friendly Male
-    speed: 0.9,
+    speed: 0.94,
     gender: "male",
   },
   {
@@ -68,7 +68,7 @@ export const VOICE_PROFILES: VoiceProfile[] = [
     name: "Alex — Dynamic",
     description: "Dynamic, persuasive male — great for closing",
     cartesiaId: "2ee87190-8f84-4925-97da-e52547f9462c",  // Cartesia: Confident Male
-    speed: 0.92,
+    speed: 0.94,
     gender: "male",
   },
   {
@@ -76,7 +76,7 @@ export const VOICE_PROFILES: VoiceProfile[] = [
     name: "David — Calm",
     description: "Calm, reassuring male — great for support",
     cartesiaId: "29e9b1dc-5c16-4ccf-9d7d-9e5fe4b1c456",  // Cartesia: Calm Male
-    speed: 0.88,
+    speed: 0.94,
     gender: "male",
   },
 ];

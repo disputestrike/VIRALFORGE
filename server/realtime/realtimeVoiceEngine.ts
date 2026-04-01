@@ -630,8 +630,8 @@ export function createCallEngine(opts: EngineOptions): void {
     epoch: number,
     source: "cerebras" | "claude"
   ): Promise<void> {
-    // New TTS utterance for this reply — do not chunk into greeting context_id.
-    cartesiaContextId = "";
+    // Fresh context for every response — prevents "context closed" cascade errors
+    cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
     let assembled = "";
     let spokenUpTo = 0;
     let fullText = "";

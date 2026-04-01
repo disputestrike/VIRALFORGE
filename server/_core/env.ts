@@ -81,9 +81,9 @@ export const ENV = {
    */
   voicePlayRingBeforeStream: process.env.VOICE_PLAY_RING_BEFORE_STREAM !== "false",
   /** Multiply Cartesia voice profile speed (~0.91 default; override with VOICE_TTS_SPEED_SCALE). */
-  voiceTtsSpeedScale: Math.min(1.25, Math.max(0.55, parseFloat(process.env.VOICE_TTS_SPEED_SCALE ?? "0.91") || 0.91)),
+  voiceTtsSpeedScale: Math.min(1.25, Math.max(0.55, parseFloat(process.env.VOICE_TTS_SPEED_SCALE ?? "1.0") || 1.0)),
   /** After Deepgram speech_final, brief pause before LLM (lower = snappier; 0 = none). */
-  voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "180", 10) || 0),
+  voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "120", 10) || 0),
   /**
    * Mu-law barge-in threshold on the 0–127 scale used by estimateEnergy (avg distance from silence).
    * Lower = easier interrupt. Values above 127 are treated as legacy mis-scaled (e.g. 600) and mapped with /5 so they still work.
@@ -95,7 +95,7 @@ export const ENV = {
     return Math.max(12, Math.min(125, scaled));
   })(),
   /** Deepgram streaming: ms of silence before end-of-turn (lower = faster replies; too low may clip words). */
-  voiceDeepgramEndpointingMs: Math.max(100, Math.min(2000, parseInt(process.env.VOICE_DEEPGRAM_ENDPOINTING_MS ?? "300", 10) || 300)),
+  voiceDeepgramEndpointingMs: Math.max(100, Math.min(2000, parseInt(process.env.VOICE_DEEPGRAM_ENDPOINTING_MS ?? "250", 10) || 250)),
   /** Deepgram utterance_end_ms — cap wait for utterance boundary. */
   voiceDeepgramUtteranceEndMs: Math.max(300, Math.min(3000, parseInt(process.env.VOICE_DEEPGRAM_UTTERANCE_END_MS ?? "800", 10) || 800)),
   /** Cerebras / voice LLM: max completion tokens per turn (phone). Cap 512 so env can request fuller answers. */
