@@ -183,6 +183,8 @@ export function createCallEngine(opts: EngineOptions): void {
   let isSpeaking = false;
   let isEnded = false;
   let greetingDone = false;  // prevent barge-in during greeting
+  /** SignalWire can emit `start` more than once; duplicate greetings → double audio. */
+  let greetingPlayed = false;
   let dgReady = false;       // don't send audio to Deepgram until connected
   let callState = createCallState();
   let turnCtl: TurnControllerState = createTurnController();
@@ -233,7 +235,13 @@ export function createCallEngine(opts: EngineOptions): void {
 
   // ── Cartesia ────────────────────────────────────────────────────────────────
   function connectCartesia() {
-    if (cartesiaWs && cartesiaWs.readyState === WebSocket.CONNECTING) return;
+    if (
+      cartesiaWs &&
+      (cartesiaWs.readyState === WebSocket.CONNECTING ||
+        cartesiaWs.readyState === WebSocket.OPEN)
+    ) {
+      return;
+    }
     const ws = new WebSocket(
       `wss://api.cartesia.ai/tts/websocket?api_key=${process.env.CARTESIA_API_KEY}&cartesia_version=2024-11-13`
     );
@@ -359,7 +367,12 @@ export function createCallEngine(opts: EngineOptions): void {
 
   // ── Deepgram STT ────────────────────────────────────────────────────────────
   function connectDeepgram() {
-    if (dgWs && dgWs.readyState === WebSocket.CONNECTING) return;
+    if (
+      dgWs &&
+      (dgWs.readyState === WebSocket.CONNECTING || dgWs.readyState === WebSocket.OPEN)
+    ) {
+      return;
+    }
     const apiKey = (process.env.DEEPGRAM_API_KEY ?? "").trim();
     if (!apiKey) {
       log("Deepgram skipped: no DEEPGRAM_API_KEY");
@@ -978,7 +991,8 @@ export function createCallEngine(opts: EngineOptions): void {
           log(`Session bind: ${e}`);
         }
         await new Promise((r) => setTimeout(r, 200));
-        if (!isEnded) {
+        if (!isEnded && !greetingPlayed) {
+          greetingPlayed = true;
           const bname = clientConfig.businessName.replace("ApexAI","Apex A I").replace("Apex AI","Apex A I"); const greeting = `Hi, thanks for calling ${bname}. How can I help you today?`;
           await speak(greeting, generationEpoch);
           traceEvent(callId, "greeting_sent");
@@ -987,6 +1001,8 @@ export function createCallEngine(opts: EngineOptions): void {
             greetingDone = true;
             log("[GREETING] Barge-in enabled");
           }, 2500);
+        } else if (!isEnded && greetingPlayed) {
+          log("[GREETING] Skipped duplicate start");
         }
       };
       waitForCartesia();
