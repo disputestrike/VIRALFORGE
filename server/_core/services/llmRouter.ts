@@ -43,11 +43,18 @@ const CEREBRAS_MODEL_ALIASES: Record<string, string> = {
 
 const DEFAULT_VOICE_MODELS = "qwen-3-235b-a22b-instruct-2507";
 
+/** Always tried after env-configured ids so a bad `CEREBRAS_MODEL` alone cannot brick voice (404 on Llama 70B, etc.). */
+const BUILTIN_MODEL_FALLBACKS = [
+  DEFAULT_VOICE_MODELS,
+  "llama3.1-8b",
+] as const;
+
 /**
  * Ordered list of Cerebras model ids to try for voice (and pool-based calls that use this helper).
  * Set `CEREBRAS_VOICE_MODELS` to a comma-separated list, e.g.
  *   qwen-3-235b-a22b-instruct-2507,llama3.1-8b
  * If unset, uses `CEREBRAS_MODEL` (single) or the default Qwen id above.
+ * Built-in fallbacks are appended so env typos / deprecated ids still resolve.
  * Voice engine falls through each until one returns non-404; then Claude if all fail.
  */
 export function cerebrasModelCandidates(): string[] {
@@ -58,7 +65,12 @@ export function cerebrasModelCandidates(): string[] {
     .map((s) => s.trim())
     .filter(Boolean);
   const resolved = parts.map((id) => CEREBRAS_MODEL_ALIASES[id] ?? id);
-  const uniq = Array.from(new Set(resolved));
+  const uniq: string[] = [];
+  const push = (id: string) => {
+    if (id && !uniq.includes(id)) uniq.push(id);
+  };
+  for (const id of resolved) push(id);
+  for (const id of BUILTIN_MODEL_FALLBACKS) push(CEREBRAS_MODEL_ALIASES[id] ?? id);
   console.log("[Cerebras] Model candidates:", uniq.join(", "));
   return uniq.length ? uniq : [DEFAULT_VOICE_MODELS];
 }

@@ -249,10 +249,10 @@ export class VoiceRealtimePipeline {
             if (this.replyStartTimer) { clearTimeout(this.replyStartTimer); this.replyStartTimer = null; }
           }
 
-          // Stream done
+          // Stream done (per segment). Do not null cartesiaContextId — same bug as realtimeVoiceEngine:
+          // mid-utterance clear + continue=true on next clause → Cartesia 400 invalid context.
           if (msg.type === "done") {
             this.isSpeaking = false;
-            this.cartesiaContextId = null;
             this.sendMark("assistant_done");
             this.setSpeakingTimeout(0); // clear
           }
@@ -269,6 +269,7 @@ export class VoiceRealtimePipeline {
   private async cartesiaSendText(text: string): Promise<void> {
     if (!this.cartesiaWs || this.cartesiaWs.readyState !== 1 /* OPEN */) return;
 
+    const hadNoContext = !this.cartesiaContextId;
     if (!this.cartesiaContextId) {
       this.cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     }
@@ -287,8 +288,9 @@ export class VoiceRealtimePipeline {
       }
     } catch {}
 
-    const continueCtx = !this.cartesiaNeedsNewContext;
+    let continueCtx = !this.cartesiaNeedsNewContext;
     this.cartesiaNeedsNewContext = false;
+    if (hadNoContext && continueCtx) continueCtx = false;
 
     this.cartesiaWs.send(JSON.stringify({
       context_id: this.cartesiaContextId,

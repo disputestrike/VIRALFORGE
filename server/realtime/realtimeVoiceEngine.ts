@@ -276,9 +276,10 @@ export function createCallEngine(opts: EngineOptions): void {
           log(`Cartesia error: ${JSON.stringify(msg)}`);
         } else if (msg.type === "done") {
           isSpeaking = false;
-          // Fresh context for the next utterance — reusing a finalized ctx_id causes
-          // Cartesia 400 "unable to infer voice mode" on speak() after greeting.
-          cartesiaContextId = "";
+          // Do NOT clear cartesiaContextId here. Cartesia emits `done` per audio segment; clearing
+          // mid-utterance made the next clause use a new context_id with continue=true →
+          // "Invalid context ID ... cancelled" and silent/broken TTS. speak() / streamToCartesia()
+          // always assign a fresh context_id before their first send for the next utterance.
           if (streamSid && sigWs.readyState === WebSocket.OPEN) {
             sigWs.send(JSON.stringify({ event: "mark", streamSid, mark: { name: "done" } }));
           }
@@ -300,7 +301,16 @@ export function createCallEngine(opts: EngineOptions): void {
     }
     const ttsSpeed = Math.min(1.2, Math.max(0.55, voiceProfile.speed * ENV.voiceTtsSpeedScale));
     log(`cartesiaSend: "${text.slice(0,40)}" voiceId=${voiceProfile.cartesiaId} speed=${ttsSpeed}`);
-    if (!cartesiaContextId) cartesiaContextId = `ctx_${Date.now()}`;
+    const hadNoContext = !cartesiaContextId;
+    if (!cartesiaContextId) {
+      cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    }
+    // First frame of any context must use continue=false; never continue on a brand-new id.
+    let continueFlag = continueCtx;
+    if (hadNoContext && continueFlag) {
+      continueFlag = false;
+      log(`[Cartesia] coerced continue=false for new context`);
+    }
 
     const voiceId = voiceProfile.cartesiaId?.trim() || "694f9389-aac1-45b6-b726-9d9369183238";
     // voice must be ONLY { mode, id } — nesting __experimental_controls breaks validation (400 invalid voice spec).
@@ -318,7 +328,7 @@ export function createCallEngine(opts: EngineOptions): void {
         encoding: "pcm_s16le",
         sample_rate: 8000,
       },
-      continue: continueCtx,
+      continue: continueFlag,
     }));
   }
 
