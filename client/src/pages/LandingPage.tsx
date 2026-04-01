@@ -203,7 +203,7 @@ export default function LandingPage() {
 
       {/* NAV */}
       <nav style={{position:"sticky",top:0,zIndex:100,backgroundColor:"rgba(10,12,18,0.96)",borderBottom:`1px solid ${C.borderW}`,backdropFilter:"blur(12px)"}}>
-        <div style={{maxWidth:1140,margin:"0 auto",padding:"0 24px",display:"flex",alignItems:"center",justifyContent:"space-between",height:64}}>
+        <div style={{maxWidth:1240,margin:"0 auto",padding:"0 clamp(20px,4vw,40px)",display:"flex",alignItems:"center",justifyContent:"space-between",height:64}}>
           <Link href="/" style={{display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:34,height:34,borderRadius:9,background:C.blue,display:"flex",alignItems:"center",justifyContent:"center"}}>
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2L15.5 14H2.5L9 2Z" fill="white"/></svg>
@@ -395,29 +395,29 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* LIVE DEMO */}
-      <section id="demo" style={{backgroundColor:C.bg2,padding:"80px 24px 96px",borderTop:`1px solid ${C.borderW}`}}>
-        <div style={{maxWidth:720,margin:"0 auto"}}>
-          <div style={{textAlign:"center",marginBottom:8}}>
+      {/* LIVE DEMO — wide frame + generous inner padding */}
+      <section id="demo" style={{backgroundColor:C.bg2,padding:"88px clamp(20px,5vw,48px) 104px",borderTop:`1px solid ${C.borderW}`}}>
+        <div style={{maxWidth:1120,margin:"0 auto",width:"100%"}}>
+          <div style={{textAlign:"center",marginBottom:12}}>
             <div style={{color:C.blue2,fontWeight:700,fontSize:13,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:16}}>Live demo</div>
-            <p style={{color:C.dim,fontSize:16,maxWidth:480,margin:"0 auto",lineHeight:1.6}}>
+            <p style={{color:C.dim,fontSize:17,maxWidth:640,margin:"0 auto",lineHeight:1.65}}>
               No signup. No credit card. We call you so you can hear the same experience your leads get.
             </p>
           </div>
-          <div style={{backgroundColor:C.bg3,borderRadius:20,padding:"28px 22px 36px",marginTop:36,border:`1px solid ${C.borderW}`}}>
+          <div style={{backgroundColor:C.bg3,borderRadius:24,padding:"clamp(32px,5vw,56px) clamp(24px,5vw,56px)",marginTop:40,border:`1px solid ${C.borderW}`,boxSizing:"border-box"}}>
             <DemoCallWidget />
           </div>
         </div>
       </section>
 
       {/* INDUSTRY DEMOS */}
-      <section id="inbound" style={{backgroundColor:C.bg,padding:"80px 24px",borderTop:`1px solid ${C.borderW}`}}>
-        <div style={{maxWidth:1100,margin:"0 auto",textAlign:"center"}}>
+      <section id="inbound" style={{backgroundColor:C.bg,padding:"88px clamp(20px,5vw,48px)",borderTop:`1px solid ${C.borderW}`}}>
+        <div style={{maxWidth:1240,margin:"0 auto",textAlign:"center",width:"100%"}}>
           <div style={{color:C.blue2,fontWeight:700,fontSize:13,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:16}}>Industry packs</div>
           <h2 style={{color:C.white,fontSize:"clamp(26px,4vw,44px)",fontWeight:800,marginBottom:16,letterSpacing:"-0.03em"}}>
             Ready for your trade
           </h2>
-          <p style={{color:C.dim,fontSize:17,maxWidth:520,margin:"0 auto 40px",lineHeight:1.65}}>
+          <p style={{color:C.dim,fontSize:17,maxWidth:680,margin:"0 auto 48px",lineHeight:1.65}}>
             Solar, roofing, HVAC, insurance, real estate, and more — scripts and qualification flows you can customize.
           </p>
           <IndustryDemos />
@@ -425,13 +425,13 @@ export default function LandingPage() {
       </section>
 
       {/* ROI CALCULATOR */}
-      <section id="outbound" style={{backgroundColor:C.bg2,padding:"80px 24px",borderTop:`1px solid ${C.borderW}`}}>
-        <div style={{maxWidth:960,margin:"0 auto",textAlign:"center"}}>
+      <section id="outbound" style={{backgroundColor:C.bg2,padding:"88px clamp(20px,5vw,48px)",borderTop:`1px solid ${C.borderW}`}}>
+        <div style={{maxWidth:1200,margin:"0 auto",textAlign:"center",width:"100%"}}>
           <div style={{color:C.blue2,fontWeight:700,fontSize:13,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:16}}>Revenue calculator</div>
           <h2 style={{color:C.white,fontSize:"clamp(26px,4vw,44px)",fontWeight:800,marginBottom:16,letterSpacing:"-0.03em"}}>
             Model the gap
           </h2>
-          <p style={{color:C.dim,fontSize:17,marginBottom:40,maxWidth:520,marginLeft:"auto",marginRight:"auto",lineHeight:1.65}}>
+          <p style={{color:C.dim,fontSize:17,marginBottom:48,maxWidth:640,marginLeft:"auto",marginRight:"auto",lineHeight:1.65}}>
             Slide your current funnel metrics. See an illustrative comparison when more leads get contacted and booked.
           </p>
           <ROICalculator />

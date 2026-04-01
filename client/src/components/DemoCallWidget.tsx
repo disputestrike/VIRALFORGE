@@ -50,71 +50,81 @@ export default function DemoCallWidget() {
     });
   };
 
+  const fieldStyle = {
+    backgroundColor: D2,
+    border: `1px solid ${DIM3}`,
+    outline: "none" as const,
+    fontSize: "16px",
+  };
+
   return (
-    <div id="try-it" className="w-full">
-      <div className="text-center mb-8 sm:mb-10">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-5"
+    <div id="try-it" className="w-full max-w-full">
+      <div className="text-center mb-10 sm:mb-12 max-w-3xl mx-auto px-2">
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-6"
           style={{ backgroundColor: `${GREEN}15`, border: `1px solid ${GREEN}30` }}>
           <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: GREEN }} />
           <span className="text-sm font-semibold" style={{ color: GREEN }}>Live demo available</span>
         </div>
-        <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-4 tracking-tight">
+        <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white mb-5 tracking-tight leading-snug">
           Get called by the same voice your leads hear
         </h2>
-        <p className="text-base sm:text-lg max-w-xl mx-auto leading-relaxed px-2" style={{ color: "rgba(255,255,255,0.72)" }}>
-          Enter your number — you’ll get a short demo call in seconds. No signup required.
+        <p className="text-base sm:text-lg leading-relaxed" style={{ color: "rgba(255,255,255,0.72)" }}>
+          Enter your number — a short demo call in seconds. No signup required.
         </p>
       </div>
 
-      <div className="max-w-lg mx-auto w-full">
-        <div className="p-6 sm:p-8 rounded-2xl" style={{ backgroundColor: D3, border: `1px solid ${DIM3}` }}>
+      <div className="max-w-2xl md:max-w-3xl mx-auto w-full px-1 sm:px-2">
+        <div
+          className="rounded-2xl sm:rounded-3xl p-8 sm:p-10 md:p-12"
+          style={{ backgroundColor: D3, border: `1px solid ${DIM3}`, boxSizing: "border-box" }}
+        >
 
             {step === "form" && (
-              <div className="space-y-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="space-y-6 sm:space-y-7">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8">
                   <div>
-                    <label className="block text-sm font-medium mb-2 text-white/90">First name *</label>
+                    <label className="block text-sm font-medium mb-2.5 text-white/90">First name *</label>
                     <input
                       type="text"
                       placeholder="Sarah"
                       value={form.firstName}
                       onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))}
-                      className="w-full px-4 py-3 rounded-xl text-white placeholder:text-white/35"
-                      style={{ backgroundColor: D2, border: `1px solid ${DIM3}`, outline: "none", fontSize: "16px" }}
+                      className="w-full min-h-[52px] px-5 py-3.5 rounded-xl text-white placeholder:text-white/35"
+                      style={fieldStyle}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2 text-white/90">Phone number *</label>
+                    <label className="block text-sm font-medium mb-2.5 text-white/90">Phone number *</label>
                     <input
                       type="tel"
                       placeholder="(555) 000-0000"
                       value={form.phone}
                       onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                      className="w-full px-4 py-3 rounded-xl text-white placeholder:text-white/35"
-                      style={{ backgroundColor: D2, border: `1px solid ${DIM3}`, outline: "none", fontSize: "16px" }}
+                      className="w-full min-h-[52px] px-5 py-3.5 rounded-xl text-white placeholder:text-white/35"
+                      style={fieldStyle}
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-2 text-white/90">Email (optional)</label>
+                  <label className="block text-sm font-medium mb-2.5 text-white/90">Email (optional)</label>
                   <input
                     type="email"
                     placeholder="you@company.com"
                     value={form.email}
                     onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                    className="w-full px-4 py-3 rounded-xl text-white placeholder:text-white/35"
-                    style={{ backgroundColor: D2, border: `1px solid ${DIM3}`, outline: "none", fontSize: "16px" }}
+                    className="w-full min-h-[52px] px-5 py-3.5 rounded-xl text-white placeholder:text-white/35"
+                    style={fieldStyle}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-2 text-white/90">Industry</label>
+                  <label className="block text-sm font-medium mb-2.5 text-white/90">Industry</label>
                   <select
                     value={form.industry}
                     onChange={e => setForm(f => ({ ...f, industry: e.target.value }))}
-                    className="w-full px-4 py-3 rounded-xl text-white"
-                    style={{ backgroundColor: D2, border: `1px solid ${DIM3}`, outline: "none", fontSize: "16px" }}
+                    className="w-full min-h-[52px] px-5 py-3.5 rounded-xl text-white"
+                    style={fieldStyle}
                   >
                     {INDUSTRIES.map(ind => (
                       <option key={ind.value} value={ind.value}>{ind.label}</option>
@@ -127,16 +137,16 @@ export default function DemoCallWidget() {
                 )}
 
                 <Button
-                  className="w-full h-14 text-base font-bold"
+                  className="w-full min-h-[56px] text-base font-bold mt-2"
                   onClick={handleSubmit}
                   style={{ backgroundColor: BLUE, borderColor: BLUE }}
                 >
                   <Phone className="w-5 h-5 mr-2" />
-                  Call Me Now — It's Free
+                  Call me now — it&apos;s free
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
 
-                <p className="text-center text-xs leading-relaxed pt-1" style={{ color: "rgba(255,255,255,0.5)" }}>
+                <p className="text-center text-xs sm:text-sm leading-relaxed pt-2 px-2" style={{ color: "rgba(255,255,255,0.5)" }}>
                   By submitting you agree to one demo call. No spam. Unsubscribe anytime.
                 </p>
               </div>
@@ -191,10 +201,10 @@ export default function DemoCallWidget() {
             )}
         </div>
 
-        <div className="flex flex-wrap justify-center gap-x-6 gap-y-3 mt-8 px-2">
+        <div className="flex flex-wrap justify-center gap-x-8 gap-y-4 mt-10 mb-2 px-4">
           {["No credit card", "Usually under a minute", "Live conversation — not a recording"].map(t => (
-            <div key={t} className="flex items-center gap-2 text-xs sm:text-sm" style={{ color: "rgba(255,255,255,0.55)" }}>
-              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" style={{ color: GREEN }} />
+            <div key={t} className="flex items-center gap-2.5 text-sm" style={{ color: "rgba(255,255,255,0.58)" }}>
+              <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: GREEN }} />
               {t}
             </div>
           ))}

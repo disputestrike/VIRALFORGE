@@ -43,11 +43,13 @@ export default function ROICalculator() {
   const fmt = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 0 });
 
   return (
-    <div className="w-full max-w-5xl mx-auto min-w-0">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10">
-        {/* Inputs — min-w-0 prevents range labels from breaking layout */}
-        <div className="space-y-7 p-6 sm:p-8 rounded-2xl min-w-0" style={{ backgroundColor: D3, border: `1px solid ${DIM3}` }}>
-          <h3 className="font-bold text-white text-lg tracking-tight">Your business today</h3>
+    <div className="w-full max-w-[1180px] mx-auto min-w-0 px-1 sm:px-0">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-14 items-start">
+        <div
+          className="space-y-8 sm:space-y-9 p-8 sm:p-10 md:p-12 rounded-2xl sm:rounded-3xl min-w-0"
+          style={{ backgroundColor: D3, border: `1px solid ${DIM3}`, boxSizing: "border-box" }}
+        >
+          <h3 className="font-bold text-white text-xl tracking-tight">Your business today</h3>
 
           {[
             { label: `New leads per day`, suffix: `${leadsPerDay}`, min: 5, max: 200, val: leadsPerDay, set: setLeadsPerDay, unit: "" as const },
@@ -55,10 +57,10 @@ export default function ROICalculator() {
             { label: `Booking rate (of contacts)`, suffix: `${bookingRate}%`, min: 5, max: 70, val: bookingRate, set: setBookingRate, unit: "%" as const },
             { label: `Close rate (of bookings)`, suffix: `${closeRate}%`, min: 5, max: 70, val: closeRate, set: setCloseRate, unit: "%" as const },
           ].map(({ label, suffix, min, max, val, set, unit }) => (
-            <div key={label} className="min-w-0 space-y-2">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className="text-sm font-medium text-white">{label}</p>
-                <p className="text-sm font-bold tabular-nums" style={{ color: BLUE }}>{suffix}</p>
+            <div key={label} className="min-w-0 space-y-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-3 pr-1">
+                <p className="text-sm sm:text-base font-medium text-white leading-snug">{label}</p>
+                <p className="text-sm sm:text-base font-bold tabular-nums shrink-0" style={{ color: BLUE }}>{suffix}</p>
               </div>
               <input
                 type="range"
@@ -66,17 +68,17 @@ export default function ROICalculator() {
                 max={max}
                 value={val}
                 onChange={e => set(Number(e.target.value))}
-                className="w-full max-w-full h-2 rounded-lg appearance-none cursor-pointer bg-white/10"
+                className="w-full max-w-full h-2.5 rounded-lg appearance-none cursor-pointer bg-white/10"
                 style={{ accentColor: BLUE }}
               />
-              <p className="text-[11px] leading-snug" style={{ color: DIM2 }}>
-                Adjust between {min}{unit} and {max}{unit}
+              <p className="text-xs leading-relaxed pb-1" style={{ color: DIM2 }}>
+                Range: {min}{unit} – {max}{unit}
               </p>
             </div>
           ))}
 
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-white">Average deal value ($)</p>
+          <div className="space-y-3 pt-1">
+            <p className="text-sm sm:text-base font-medium text-white">Average deal value ($)</p>
             <input
               type="number"
               min={500}
@@ -84,17 +86,17 @@ export default function ROICalculator() {
               step={500}
               value={dealValue}
               onChange={e => setDealValue(Number(e.target.value))}
-              className="w-full px-3 py-2.5 rounded-xl text-white"
+              className="w-full min-h-[52px] px-4 py-3 rounded-xl text-white box-border"
               style={{ backgroundColor: "#0a0c12", border: `1px solid ${DIM3}`, outline: "none", fontSize: "16px" }}
             />
           </div>
 
-          <div className="space-y-3 pt-2 border-t" style={{ borderColor: DIM3 }}>
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <p className="text-sm font-medium" style={{ color: GREEN }}>With ApexAI — contact rate</p>
-              <p className="text-sm font-bold tabular-nums" style={{ color: GREEN }}>{aiContactRate}%</p>
+          <div className="space-y-4 pt-4 mt-2 border-t" style={{ borderColor: DIM3 }}>
+            <div className="flex flex-wrap items-baseline justify-between gap-3 pr-1">
+              <p className="text-sm sm:text-base font-medium leading-snug" style={{ color: GREEN }}>With ApexAI — contact rate</p>
+              <p className="text-sm sm:text-base font-bold tabular-nums shrink-0" style={{ color: GREEN }}>{aiContactRate}%</p>
             </div>
-            <p className="text-xs leading-relaxed" style={{ color: DIM2 }}>
+            <p className="text-xs sm:text-sm leading-relaxed" style={{ color: DIM2 }}>
               Typical range after automation: 60–80% (vs {contactRate}% today). Drag to model your scenario.
             </p>
             <input
@@ -103,30 +105,30 @@ export default function ROICalculator() {
               max={95}
               value={aiContactRate}
               onChange={e => setAiContactRate(Number(e.target.value))}
-              className="w-full max-w-full h-2 rounded-lg appearance-none cursor-pointer bg-white/10"
+              className="w-full max-w-full h-2.5 rounded-lg appearance-none cursor-pointer bg-white/10"
               style={{ accentColor: GREEN }}
             />
           </div>
         </div>
 
-        {/* Results — softer accent than pure red/green walls */}
-        <div className="space-y-4 min-w-0">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-4 sm:p-5 rounded-xl" style={{ backgroundColor: D3, border: `1px solid ${DIM3}` }}>
-              <p className="text-[11px] mb-2 font-semibold uppercase tracking-wide" style={{ color: DIM2 }}>Without ApexAI</p>
-              <p className="text-xl sm:text-2xl font-black text-white">${fmt(currentDailyRevenue)}</p>
-              <p className="text-xs mt-0.5" style={{ color: DIM2 }}>daily revenue</p>
-              <div className="mt-3 space-y-1 text-[11px] sm:text-xs leading-relaxed" style={{ color: DIM2 }}>
+        {/* Results: single full-width column so every block matches button width */}
+        <div className="flex flex-col gap-5 w-full min-w-0 [&>*]:w-full [&>*]:max-w-full [&>*]:box-border">
+          <div className="grid grid-cols-2 gap-4 w-full">
+            <div className="p-6 sm:p-7 rounded-2xl min-h-[200px] flex flex-col" style={{ backgroundColor: D3, border: `1px solid ${DIM3}` }}>
+              <p className="text-xs mb-3 font-semibold uppercase tracking-wide" style={{ color: DIM2 }}>Without ApexAI</p>
+              <p className="text-2xl sm:text-3xl font-black text-white">${fmt(currentDailyRevenue)}</p>
+              <p className="text-sm mt-1" style={{ color: DIM2 }}>daily revenue</p>
+              <div className="mt-auto pt-4 space-y-1.5 text-xs sm:text-sm leading-relaxed" style={{ color: DIM2 }}>
                 <p>{currentContacts.toFixed(1)} contacts/day</p>
                 <p>{currentBookings.toFixed(1)} bookings/day</p>
                 <p>{currentSales.toFixed(2)} sales/day</p>
               </div>
             </div>
-            <div className="p-4 sm:p-5 rounded-xl" style={{ backgroundColor: D3, border: `1px solid ${GREEN}35` }}>
-              <p className="text-[11px] mb-2 font-semibold uppercase tracking-wide" style={{ color: GREEN }}>With ApexAI</p>
-              <p className="text-xl sm:text-2xl font-black" style={{ color: GREEN }}>${fmt(aiDailyRevenue)}</p>
-              <p className="text-xs mt-0.5" style={{ color: DIM2 }}>daily revenue</p>
-              <div className="mt-3 space-y-1 text-[11px] sm:text-xs leading-relaxed" style={{ color: DIM2 }}>
+            <div className="p-6 sm:p-7 rounded-2xl min-h-[200px] flex flex-col" style={{ backgroundColor: D3, border: `1px solid ${GREEN}35` }}>
+              <p className="text-xs mb-3 font-semibold uppercase tracking-wide" style={{ color: GREEN }}>With ApexAI</p>
+              <p className="text-2xl sm:text-3xl font-black" style={{ color: GREEN }}>${fmt(aiDailyRevenue)}</p>
+              <p className="text-sm mt-1" style={{ color: DIM2 }}>daily revenue</p>
+              <div className="mt-auto pt-4 space-y-1.5 text-xs sm:text-sm leading-relaxed" style={{ color: DIM2 }}>
                 <p>{aiContacts.toFixed(1)} contacts/day</p>
                 <p>{aiBookings.toFixed(1)} bookings/day</p>
                 <p>{aiSales.toFixed(2)} sales/day</p>
@@ -134,29 +136,29 @@ export default function ROICalculator() {
             </div>
           </div>
 
-          <div className="p-5 sm:p-6 rounded-xl" style={{ backgroundColor: "rgba(251,191,36,0.08)", border: `1px solid ${AMBER}35` }}>
-            <div className="flex items-start gap-2 mb-2">
-              <TrendingUp className="w-4 h-4 shrink-0 mt-0.5" style={{ color: AMBER }} />
-              <p className="text-sm font-bold leading-snug" style={{ color: AMBER }}>Estimated revenue left on the table (daily)</p>
+          <div className="p-7 sm:p-8 rounded-2xl w-full" style={{ backgroundColor: "rgba(251,191,36,0.08)", border: `1px solid ${AMBER}35` }}>
+            <div className="flex items-start gap-3 mb-3">
+              <TrendingUp className="w-5 h-5 shrink-0 mt-0.5" style={{ color: AMBER }} />
+              <p className="text-base font-bold leading-snug" style={{ color: AMBER }}>Estimated revenue left on the table (daily)</p>
             </div>
-            <p className="text-3xl sm:text-4xl font-black text-white">${fmt(dailyGap)}<span className="text-lg font-bold text-white/60">/day</span></p>
-            <p className="text-sm mt-2" style={{ color: DIM2 }}>
+            <p className="text-3xl sm:text-4xl font-black text-white">${fmt(dailyGap)}<span className="text-xl font-bold text-white/60">/day</span></p>
+            <p className="text-sm mt-3" style={{ color: DIM2 }}>
               ${fmt(monthlyGap)}/mo · ${fmt(annualGap)}/yr
             </p>
           </div>
 
-          <div className="p-5 sm:p-6 rounded-xl" style={{ backgroundColor: `${GREEN}0d`, border: `1px solid ${GREEN}35` }}>
-            <p className="text-[11px] mb-1 font-semibold uppercase tracking-wider" style={{ color: `${GREEN}cc` }}>
+          <div className="p-7 sm:p-8 rounded-2xl w-full" style={{ backgroundColor: `${GREEN}0d`, border: `1px solid ${GREEN}35` }}>
+            <p className="text-xs mb-2 font-semibold uppercase tracking-wider" style={{ color: `${GREEN}cc` }}>
               Illustrative net vs Growth plan (${apexCost}/mo)
             </p>
             <p className="text-3xl sm:text-4xl font-black" style={{ color: GREEN }}>${fmt(netAnnualProfit)}</p>
-            <p className="text-sm mt-2" style={{ color: DIM2 }}>
-              <span className="text-lg font-black" style={{ color: GREEN }}>{roi}%</span> illustrative ROI on subscription (your mileage varies)
+            <p className="text-sm mt-3 leading-relaxed" style={{ color: DIM2 }}>
+              <span className="text-xl font-black" style={{ color: GREEN }}>{roi}%</span> illustrative ROI on subscription (your mileage varies)
             </p>
           </div>
 
-          <Link href="/dashboard">
-            <Button className="w-full h-12 font-bold" style={{ backgroundColor: BLUE }}>
+          <Link href="/dashboard" className="w-full block">
+            <Button className="w-full min-h-[52px] text-base font-bold rounded-xl" style={{ backgroundColor: BLUE }}>
               Start free — see your dashboard
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
@@ -164,7 +166,7 @@ export default function ROICalculator() {
         </div>
       </div>
 
-      <p className="text-xs sm:text-sm text-center mt-8 px-2 leading-relaxed" style={{ color: DIM2 }}>
+      <p className="text-xs sm:text-sm text-center mt-10 sm:mt-12 px-4 leading-relaxed max-w-2xl mx-auto" style={{ color: DIM2 }}>
         Illustrative calculator — not a guarantee. Conservative assumptions; many teams see stronger booking lift once qualification is automated.
       </p>
     </div>

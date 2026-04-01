@@ -106,8 +106,8 @@ export default function IndustryDemos() {
 
   return (
     <div id="demos" className="w-full">
-      <div className="max-w-5xl mx-auto">
-        <div className="text-center mb-10 sm:mb-12">
+      <div className="max-w-[1180px] mx-auto w-full px-1 sm:px-0">
+        <div className="text-center mb-12 sm:mb-14">
           <div className="inline-block px-4 py-1.5 rounded-full text-xs font-semibold mb-4"
             style={{ backgroundColor: `${BLUE}18`, border: `1px solid ${BLUE}35`, color: BLUE_LIGHT }}>
             Industry samples
@@ -120,50 +120,50 @@ export default function IndustryDemos() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
           {DEMOS.map((demo) => (
-            <div key={demo.id} className="group p-5 sm:p-6 rounded-2xl transition-all duration-200"
+            <div key={demo.id} className="group flex flex-col p-7 sm:p-8 rounded-2xl sm:rounded-3xl transition-all duration-200 min-h-0"
               style={{ backgroundColor: D2, border: `1px solid ${DIM3}` }}
               onMouseEnter={e => (e.currentTarget.style.borderColor = `${demo.color}45`)}
               onMouseLeave={e => (e.currentTarget.style.borderColor = DIM3)}>
 
-              <div className="flex items-center justify-between mb-3 gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">{demo.emoji}</span>
-                  <div>
-                    <p className="font-bold text-white text-sm">{demo.label}</p>
-                    <p className="text-xs" style={{ color: DIM2 }}>{demo.duration}</p>
+              <div className="flex items-start justify-between mb-5 gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-3xl shrink-0 leading-none">{demo.emoji}</span>
+                  <div className="min-w-0">
+                    <p className="font-bold text-white text-base">{demo.label}</p>
+                    <p className="text-sm mt-0.5" style={{ color: DIM2 }}>{demo.duration}</p>
                   </div>
                 </div>
-                <span className="text-[10px] sm:text-xs px-2 py-1 rounded-full font-semibold shrink-0"
+                <span className="text-xs px-3 py-1.5 rounded-full font-semibold shrink-0"
                   style={{ backgroundColor: `${demo.color}18`, color: demo.color }}>
                   Sample
                 </span>
               </div>
 
-              <p className="text-xs mb-3 leading-relaxed min-h-[2.5rem]" style={{ color: DIM2 }}>{demo.tagline}</p>
+              <p className="text-sm mb-5 leading-relaxed" style={{ color: DIM2 }}>{demo.tagline}</p>
 
-              <div className="p-3 rounded-xl mb-4 text-xs italic leading-relaxed" style={{ backgroundColor: `${demo.color}0d`, color: DIM2 }}>
-                “{demo.sampleScript}”
+              <div className="p-4 sm:p-5 rounded-xl mb-6 text-sm italic leading-relaxed" style={{ backgroundColor: `${demo.color}0d`, color: DIM2 }}>
+                &ldquo;{demo.sampleScript}&rdquo;
               </div>
 
-              <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+              <div className="flex gap-3 mt-auto pt-1">
                 <Button
                   onClick={() => togglePlay(demo.id, demo.audioUrl)}
-                  className="flex-1 h-9 text-xs font-semibold"
+                  className="flex-1 min-h-[44px] text-sm font-semibold"
                   style={{
                     backgroundColor: playing === demo.id ? `${demo.color}30` : `${demo.color}20`,
                     border: `1px solid ${demo.color}40`,
                     color: demo.color,
                   }}>
                   {playing === demo.id
-                    ? <><Pause className="w-3.5 h-3.5 mr-1.5" />Stop</>
-                    : <><Play className="w-3.5 h-3.5 mr-1.5" />Play Sample</>
+                    ? <><Pause className="w-4 h-4 mr-2" />Stop</>
+                    : <><Play className="w-4 h-4 mr-2" />Play sample</>
                   }
                 </Button>
-                <a href="#demo">
-                  <Button className="h-9 px-3 text-xs shrink-0" style={{ backgroundColor: BLUE }} aria-label="Request call">
-                    <Phone className="w-3.5 h-3.5" />
+                <a href="#demo" className="shrink-0">
+                  <Button className="min-h-[44px] min-w-[44px] px-0 text-sm" style={{ backgroundColor: BLUE }} aria-label="Request call">
+                    <Phone className="w-4 h-4" />
                   </Button>
                 </a>
               </div>
@@ -171,13 +171,13 @@ export default function IndustryDemos() {
           ))}
         </div>
 
-        <div className="mt-12 text-center px-2">
-          <p className="text-sm mb-4" style={{ color: DIM2 }}>
+        <div className="mt-16 text-center px-4">
+          <p className="text-base mb-5" style={{ color: DIM2 }}>
             Want a live call on your phone?
           </p>
           <a href="#demo">
-            <Button size="lg" className="font-bold" style={{ backgroundColor: BLUE }}>
-              <Phone className="w-4 h-4 mr-2" />
+            <Button size="lg" className="font-bold min-h-[52px] px-8 text-base rounded-xl" style={{ backgroundColor: BLUE }}>
+              <Phone className="w-5 h-5 mr-2" />
               Free demo call
             </Button>
           </a>
