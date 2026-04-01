@@ -36,28 +36,32 @@ export interface LLMResponse {
 export function cerebrasModelCandidates(): string[] {
   // CEREBRAS_MODEL env in Railway = "llama-3.3-70b" (with dashes, trailing space)
   // Cerebras API model name map (dashes → dots, confirmed working):
+  // CONFIRMED available on this account (tested April 2026):
+  //   qwen-3-235b-a22b-instruct-2507  ← 235B model, excellent quality
+  //   llama3.1-8b                     ← fast but small, fallback only
+  // llama-3.3-70b / llama3.3-70b do NOT exist on this account (404)
+
   const MODEL_ALIASES: Record<string, string> = {
-    "llama-3.3-70b": "llama3.3-70b",
-    "llama-3.1-70b": "llama3.1-70b",
-    "llama-3.1-8b":  "llama3.1-8b",
-    "llama3.3-70b":  "llama3.3-70b",
-    "llama3.1-70b":  "llama3.1-70b",
+    "llama-3.3-70b": "qwen-3-235b-a22b-instruct-2507",  // env var maps to best available
+    "llama-3.1-70b": "qwen-3-235b-a22b-instruct-2507",
+    "llama3.3-70b":  "qwen-3-235b-a22b-instruct-2507",
+    "llama3.1-70b":  "qwen-3-235b-a22b-instruct-2507",
+    "qwen-3-235b-a22b-instruct-2507": "qwen-3-235b-a22b-instruct-2507",
     "llama3.1-8b":   "llama3.1-8b",
   };
 
   const raw = (process.env.CEREBRAS_MODEL ?? "").trim();
   const env = MODEL_ALIASES[raw] || raw;
 
-  // Always try the best available models in order
   const out: string[] = [];
   const add = (m: string) => { if (m && !out.includes(m)) out.push(m); };
 
-  if (env) add(env);
-  add("llama3.3-70b");
-  add("llama3.1-70b");
-  add("llama3.1-8b");
+  // Primary: best available model
+  add(env || "qwen-3-235b-a22b-instruct-2507");
+  add("qwen-3-235b-a22b-instruct-2507");
+  add("llama3.1-8b");  // last resort fallback
 
-  console.log(`[Cerebras] Model candidates: ${out.join(", ")} (raw env: "${raw}")`);
+  console.log(`[Cerebras] Model candidates: ${out.join(", ")} (env: "${raw}")`);
   return out;
 }
 
