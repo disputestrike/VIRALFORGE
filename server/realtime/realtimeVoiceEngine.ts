@@ -128,12 +128,13 @@ const cerebrasPool = new CerebrasPool();
 /** Map dashboard / DB voice IDs (_core) to Cartesia ids the streaming engine uses; keep realtime-only IDs working. */
 function mapCoreCartesiaToRt(core: CoreVoiceProfile): VoiceProfile {
   const base = getVoiceProfile("professional-female");
+  const cartesiaId = core.externalVoiceId?.trim() || "694f9389-aac1-45b6-b726-9d9369183238";
   return {
     ...base,
     id: core.id,
     name: core.label,
     description: core.style ?? base.description,
-    cartesiaId: core.externalVoiceId,
+    cartesiaId,
     speed: typeof core.speed === "number" ? core.speed : base.speed,
   };
 }
