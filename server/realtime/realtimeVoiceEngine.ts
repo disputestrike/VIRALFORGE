@@ -550,28 +550,11 @@ export function createCallEngine(opts: EngineOptions): void {
         } else if (hasCerebras) {
           await respondCerebras(epoch, transcript);
         } else {
-          throw new Error("All LLMs failed");
+          await speak(sorry, epoch);
         }
       } catch (e2: any) {
-        log(`[ERROR] Fallback LLM failed: ${e2.message}`);
-        try {
-          await respondCerebras(epoch, transcript);
-        } catch (e2: any) {
-          log(`[ERROR] Cerebras retry failed: ${e2.message}`);
-          if (hasAnthropic) {
-          try {
-            await respondAnthropicFallback(epoch, transcript);
-          } catch (e3: any) {
-            log(`[ERROR] Anthropic fallback failed: ${e3.message}`);
-            try {
-              await speak(sorry, epoch);
-            } catch {}
-          }
-        } else {
-          try {
-            await speak(sorry, epoch);
-          } catch {}
-        }
+        log(`[ERROR] All LLMs failed: ${e2.message}`);
+        try { await speak(sorry, epoch); } catch {}
       }
     }
     traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
