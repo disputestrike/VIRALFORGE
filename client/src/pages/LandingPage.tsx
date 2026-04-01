@@ -10,10 +10,27 @@ import LandingFaq from "@/components/marketing/LandingFaq";
 import LandingTestimonialCarousel from "@/components/marketing/LandingTestimonialCarousel";
 import { landingColors as C } from "@/components/marketing/landingTheme";
 import {
-  ArrowRight, Phone, PhoneIncoming, PhoneOutgoing,
-  CheckCircle2, Zap, BarChart3,
-  Calendar, MessageSquare, Shield, Star,
+  platformOverview,
+  platformPillars,
+  pricingInboundBullets,
+  pricingOutboundBullets,
+  productFeatures,
+  solutionsByIndustry,
+} from "@/components/marketing/siteContent";
+import {
+  ArrowRight,
+  Phone,
+  PhoneIncoming,
+  PhoneOutgoing,
+  CheckCircle2,
+  Zap,
+  BarChart3,
+  Calendar,
+  MessageSquare,
+  Shield,
+  Star,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const testimonials = [
   { name: "Moises R.", co: "Roofing — Dallas", quote: "200+ appointments, 160 contracts, $2M revenue in two weeks.", before: "5% response rate manually", after: "47% with ApexAI", icon: "🏗️" },
@@ -54,35 +71,31 @@ export default function LandingPage() {
       body: "ApexAI picks up in under a second, qualifies the caller, and books the appointment — without a human ever picking up the phone.",
       points: ["Instant pickup — zero calls to voicemail", "Real-time lead qualification", "Books directly to your calendar", "Auto SMS confirmation sent", "Full transcript and recording"],
       panel: (
-        <div style={{ backgroundColor: C.bg, borderRadius: 16, padding: 28, border: `1px solid ${C.borderW}` }}>
-          <div style={{ color: C.dim2, fontSize: 11, marginBottom: 18, textTransform: "uppercase", letterSpacing: "0.1em" }}>Live call example</div>
+        <div className="rounded-2xl border border-white/10 p-7" style={{ backgroundColor: C.bg }}>
+          <div className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-white/40">Live call example</div>
           {[
             { r: "Caller", t: "Do you handle solar companies?" },
             { r: "ApexAI", t: "Absolutely. We handle inbound calls, qualify homeowners, and book installs directly to your calendar. Are you getting a lot of inbound leads right now?" },
             { r: "Caller", t: "Yes, about 50 a day but we miss half of them." },
             { r: "ApexAI", t: "Got it — that is a lot of missed revenue. I can show you exactly how ApexAI handles those calls. Want me to set up a quick demo?" },
           ].map(({ r, t }, i) => (
-            <div key={i} style={{ display: "flex", gap: 10, marginBottom: 14, alignItems: "flex-start" }}>
+            <div key={i} className="mb-3 flex gap-2.5">
               <div
+                className="flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
                 style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: "50%",
-                  flexShrink: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 10,
-                  fontWeight: 700,
                   color: r === "ApexAI" ? "#fff" : "#000",
                   backgroundColor: r === "ApexAI" ? C.blue : "rgba(255,255,255,0.15)",
                 }}
               >
                 {r === "ApexAI" ? "A" : "C"}
               </div>
-              <div style={{ backgroundColor: r === "ApexAI" ? `${C.blue}18` : "rgba(255,255,255,0.04)", padding: "9px 13px", borderRadius: 10, flex: 1 }}>
-                <div style={{ color: r === "ApexAI" ? C.blue2 : C.dim2, fontSize: 10, fontWeight: 700, marginBottom: 3 }}>{r}</div>
-                <div style={{ color: r === "ApexAI" ? C.white : C.dim, fontSize: 13, lineHeight: 1.5 }}>{t}</div>
+              <div className="flex-1 rounded-lg px-3 py-2" style={{ backgroundColor: r === "ApexAI" ? `${C.blue}18` : "rgba(255,255,255,0.04)" }}>
+                <div className="mb-0.5 text-[10px] font-bold" style={{ color: r === "ApexAI" ? C.blue2 : "rgba(255,255,255,0.4)" }}>
+                  {r}
+                </div>
+                <div className="text-[13px] leading-snug" style={{ color: r === "ApexAI" ? C.white : "rgba(255,255,255,0.62)" }}>
+                  {t}
+                </div>
               </div>
             </div>
           ))}
@@ -95,8 +108,8 @@ export default function LandingPage() {
       body: "Upload your lead list and ApexAI calls them all. Qualifies the interested ones, books appointments, and follows up on everyone else automatically.",
       points: ["Upload contacts — calling in minutes", "Handles objections naturally", "Books qualified leads automatically", "SMS and email follow-up built in", "Full campaign analytics dashboard"],
       panel: (
-        <div style={{ backgroundColor: C.bg, borderRadius: 16, padding: 28, border: `1px solid ${C.borderW}` }}>
-          <div style={{ color: C.dim2, fontSize: 11, marginBottom: 18, textTransform: "uppercase", letterSpacing: "0.1em" }}>Campaign dashboard — live</div>
+        <div className="rounded-2xl border border-white/10 p-7" style={{ backgroundColor: C.bg }}>
+          <div className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-white/40">Campaign dashboard — live</div>
           {[
             { label: "Campaign", value: "Solar Q1 — Texas", color: C.blue2 },
             { label: "Contacts loaded", value: "2,847", color: C.white },
@@ -105,9 +118,11 @@ export default function LandingPage() {
             { label: "Conversion rate", value: "9.2%", color: C.green },
             { label: "SMS follow-ups sent", value: "374", color: C.blue3 },
           ].map(({ label, value, color }) => (
-            <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${C.borderW}` }}>
-              <span style={{ color: C.dim2, fontSize: 13 }}>{label}</span>
-              <span style={{ color, fontSize: 14, fontWeight: 700 }}>{value}</span>
+            <div key={label} className="flex justify-between border-b border-white/[0.07] py-2.5">
+              <span className="text-[13px] text-white/40">{label}</span>
+              <span className="text-sm font-bold" style={{ color }}>
+                {value}
+              </span>
             </div>
           ))}
         </div>
@@ -119,15 +134,15 @@ export default function LandingPage() {
       body: "No back-and-forth. The AI collects name, phone, and preferred time — confirms it, sends a reminder, and writes it to your calendar.",
       points: ["Name, phone, and time collected", "Instant confirmation SMS sent", "Calendar sync and reminders", "Reduces no-shows by 60%", "CRM updated automatically"],
       panel: (
-        <div style={{ backgroundColor: C.bg, borderRadius: 16, padding: 28, border: `1px solid ${C.borderW}` }}>
-          <div style={{ color: C.dim2, fontSize: 11, marginBottom: 18, textTransform: "uppercase", letterSpacing: "0.1em" }}>Booking confirmation</div>
-          <div style={{ backgroundColor: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 12, padding: 20, marginBottom: 16 }}>
-            <div style={{ color: C.green, fontSize: 12, fontWeight: 700, marginBottom: 10 }}>✓ APPOINTMENT CONFIRMED</div>
-            <div style={{ color: C.white, fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Sarah Johnson — Solar Assessment</div>
-            <div style={{ color: C.dim, fontSize: 13, marginBottom: 4 }}>Tuesday, April 8 at 2:00 PM</div>
-            <div style={{ color: C.dim, fontSize: 13 }}>📱 SMS confirmation sent to (555) 867-5309</div>
+        <div className="rounded-2xl border border-white/10 p-7" style={{ backgroundColor: C.bg }}>
+          <div className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-white/40">Booking confirmation</div>
+          <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5">
+            <div className="mb-2 text-xs font-bold text-emerald-400">✓ APPOINTMENT CONFIRMED</div>
+            <div className="mb-1 text-[15px] font-semibold text-white">Sarah Johnson — Solar Assessment</div>
+            <div className="text-[13px] text-white/60">Tuesday, April 8 at 2:00 PM</div>
+            <div className="text-[13px] text-white/60">📱 SMS confirmation sent to (555) 867-5309</div>
           </div>
-          <div style={{ color: C.dim2, fontSize: 13, lineHeight: 1.6 }}>Booked automatically during inbound call. No human involved. Calendar updated instantly.</div>
+          <p className="text-[13px] leading-relaxed text-white/45">Booked automatically during inbound call. No human involved. Calendar updated instantly.</p>
         </div>
       ),
     },
@@ -137,8 +152,8 @@ export default function LandingPage() {
       body: "Every call recorded, transcribed, and scored. Know your conversion rate, top objections, and AI performance — turn by turn.",
       points: ["All calls recorded and transcribed", "Lead scoring per call", "Objection pattern tracking", "Per-campaign conversion analytics", "Export to your CRM"],
       panel: (
-        <div style={{ backgroundColor: C.bg, borderRadius: 16, padding: 28, border: `1px solid ${C.borderW}` }}>
-          <div style={{ color: C.dim2, fontSize: 11, marginBottom: 18, textTransform: "uppercase", letterSpacing: "0.1em" }}>Analytics — today</div>
+        <div className="rounded-2xl border border-white/10 p-7" style={{ backgroundColor: C.bg }}>
+          <div className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-white/40">Analytics — today</div>
           {[
             { label: "Calls handled", value: "847", pct: "+23%" },
             { label: "Leads qualified", value: "203", pct: "+31%" },
@@ -146,11 +161,11 @@ export default function LandingPage() {
             { label: "Avg call duration", value: "3m 24s", pct: "stable" },
             { label: "Conversion rate", value: "7.9%", pct: "+2.1%" },
           ].map(({ label, value, pct }) => (
-            <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${C.borderW}` }}>
-              <span style={{ color: C.dim2, fontSize: 13 }}>{label}</span>
-              <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <span style={{ color: C.white, fontSize: 14, fontWeight: 700 }}>{value}</span>
-                <span style={{ color: C.green, fontSize: 11, backgroundColor: "rgba(34,197,94,0.12)", padding: "2px 7px", borderRadius: 4 }}>{pct}</span>
+            <div key={label} className="flex items-center justify-between border-b border-white/[0.07] py-2.5">
+              <span className="text-[13px] text-white/40">{label}</span>
+              <span className="flex items-center gap-2">
+                <span className="text-sm font-bold text-white">{value}</span>
+                <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[11px] text-emerald-400">{pct}</span>
               </span>
             </div>
           ))}
@@ -160,20 +175,8 @@ export default function LandingPage() {
   ];
 
   return (
-    <div style={{ fontFamily: "-apple-system, 'Helvetica Neue', Arial, sans-serif", backgroundColor: C.bg, color: C.white, overflowX: "hidden" }}>
+    <div className="min-w-0 bg-zinc-50 text-zinc-900 antialiased" style={{ fontFamily: "-apple-system, 'Helvetica Neue', Arial, sans-serif" }}>
       <style>{`
-        *{box-sizing:border-box;margin:0;padding:0}
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-        @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
-        @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-        a{text-decoration:none;color:inherit}
-        .nav-link{color:rgba(255,255,255,0.6);font-size:14px;font-weight:500;transition:color 0.15s}
-        .nav-link:hover{color:#fff}
-        .tab-btn{background:none;border:none;cursor:pointer;transition:all 0.2s;white-space:nowrap}
-        .hover-card{transition:border-color 0.2s,transform 0.2s}
-        .hover-card:hover{border-color:rgba(29,111,244,0.4)!important;transform:translateY(-2px)}
-        .cta-btn{transition:opacity 0.15s,transform 0.15s;cursor:pointer}
-        .cta-btn:hover{opacity:0.9;transform:translateY(-1px)}
         .show-mobile{display:none!important}
         @media(max-width:768px){
           .show-mobile{display:flex!important}
@@ -186,196 +189,227 @@ export default function LandingPage() {
         @media(max-width:768px){.footer-cols{grid-template-columns:1fr!important;gap:28px!important}}
       `}</style>
 
-      <div style={{ backgroundColor: `${C.blue}18`, borderBottom: `1px solid ${C.border}`, padding: "8px 24px", textAlign: "center" }}>
-        <span style={{ color: C.blue3, fontSize: 13, fontWeight: 600 }}>{tickerItems[ticker % tickerItems.length]}</span>
+      <div className="border-b border-blue-200/60 bg-blue-50 px-6 py-2 text-center text-sm font-semibold text-blue-900">
+        {tickerItems[ticker % tickerItems.length]}
       </div>
 
       <MarketingNav />
 
-      {/* HERO */}
-      <section style={{ backgroundColor: C.bg, padding: "96px 24px 80px", textAlign: "center", position: "relative", overflow: "hidden" }}>
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            backgroundImage: `linear-gradient(${C.blue}06 1px,transparent 1px),linear-gradient(90deg,${C.blue}06 1px,transparent 1px)`,
-            backgroundSize: "56px 56px",
-            pointerEvents: "none",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            top: "5%",
-            left: "50%",
-            transform: "translateX(-50%)",
-            width: 800,
-            height: 500,
-            background: `radial-gradient(ellipse,${C.blue}1a 0%,transparent 65%)`,
-            pointerEvents: "none",
-          }}
-        />
-        <div style={{ maxWidth: 820, margin: "0 auto", position: "relative", animation: "fadeUp 0.5s ease" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, backgroundColor: `${C.blue}18`, border: `1px solid ${C.border}`, borderRadius: 100, padding: "7px 18px", marginBottom: 36 }}>
-            <div style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: C.green, animation: "pulse 2s infinite" }} />
-            <span style={{ color: C.blue3, fontSize: 13, fontWeight: 600 }}>Live — answering calls right now</span>
+      {/* HERO — new shell: dark band, not full-page dark */}
+      <section className="relative overflow-hidden bg-zinc-950 px-6 py-24 text-center text-white md:py-28">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(29,111,244,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(29,111,244,0.03)_1px,transparent_1px)] bg-[size:56px_56px]" />
+        <div className="pointer-events-none absolute left-1/2 top-[8%] h-[420px] w-[780px] -translate-x-1/2 bg-[radial-gradient(ellipse,rgba(29,111,244,0.12)_0%,transparent_65%)]" />
+        <div className="relative mx-auto max-w-3xl">
+          <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-200">
+            <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />
+            Live — production lines answering now
           </div>
-          <h1 style={{ color: C.white, fontSize: "clamp(38px,6.5vw,68px)", fontWeight: 900, lineHeight: 1.08, marginBottom: 24, letterSpacing: "-0.04em" }}>
-            Your AI revenue engine.
-            <br />
-            <span style={{ color: C.blue3 }}>Inbound + outbound.</span>
-            <br />
-            Always closing.
+          <h1 className="text-balance text-4xl font-black leading-[1.08] tracking-tight md:text-6xl md:leading-[1.05]">
+            Inbound and outbound AI voice.
+            <span className="block text-blue-400">Bookings, SMS, analytics — one ApexAI stack.</span>
           </h1>
-          <p style={{ color: C.dim, fontSize: "clamp(17px,2.5vw,20px)", lineHeight: 1.65, maxWidth: 600, margin: "0 auto 44px" }}>
-            Answers every call. Qualifies leads. Books appointments. Runs outbound campaigns — 24 hours a day, 7 days a week.
+          <p className="mx-auto mt-6 max-w-xl text-pretty text-lg leading-relaxed text-zinc-400">
+            {platformOverview.subtitle}
           </p>
-          <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
+          <div className="mt-10 flex flex-wrap justify-center gap-3">
             <a href="#demo">
-              <button
-                type="button"
-                className="cta-btn"
-                style={{
-                  backgroundColor: C.blue,
-                  color: C.white,
-                  fontWeight: 800,
-                  fontSize: 16,
-                  padding: "15px 32px",
-                  borderRadius: 10,
-                  border: "none",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <Phone size={18} /> Hear it live — call me now
-              </button>
+              <Button size="lg" className="h-12 gap-2 bg-blue-600 px-8 font-bold text-white hover:bg-blue-500">
+                <Phone className="size-5" /> Hear it on your phone
+              </Button>
             </a>
             <a href={getLoginUrl()}>
-              <button
-                type="button"
-                className="cta-btn"
-                style={{
-                  backgroundColor: "transparent",
-                  color: C.white,
-                  fontWeight: 600,
-                  fontSize: 16,
-                  padding: "15px 28px",
-                  borderRadius: 10,
-                  border: `1px solid ${C.borderW}`,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                Start free trial <ArrowRight size={16} />
-              </button>
+              <Button size="lg" variant="outline" className="h-12 border-zinc-600 bg-transparent px-8 font-semibold text-white hover:bg-white/10">
+                Start free trial <ArrowRight className="ml-1 size-4" />
+              </Button>
             </a>
           </div>
-
-          <div style={{ display: "flex", gap: 40, justifyContent: "center", flexWrap: "wrap", marginTop: 64, paddingTop: 64, borderTop: `1px solid ${C.borderW}` }}>
+          <div className="mx-auto mt-16 grid max-w-2xl grid-cols-2 gap-8 border-t border-white/10 pt-12 sm:grid-cols-4">
             {[
-              { value: "< 1 sec", label: "Pickup time" },
-              { value: "24/7", label: "Always available" },
-              { value: "Zero", label: "Filler words" },
-              { value: "8+", label: "Voice options" },
-            ].map(({ value, label }) => (
-              <div key={label} style={{ textAlign: "center" }}>
-                <div style={{ color: C.blue3, fontWeight: 900, fontSize: 24, letterSpacing: "-0.03em" }}>{value}</div>
-                <div style={{ color: C.dim2, fontSize: 13, marginTop: 4 }}>{label}</div>
+              { value: "< 1s", label: "Typical pickup" },
+              { value: "24/7", label: "Inbound coverage" },
+              { value: "Voice + SMS", label: "Same campaigns" },
+              { value: "8+", label: "Cartesia voices" },
+            ].map((s) => (
+              <div key={s.label}>
+                <div className="text-2xl font-black text-blue-300">{s.value}</div>
+                <div className="mt-1 text-xs font-medium text-zinc-500">{s.label}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* SOCIAL PROOF */}
-      <section style={{ backgroundColor: C.bg2, padding: "40px 24px", borderTop: `1px solid ${C.borderW}`, borderBottom: `1px solid ${C.borderW}` }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <p style={{ color: C.dim2, fontSize: 12, textAlign: "center", marginBottom: 20, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>
-            Trusted by fast-growing businesses
-          </p>
-          <div style={{ display: "flex", gap: 16, justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
+      {/* Logos */}
+      <section className="border-y border-zinc-200 bg-white py-10">
+        <div className="mx-auto max-w-6xl px-6">
+          <p className="mb-6 text-center text-xs font-bold uppercase tracking-wider text-zinc-400">Teams running high-intent phone revenue</p>
+          <div className="flex flex-wrap justify-center gap-3">
             {logos.map((l) => (
-              <div key={l} style={{ color: C.dim, fontSize: 13, fontWeight: 600, padding: "8px 16px", border: `1px solid ${C.borderW}`, borderRadius: 8, backgroundColor: C.bg3 }}>
+              <span key={l} className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm font-semibold text-zinc-600">
                 {l}
-              </div>
+              </span>
             ))}
           </div>
         </div>
       </section>
 
       {/* PLATFORM */}
-      <section id="platform" style={{ backgroundColor: C.bg, padding: "88px 24px" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 48 }}>
-            <div style={{ color: C.blue2, fontWeight: 700, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16 }}>The platform</div>
-            <h2 style={{ color: C.white, fontSize: "clamp(26px,4vw,44px)", fontWeight: 800, marginBottom: 16, letterSpacing: "-0.03em" }}>One platform. Every revenue channel.</h2>
-            <p style={{ color: C.dim, fontSize: 18, maxWidth: 520, margin: "0 auto" }}>Not a chatbot. Not a legacy IVR. A complete AI revenue engine for inbound and outbound.</p>
+      <section id="platform" className="scroll-mt-24 border-b border-zinc-200 bg-white px-6 py-20 md:py-24">
+        <div className="mx-auto max-w-6xl">
+          <div className="mx-auto mb-14 max-w-2xl text-center">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">Platform</p>
+            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-zinc-900 md:text-4xl">{platformOverview.title}</h2>
+            <p className="mt-4 text-lg leading-relaxed text-zinc-600">{platformOverview.subtitle}</p>
           </div>
 
-          <div style={{ display: "flex", gap: 4, justifyContent: "center", backgroundColor: C.bg3, borderRadius: 12, padding: 5, marginBottom: 44, width: "fit-content", margin: "0 auto 44px", flexWrap: "wrap" }}>
-            {tabs.map((tab, i) => (
-              <button
-                key={tab.label}
-                type="button"
-                className="tab-btn"
-                onClick={() => setActiveTab(i)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 7,
-                  padding: "10px 20px",
-                  borderRadius: 9,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: activeTab === i ? C.white : C.dim,
-                  backgroundColor: activeTab === i ? C.blue : "transparent",
-                }}
-              >
-                {tab.icon} {tab.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 52, alignItems: "center" }}>
-            <div>
-              <div style={{ color: tabContent[activeTab]!.color, fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 16 }}>{tabs[activeTab]!.label}</div>
-              <h3 style={{ color: C.white, fontSize: "clamp(22px,3.5vw,34px)", fontWeight: 800, marginBottom: 16, letterSpacing: "-0.02em", lineHeight: 1.2 }}>{tabContent[activeTab]!.headline}</h3>
-              <p style={{ color: C.dim, fontSize: 16, lineHeight: 1.7, marginBottom: 28 }}>{tabContent[activeTab]!.body}</p>
-              {tabContent[activeTab]!.points.map((p) => (
-                <div key={p} style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
-                  <CheckCircle2 size={16} style={{ color: tabContent[activeTab]!.color, flexShrink: 0, marginTop: 2 }} />
-                  <span style={{ color: C.dim, fontSize: 15 }}>{p}</span>
+          <div className="mb-16 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {platformPillars.map((p) => {
+              const Icon = p.icon;
+              const id = p.href.replace("#", "");
+              return (
+                <div
+                  key={p.href}
+                  id={id}
+                  className="scroll-mt-28 rounded-2xl border border-zinc-200 bg-zinc-50/80 p-6 transition-shadow hover:shadow-md"
+                >
+                  {Icon ? (
+                    <div className="mb-4 flex size-11 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600">
+                      <Icon className="size-5" />
+                    </div>
+                  ) : null}
+                  <h3 className="text-lg font-bold text-zinc-900">{p.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-600">{p.description}</p>
                 </div>
+              );
+            })}
+          </div>
+
+          <div className="rounded-3xl border border-zinc-800 bg-zinc-950 p-6 md:p-10">
+            <p className="mb-6 text-center text-xs font-bold uppercase tracking-wider text-blue-400/90">Interactive — same four modules in the app</p>
+            <div className="mb-8 flex flex-wrap justify-center gap-1 rounded-xl bg-zinc-900/80 p-1">
+              {tabs.map((tab, i) => (
+                <button
+                  key={tab.label}
+                  type="button"
+                  onClick={() => setActiveTab(i)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors",
+                    activeTab === i ? "bg-blue-600 text-white" : "text-zinc-400 hover:text-white"
+                  )}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </button>
               ))}
             </div>
-            {tabContent[activeTab]!.panel}
+            <div className="grid-2 grid items-center gap-10 lg:grid-cols-2 lg:gap-12">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider" style={{ color: tabContent[activeTab]!.color }}>
+                  {tabs[activeTab]!.label}
+                </p>
+                <h3 className="mt-2 text-2xl font-bold text-white md:text-3xl">{tabContent[activeTab]!.headline}</h3>
+                <p className="mt-3 text-zinc-400">{tabContent[activeTab]!.body}</p>
+                <ul className="mt-6 space-y-2">
+                  {tabContent[activeTab]!.points.map((pt) => (
+                    <li key={pt} className="flex gap-2 text-sm text-zinc-300">
+                      <CheckCircle2 className="mt-0.5 size-4 shrink-0" style={{ color: tabContent[activeTab]!.color }} />
+                      {pt}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              {tabContent[activeTab]!.panel}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURES — ApexAI product + pricing bullets */}
+      <section id="features" className="scroll-mt-24 border-b border-zinc-200 bg-zinc-50 px-6 py-20 md:py-24">
+        <div className="mx-auto max-w-6xl">
+          <div className="mx-auto mb-12 max-w-2xl text-center">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">Features</p>
+            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-zinc-900 md:text-4xl">What ApexAI does in your account</h2>
+            <p className="mt-4 text-lg text-zinc-600">
+              Voice AI capabilities from the product surface, plus the inbound and outbound capabilities listed on pricing — no generic “AI widget” list.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {productFeatures.map((f) => {
+              const Icon = f.icon;
+              const fid = f.href.replace("#", "");
+              return (
+                <div key={f.href} id={fid} className="scroll-mt-28 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                  <div className="flex gap-4">
+                    {Icon ? (
+                      <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600">
+                        <Icon className="size-5" />
+                      </div>
+                    ) : null}
+                    <div>
+                      <h3 className="font-bold text-zinc-900">{f.title}</h3>
+                      <p className="mt-1 text-sm leading-relaxed text-zinc-600">{f.description}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div id="features-channels" className="scroll-mt-28 mt-10 rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
+            <h3 className="text-xl font-bold text-zinc-900">Channels, campaigns, and ops</h3>
+            <p className="mt-2 text-zinc-600">Everything that ships beside the live voice agent — how teams actually run revenue.</p>
+            <div className="mt-8 grid gap-8 md:grid-cols-2">
+              <div>
+                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-blue-600">Inbound (pricing)</p>
+                <ul className="space-y-2">
+                  {pricingInboundBullets.map((x) => (
+                    <li key={x} className="flex gap-2 text-sm text-zinc-700">
+                      <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                      {x}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-blue-600">Outbound (pricing)</p>
+                <ul className="space-y-2">
+                  {pricingOutboundBullets.map((x) => (
+                    <li key={x} className="flex gap-2 text-sm text-zinc-700">
+                      <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                      {x}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* DIFFERENTIATION */}
-      <section id="different" style={{ backgroundColor: C.bg2, padding: "88px 24px", borderTop: `1px solid ${C.borderW}` }}>
-        <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 48 }}>
-            <div style={{ color: C.blue2, fontWeight: 700, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16 }}>Why ApexAI</div>
-            <h2 style={{ color: C.white, fontSize: "clamp(26px,4vw,42px)", fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 14 }}>Legacy IVR vs ApexAI</h2>
-            <p style={{ color: C.dim, fontSize: 17, maxWidth: 560, margin: "0 auto", lineHeight: 1.65 }}>Menus and voicemail leak revenue. ApexAI holds a real conversation, qualifies intent, and books — on every ring.</p>
+      <section id="different" className="scroll-mt-24 border-b border-zinc-200 bg-white px-6 py-20 md:py-24">
+        <div className="mx-auto max-w-5xl">
+          <div className="mb-12 text-center">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">Why ApexAI</p>
+            <h2 className="mt-3 text-3xl font-extrabold text-zinc-900 md:text-4xl">Legacy IVR vs ApexAI</h2>
+            <p className="mx-auto mt-4 max-w-xl text-zinc-600">
+              Menus and voicemail leak revenue. ApexAI holds a real conversation, qualifies intent, and books — on every ring.
+            </p>
           </div>
-          <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-            <div className="hover-card" style={{ backgroundColor: C.bg3, borderRadius: 16, padding: 28, border: `1px solid ${C.borderW}` }}>
-              <div style={{ color: C.dim2, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", marginBottom: 12 }}>LEGACY PHONE TREE</div>
-              <ul style={{ color: C.dim, fontSize: 15, lineHeight: 1.85, paddingLeft: 18 }}>
+          <div className="grid gap-5 md:grid-cols-2">
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-8">
+              <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">Legacy phone tree</p>
+              <ul className="mt-4 list-disc space-y-2 pl-5 text-zinc-600">
                 <li>Press 1… press 2… callers hang up</li>
                 <li>Voicemail when you are busy</li>
                 <li>No qualification or follow-up</li>
                 <li>Static scripts, no learning loop</li>
               </ul>
             </div>
-            <div className="hover-card" style={{ backgroundColor: `${C.blue}10`, borderRadius: 16, padding: 28, border: `1px solid ${C.border}` }}>
-              <div style={{ color: C.blue3, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", marginBottom: 12 }}>APEXAI</div>
-              <ul style={{ color: C.white, fontSize: 15, lineHeight: 1.85, paddingLeft: 18, opacity: 0.95 }}>
+            <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-8">
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-600">ApexAI</p>
+              <ul className="mt-4 list-disc space-y-2 pl-5 text-zinc-800">
                 <li>Natural dialogue — sub-second pickup</li>
                 <li>24/7 answers with barge-in and handoff</li>
                 <li>Qualifies, books, SMS confirms</li>
@@ -387,16 +421,16 @@ export default function LandingPage() {
       </section>
 
       {/* HOW IT WORKS */}
-      <section id="how-it-works" style={{ backgroundColor: C.bg, padding: "88px 24px", borderTop: `1px solid ${C.borderW}` }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 52 }}>
-            <div style={{ color: C.blue2, fontWeight: 700, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16 }}>How it works</div>
-            <h2 style={{ color: C.white, fontSize: "clamp(26px,4vw,44px)", fontWeight: 800, marginBottom: 16, letterSpacing: "-0.03em" }}>Real-time phone conversation — not a chatbot</h2>
-            <p style={{ color: C.dim, fontSize: 17, maxWidth: 560, margin: "0 auto", lineHeight: 1.65 }}>
+      <section id="how-it-works" className="scroll-mt-24 border-b border-zinc-200 bg-zinc-50 px-6 py-20 md:py-24">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-12 text-center">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">How it works</p>
+            <h2 className="mt-3 text-3xl font-extrabold text-zinc-900 md:text-4xl">Real-time phone conversation — not a chatbot</h2>
+            <p className="mx-auto mt-4 max-w-xl text-zinc-600">
               Your caller talks naturally. The system listens, decides when they are done speaking, generates a reply, and speaks with a natural voice — while optional actions like calendar and SMS run in the background.
             </p>
           </div>
-          <div className="how-works-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5,minmax(0,1fr))", gap: 12, alignItems: "stretch" }}>
+          <div className="how-works-grid grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {[
               { icon: "📞", label: "Caller speaks", sub: "Audio from the phone line is processed continuously.", color: C.blue },
               { icon: "🎤", label: "Speech timing", sub: "Detects when the caller finishes so replies do not talk over them.", color: C.blue2 },
@@ -404,121 +438,136 @@ export default function LandingPage() {
               { icon: "🔊", label: "Natural voice", sub: "Speaks as the answer is ready — minimal awkward silence.", color: C.green },
               { icon: "✅", label: "Actions", sub: "Bookings, CRM updates, and text confirmations when you enable them.", color: "#f59e0b" },
             ].map(({ icon, label, sub, color }, idx) => (
-              <div key={label} style={{ display: "flex", alignItems: "stretch", minWidth: 0 }}>
-                <div className="hover-card" style={{ backgroundColor: C.bg3, borderRadius: 14, padding: "20px 14px", border: `1px solid ${C.borderW}`, textAlign: "center", flex: 1, minHeight: 152, display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: 8 }}>
-                  <div style={{ fontSize: 24 }}>{icon}</div>
-                  <div style={{ color, fontWeight: 700, fontSize: 12, lineHeight: 1.3 }}>{label}</div>
-                  <div style={{ color: C.dim2, fontSize: 11, lineHeight: 1.5 }}>{sub}</div>
+              <div key={label} className="flex min-w-0 items-stretch">
+                <div className="flex flex-1 flex-col gap-2 rounded-xl border border-zinc-200 bg-white p-4 text-center shadow-sm">
+                  <span className="text-2xl">{icon}</span>
+                  <span className="text-xs font-bold" style={{ color }}>
+                    {label}
+                  </span>
+                  <span className="text-[11px] leading-snug text-zinc-500">{sub}</span>
                 </div>
-                {idx < 4 && <div className="how-works-arrow" style={{ color: C.blue2, fontSize: 18, padding: "0 4px", flexShrink: 0, display: "flex", alignItems: "center" }}>→</div>}
-              </div>
-            ))}
-          </div>
-          <div className="grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 14, marginTop: 36 }}>
-            {[
-              { value: "Sub‑second", label: "Typical response start" },
-              { value: "Low latency", label: "Built for live calls" },
-              { value: "24/7", label: "Always answers" },
-              { value: "Human transfer", label: "Hand off anytime" },
-            ].map(({ value, label }) => (
-              <div key={label} style={{ backgroundColor: C.bg3, border: `1px solid ${C.borderW}`, borderRadius: 12, padding: "18px 14px", textAlign: "center" }}>
-                <div style={{ color: C.blue3, fontWeight: 800, fontSize: 18, letterSpacing: "-0.02em" }}>{value}</div>
-                <div style={{ color: C.dim2, fontSize: 12, marginTop: 6, lineHeight: 1.4 }}>{label}</div>
+                {idx < 4 && <span className="how-works-arrow hidden items-center px-1 text-blue-500 lg:flex">→</span>}
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* LIVE DEMO */}
-      <section id="demo" style={{ backgroundColor: C.bg2, padding: "88px clamp(20px,5vw,48px) 104px", borderTop: `1px solid ${C.borderW}` }}>
-        <div style={{ maxWidth: 1240, margin: "0 auto", width: "100%" }}>
-          <div style={{ textAlign: "center", marginBottom: 12 }}>
-            <div style={{ color: C.blue2, fontWeight: 700, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16 }}>Live demo</div>
-            <p style={{ color: C.dim, fontSize: 17, maxWidth: 720, margin: "0 auto", lineHeight: 1.65 }}>No signup. No credit card. We call you so you can hear the same experience your leads get.</p>
+      {/* DEMO */}
+      <section id="demo" className="scroll-mt-24 border-b border-zinc-200 bg-white px-6 py-20 md:py-24">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-10 text-center">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">Live demo</p>
+            <p className="mx-auto mt-3 max-w-2xl text-zinc-600">
+              No signup. No credit card. We call you so you hear the same experience your leads get on your lines.
+            </p>
           </div>
-          <div style={{ backgroundColor: C.bg3, borderRadius: 24, padding: "clamp(28px,4vw,48px) clamp(20px,4vw,40px)", marginTop: 36, border: `1px solid ${C.borderW}`, boxSizing: "border-box", width: "100%" }}>
+          <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-6 md:p-10">
             <DemoCallWidget />
           </div>
         </div>
       </section>
 
-      {/* INDUSTRY / SOLUTIONS — #inbound kept for legacy deep links */}
-      <section id="solutions" style={{ backgroundColor: C.bg, padding: "88px clamp(20px,5vw,48px)", borderTop: `1px solid ${C.borderW}` }}>
-        <div id="inbound" style={{ height: 1, scrollMarginTop: 88, overflow: "hidden", pointerEvents: "none" }} aria-hidden />
-        <div style={{ maxWidth: 1240, margin: "0 auto", textAlign: "center", width: "100%" }}>
-          <div style={{ color: C.blue2, fontWeight: 700, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16 }}>Solutions</div>
-          <h2 style={{ color: C.white, fontSize: "clamp(26px,4vw,44px)", fontWeight: 800, marginBottom: 16, letterSpacing: "-0.03em" }}>Industry packs</h2>
-          <p style={{ color: C.dim, fontSize: 17, maxWidth: 680, margin: "0 auto 48px", lineHeight: 1.65 }}>
-            Solar, roofing, HVAC, insurance, real estate, and more — scripts and qualification flows you can customize.
-          </p>
+      {/* SOLUTIONS */}
+      <section id="solutions" className="scroll-mt-24 border-b border-zinc-200 bg-zinc-50 px-6 py-20 md:py-24">
+        <div id="inbound" className="h-px scroll-mt-28 overflow-hidden opacity-0" aria-hidden />
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-10 text-center">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">Solutions</p>
+            <h2 className="mt-3 text-3xl font-extrabold text-zinc-900 md:text-4xl">Industry packs</h2>
+            <p className="mx-auto mt-4 max-w-2xl text-zinc-600">
+              Same ApexAI engine — scripts and qualification tuned for how you already sell. Jump to a vertical or play the demos below.
+            </p>
+          </div>
+          <div className="mb-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {solutionsByIndustry.map((s) => {
+              const Icon = s.icon;
+              const sid = s.href.replace("#", "");
+              return (
+                <div key={s.href} id={sid} className="scroll-mt-28">
+                  <div className="h-full rounded-xl border border-zinc-200 bg-white p-5 shadow-sm transition-shadow hover:border-blue-200 hover:shadow-md">
+                    <div className="flex items-start gap-3">
+                      {Icon ? (
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-600">
+                          <Icon className="size-5" />
+                        </div>
+                      ) : null}
+                      <div>
+                        <h3 className="font-bold text-zinc-900">{s.title}</h3>
+                        <p className="mt-1 text-sm text-zinc-600">{s.description}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
           <IndustryDemos />
         </div>
       </section>
 
-      {/* ROI — #outbound kept for legacy deep links */}
-      <section id="calculator" style={{ backgroundColor: C.bg2, padding: "88px clamp(20px,5vw,48px)", borderTop: `1px solid ${C.borderW}` }}>
-        <div id="outbound" style={{ height: 1, scrollMarginTop: 88, overflow: "hidden", pointerEvents: "none" }} aria-hidden />
-        <div style={{ maxWidth: 1280, margin: "0 auto", textAlign: "center", width: "100%" }}>
-          <div style={{ color: C.blue2, fontWeight: 700, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16 }}>Revenue calculator</div>
-          <h2 style={{ color: C.white, fontSize: "clamp(26px,4vw,44px)", fontWeight: 800, marginBottom: 16, letterSpacing: "-0.03em" }}>Model the gap</h2>
-          <p style={{ color: C.dim, fontSize: 17, marginBottom: 48, maxWidth: 640, marginLeft: "auto", marginRight: "auto", lineHeight: 1.65 }}>
+      {/* ROI */}
+      <section id="calculator" className="scroll-mt-24 border-b border-zinc-200 bg-white px-6 py-20 md:py-24">
+        <div id="outbound" className="h-px scroll-mt-28 overflow-hidden opacity-0" aria-hidden />
+        <div className="mx-auto max-w-6xl text-center">
+          <p className="text-xs font-bold uppercase tracking-wider text-blue-600">Revenue calculator</p>
+          <h2 className="mt-3 text-3xl font-extrabold text-zinc-900 md:text-4xl">Model the gap</h2>
+          <p className="mx-auto mt-4 mb-10 max-w-xl text-zinc-600">
             Slide your current funnel metrics. See an illustrative comparison when more leads get contacted and booked.
           </p>
           <ROICalculator />
         </div>
       </section>
 
-      <LandingTestimonialCarousel testimonials={testimonials} />
+      <LandingTestimonialCarousel testimonials={testimonials} variant="light" />
 
-      <LandingFaq />
+      <LandingFaq variant="light" />
 
       {/* TRUST */}
-      <section id="trust" style={{ backgroundColor: C.bg, padding: "72px 24px", borderTop: `1px solid ${C.borderW}` }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <h2 style={{ color: C.white, fontSize: "clamp(22px,3.5vw,36px)", fontWeight: 800, textAlign: "center", marginBottom: 48, letterSpacing: "-0.02em" }}>Enterprise-grade reliability</h2>
-          <div className="grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20 }}>
+      <section id="trust" className="scroll-mt-24 border-b border-zinc-200 bg-zinc-50 px-6 py-16 md:py-20">
+        <div className="mx-auto max-w-6xl">
+          <h2 className="mb-10 text-center text-2xl font-extrabold text-zinc-900 md:text-3xl">Enterprise-grade reliability</h2>
+          <div className="grid-3 grid gap-4 md:grid-cols-3">
             {[
-              { icon: <Shield size={26} style={{ color: C.blue3 }} />, title: "SOC 2 ready", desc: "Security controls aligned with enterprise standards. Data encrypted in transit and at rest." },
-              { icon: <MessageSquare size={26} style={{ color: C.blue3 }} />, title: "TCPA-aware", desc: "Built-in controls for outbound at scale. You manage consent; we help you stay organized." },
-              { icon: <Zap size={26} style={{ color: C.blue3 }} />, title: "99.9% uptime", desc: "Hosted on redundant cloud infrastructure with monitoring and failover." },
-              { icon: <Phone size={26} style={{ color: C.blue3 }} />, title: "Human handoff", desc: "Instant live transfer anytime a caller needs a real person. Seamless." },
-              { icon: <Star size={26} style={{ color: C.blue3 }} />, title: "All calls recorded", desc: "Full transcripts and recordings for every conversation. Review anytime." },
-              { icon: <Calendar size={26} style={{ color: C.blue3 }} />, title: "12+ languages", desc: "English, Spanish, French, German, Portuguese, and more. Global ready." },
+              { icon: <Shield className="size-6 text-blue-600" />, title: "SOC 2 ready", desc: "Security controls aligned with enterprise standards. Data encrypted in transit and at rest." },
+              { icon: <MessageSquare className="size-6 text-blue-600" />, title: "TCPA-aware", desc: "Built-in controls for outbound at scale. You manage consent; we help you stay organized." },
+              { icon: <Zap className="size-6 text-blue-600" />, title: "99.9% uptime", desc: "Hosted on redundant cloud infrastructure with monitoring and failover." },
+              { icon: <Phone className="size-6 text-blue-600" />, title: "Human handoff", desc: "Instant live transfer anytime a caller needs a real person. Seamless." },
+              { icon: <Star className="size-6 text-blue-600" />, title: "All calls recorded", desc: "Full transcripts and recordings for every conversation. Review anytime." },
+              { icon: <Calendar className="size-6 text-blue-600" />, title: "12+ languages", desc: "English, Spanish, French, German, Portuguese, and more. Global ready." },
             ].map(({ icon, title, desc }) => (
-              <div key={title} className="hover-card" style={{ backgroundColor: C.bg3, borderRadius: 16, padding: 24, border: `1px solid ${C.borderW}` }}>
-                <div style={{ marginBottom: 14 }}>{icon}</div>
-                <div style={{ color: C.white, fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{title}</div>
-                <div style={{ color: C.dim2, fontSize: 14, lineHeight: 1.6 }}>{desc}</div>
+              <div key={title} className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <div className="mb-3">{icon}</div>
+                <h3 className="font-bold text-zinc-900">{title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-600">{desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* FINAL CTA */}
-      <section style={{ backgroundColor: C.bg2, padding: "96px 24px", textAlign: "center", position: "relative", overflow: "hidden", borderTop: `1px solid ${C.borderW}` }}>
-        <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 600, height: 400, background: `radial-gradient(ellipse,${C.blue}18 0%,transparent 70%)`, pointerEvents: "none" }} />
-        <div style={{ maxWidth: 600, margin: "0 auto", position: "relative" }}>
-          <h2 style={{ color: C.white, fontSize: "clamp(30px,5vw,52px)", fontWeight: 900, marginBottom: 20, letterSpacing: "-0.04em" }}>
+      {/* CTA */}
+      <section className="relative overflow-hidden bg-zinc-950 px-6 py-20 text-center text-white">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(29,111,244,0.15)_0%,transparent_70%)]" />
+        <div className="relative mx-auto max-w-lg">
+          <h2 className="text-3xl font-black tracking-tight md:text-4xl">
             Stop missing calls.
-            <br />
-            <span style={{ color: C.blue3 }}>Start closing more.</span>
+            <span className="block text-blue-400">Start closing more.</span>
           </h2>
-          <p style={{ color: C.dim, fontSize: 18, marginBottom: 44 }}>Your competitors are already using AI. The question is whether yours is better than theirs.</p>
-          <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
+          <p className="mt-4 text-zinc-400">Your competitors are already using AI. The question is whether yours is better than theirs.</p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
             <a href="#demo">
-              <button type="button" className="cta-btn" style={{ backgroundColor: C.blue, color: C.white, fontWeight: 800, fontSize: 16, padding: "16px 36px", borderRadius: 10, border: "none", display: "flex", alignItems: "center", gap: 8 }}>
-                <Phone size={18} /> Get your first AI call
-              </button>
+              <Button size="lg" className="h-12 bg-blue-600 px-8 font-bold hover:bg-blue-500">
+                <Phone className="mr-2 size-5" /> Get your first AI call
+              </Button>
             </a>
             <a href={getLoginUrl()}>
-              <button type="button" className="cta-btn" style={{ backgroundColor: "transparent", color: C.white, fontWeight: 600, fontSize: 16, padding: "16px 28px", borderRadius: 10, border: `1px solid ${C.borderW}` }}>
+              <Button size="lg" variant="outline" className="h-12 border-zinc-600 bg-transparent px-8 text-white hover:bg-white/10">
                 Sign up free
-              </button>
+              </Button>
             </a>
           </div>
-          <p style={{ color: C.dim2, fontSize: 13, marginTop: 20 }}>No credit card required. Live in under 5 minutes.</p>
+          <p className="mt-6 text-sm text-zinc-500">No credit card required. Live in under 5 minutes.</p>
         </div>
       </section>
 

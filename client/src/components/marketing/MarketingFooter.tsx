@@ -65,6 +65,9 @@ export default function MarketingFooter() {
               <a href="#platform" className={link}>
                 Platform
               </a>
+              <a href="#features" className={link}>
+                Features
+              </a>
               <a href="#demo" className={link}>
                 Live demo
               </a>

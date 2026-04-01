@@ -33,54 +33,104 @@ const items: { q: string; a: string }[] = [
   },
 ];
 
-export default function LandingFaq() {
+type FaqVariant = "dark" | "light";
+
+export default function LandingFaq({ variant = "dark" }: { variant?: FaqVariant }) {
+  const light = variant === "light";
+
   return (
     <section
       id="faq"
-      style={{
-        backgroundColor: C.bg2,
-        padding: "88px 24px",
-        borderTop: `1px solid ${C.borderW}`,
-        fontFamily: "-apple-system, 'Helvetica Neue', Arial, sans-serif",
-      }}
+      className={light ? "scroll-mt-24 border-b border-zinc-200 bg-white px-6 py-20 md:py-24" : ""}
+      style={
+        light
+          ? { fontFamily: "-apple-system, 'Helvetica Neue', Arial, sans-serif" }
+          : {
+              backgroundColor: C.bg2,
+              padding: "88px 24px",
+              borderTop: `1px solid ${C.borderW}`,
+              fontFamily: "-apple-system, 'Helvetica Neue', Arial, sans-serif",
+            }
+      }
     >
-      <div style={{ maxWidth: 720, margin: "0 auto" }}>
-        <div style={{ textAlign: "center", marginBottom: 40 }}>
+      <div className="mx-auto max-w-2xl" style={light ? undefined : { maxWidth: 720, margin: "0 auto" }}>
+        <div className={light ? "mb-10 text-center" : undefined} style={light ? undefined : { textAlign: "center", marginBottom: 40 }}>
           <div
-            style={{
-              color: C.blue2,
-              fontWeight: 700,
-              fontSize: 13,
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
-              marginBottom: 16,
-            }}
+            className={light ? "text-xs font-bold uppercase tracking-wider text-blue-600" : ""}
+            style={
+              light
+                ? undefined
+                : {
+                    color: C.blue2,
+                    fontWeight: 700,
+                    fontSize: 13,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.1em",
+                    marginBottom: 16,
+                  }
+            }
           >
             FAQ
           </div>
           <h2
-            style={{
-              color: C.white,
-              fontSize: "clamp(26px,4vw,40px)",
-              fontWeight: 800,
-              letterSpacing: "-0.03em",
-              marginBottom: 12,
-            }}
+            className={light ? "mt-3 text-3xl font-extrabold tracking-tight text-zinc-900 md:text-4xl" : ""}
+            style={
+              light
+                ? undefined
+                : {
+                    color: C.white,
+                    fontSize: "clamp(26px,4vw,40px)",
+                    fontWeight: 800,
+                    letterSpacing: "-0.03em",
+                    marginBottom: 12,
+                  }
+            }
           >
             Common questions
           </h2>
-          <p style={{ color: C.dim, fontSize: 17, lineHeight: 1.65, maxWidth: 520, margin: "0 auto" }}>
+          <p
+            className={light ? "mt-4 text-lg text-zinc-600" : ""}
+            style={
+              light
+                ? undefined
+                : { color: C.dim, fontSize: 17, lineHeight: 1.65, maxWidth: 520, margin: "0 auto" }
+            }
+          >
             Straight answers about voice AI, rollout, and how ApexAI fits your phone channel.
           </p>
         </div>
 
-        <Accordion type="single" collapsible className="w-full rounded-xl border border-white/[0.08] bg-[#141820] px-2">
+        <Accordion
+          type="single"
+          collapsible
+          className={
+            light
+              ? "w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-2 shadow-sm"
+              : "w-full rounded-xl border border-white/[0.08] bg-[#141820] px-2"
+          }
+        >
           {items.map((item, i) => (
-            <AccordionItem key={item.q} value={`item-${i}`} className="border-white/[0.07] px-2">
-              <AccordionTrigger className="text-left text-[15px] font-semibold text-white hover:no-underline [&[data-state=open]]:text-blue-300">
+            <AccordionItem
+              key={item.q}
+              value={`item-${i}`}
+              className={light ? "border-zinc-200 px-2" : "border-white/[0.07] px-2"}
+            >
+              <AccordionTrigger
+                className={
+                  light
+                    ? "text-left text-[15px] font-semibold text-zinc-900 hover:no-underline [&[data-state=open]]:text-blue-600"
+                    : "text-left text-[15px] font-semibold text-white hover:no-underline [&[data-state=open]]:text-blue-300"
+                }
+              >
                 {item.q}
               </AccordionTrigger>
-              <AccordionContent className="text-[15px] leading-relaxed text-[rgba(255,255,255,0.65)] pb-4">
+              <AccordionContent
+                className={
+                  light
+                    ? "pb-4 text-[15px] leading-relaxed text-zinc-600"
+                    : "pb-4 text-[15px] leading-relaxed text-[rgba(255,255,255,0.65)]"
+                }
+              >
                 {item.a}
               </AccordionContent>
             </AccordionItem>
