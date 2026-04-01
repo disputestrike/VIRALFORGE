@@ -2,7 +2,7 @@
  * realtimeVoiceEngine.ts — THE CORE ORCHESTRATOR
  * 
  * Pipeline: SignalWire → Deepgram STT → Cerebras → Cartesia TTS → SignalWire
- * Claude if LLM_ALLOW_ANTHROPIC_FALLBACK=true and ANTHROPIC_API_KEY (matches voiceRealtimePipeline).
+ * Claude when ANTHROPIC_API_KEY is set on failure (voiceRealtimePipeline still uses LLM_ALLOW_ANTHROPIC_FALLBACK).
  * 
  * Key principles:
  * 1. Telephony: mulaw 8kHz to/from SignalWire; Cartesia outputs pcm_mulaw for outbound TTS
@@ -522,12 +522,10 @@ export function createCallEngine(opts: EngineOptions): void {
     });
 
     // PRIMARY: Cerebras (multi-key + model rotation in respondCerebras)
-    // FALLBACK: Claude only when LLM_ALLOW_ANTHROPIC_FALLBACK=true and ANTHROPIC_API_KEY is set (matches voiceRealtimePipeline)
+    // FALLBACK: Claude when ANTHROPIC_API_KEY is set (live calls; stricter opt-in remains in voiceRealtimePipeline)
     const reprompt =
       "I didn't quite catch that—could you say that again in a few words?";
-    const allowAnthropic =
-      ENV.llmAllowAnthropicFallback &&
-      !!(process.env.ANTHROPIC_API_KEY ?? "").trim();
+    const allowAnthropic = !!(process.env.ANTHROPIC_API_KEY ?? "").trim();
     traceEvent(callId, "llm_route", {
       path: "cerebras",
       anthropicFallback: allowAnthropic,
