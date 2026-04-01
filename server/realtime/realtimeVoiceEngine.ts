@@ -521,38 +521,21 @@ export function createCallEngine(opts: EngineOptions): void {
       } catch {}
     });
 
-    // Route: Claude first (full intelligence), Cerebras fast-path if opted in
-    const preferCerebras = process.env.LLM_PREFER_CEREBRAS === "true";
+    // PRIMARY: Cerebras qwen-3-235b (fast + intelligent)
+    // FALLBACK: Claude (if Cerebras fails for any reason)
     const sorry = "Sorry, I'm having a brief connection issue. Could you repeat that?";
+    traceEvent(callId, "llm_route", { path: "cerebras-qwen" });
+    log("[ROUTE] Cerebras qwen-3-235b → Claude fallback");
 
-    traceEvent(callId, "llm_route", { path: preferCerebras ? "cerebras" : "claude" });
-    log(`[ROUTE] ${preferCerebras ? "Cerebras (LLM_PREFER_CEREBRAS=true)" : "Claude (default — set LLM_PREFER_CEREBRAS=true to use Cerebras)"}`);
-
-    if (preferCerebras) {
-      // Cerebras fast-path: try Cerebras, fall back to Claude
-      try {
-        await respondCerebras(epoch, transcript);
-      } catch (e: any) {
-        log(`[Cerebras] Failed (${e.message}) — falling back to Claude`);
-        try {
-          await respondAnthropicFallback(epoch, transcript);
-        } catch (e2: any) {
-          log(`[Claude] Also failed: ${e2.message}`);
-          try { await speak(sorry, epoch); } catch {}
-        }
-      }
-    } else {
-      // Default: Claude first, Cerebras as fallback
+    try {
+      await respondCerebras(epoch, transcript);
+    } catch (e: any) {
+      log(`[Cerebras] Failed: ${e.message} — falling back to Claude`);
       try {
         await respondAnthropicFallback(epoch, transcript);
-      } catch (e: any) {
-        log(`[Claude] Failed (${e.message}) — falling back to Cerebras`);
-        try {
-          await respondCerebras(epoch, transcript);
-        } catch (e2: any) {
-          log(`[Cerebras] Also failed: ${e2.message}`);
-          try { await speak(sorry, epoch); } catch {}
-        }
+      } catch (e2: any) {
+        log(`[Claude] Also failed: ${e2.message}`);
+        try { await speak(sorry, epoch); } catch {}
       }
     }
     traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });

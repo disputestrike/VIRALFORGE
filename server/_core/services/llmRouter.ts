@@ -41,28 +41,10 @@ export function cerebrasModelCandidates(): string[] {
   //   llama3.1-8b                     ← fast but small, fallback only
   // llama-3.3-70b / llama3.3-70b do NOT exist on this account (404)
 
-  const MODEL_ALIASES: Record<string, string> = {
-    "llama-3.3-70b": "qwen-3-235b-a22b-instruct-2507",  // env var maps to best available
-    "llama-3.1-70b": "qwen-3-235b-a22b-instruct-2507",
-    "llama3.3-70b":  "qwen-3-235b-a22b-instruct-2507",
-    "llama3.1-70b":  "qwen-3-235b-a22b-instruct-2507",
-    "qwen-3-235b-a22b-instruct-2507": "qwen-3-235b-a22b-instruct-2507",
-    "llama3.1-8b":   "llama3.1-8b",
-  };
-
-  const raw = (process.env.CEREBRAS_MODEL ?? "").trim();
-  const env = MODEL_ALIASES[raw] || raw;
-
-  const out: string[] = [];
-  const add = (m: string) => { if (m && !out.includes(m)) out.push(m); };
-
-  // Primary: best available model
-  add(env || "qwen-3-235b-a22b-instruct-2507");
-  add("qwen-3-235b-a22b-instruct-2507");
-  add("llama3.1-8b");  // last resort fallback
-
-  console.log(`[Cerebras] Model candidates: ${out.join(", ")} (env: "${raw}")`);
-  return out;
+  // qwen-3-235b is the ONLY model we use on Cerebras — fast + intelligent
+  // If Cerebras fails entirely, Claude is the fallback (handled in voice engine)
+  console.log("[Cerebras] Model: qwen-3-235b-a22b-instruct-2507");
+  return ["qwen-3-235b-a22b-instruct-2507"];
 }
 
 // ── Routing Logic ─────────────────────────────────────────────────────────────
