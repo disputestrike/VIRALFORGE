@@ -521,40 +521,38 @@ export function createCallEngine(opts: EngineOptions): void {
       } catch {}
     });
 
-    const hasAnthropic = !!(process.env.ANTHROPIC_API_KEY ?? "").trim();
-    const hasCerebras = cerebrasPool.hasKeys();
-    // Use Cerebras fast-path if available and 70b model works; Claude for full intelligence
+    // Route: Claude first (full intelligence), Cerebras fast-path if opted in
     const preferCerebras = process.env.LLM_PREFER_CEREBRAS === "true";
-    
+    const sorry = "Sorry, I'm having a brief connection issue. Could you repeat that?";
+
     traceEvent(callId, "llm_route", { path: preferCerebras ? "cerebras" : "claude" });
-    log(`[ROUTE] ${preferCerebras ? "Cerebras (fast)" : "Claude (intelligent)"}`);
+    log(`[ROUTE] ${preferCerebras ? "Cerebras" : "Claude"}`);
 
-    const sorry =
-      "Sorry, I'm having a brief connection issue. Could you repeat that?";
-
-    try {
-      if (preferCerebras && hasCerebras) {
-        await respondCerebras(epoch, transcript);
-      } else if (hasAnthropic) {
-        await respondAnthropicFallback(epoch, transcript);
-      } else if (hasCerebras) {
-        await respondCerebras(epoch, transcript);
-      } else {
-        throw new Error("No LLM available");
-      }
-    } catch (e: any) {
-      log(`[ERROR] Primary LLM failed: ${e.message} — trying fallback`);
+    if (preferCerebras) {
+      // Cerebras fast-path: try Cerebras, fall back to Claude
       try {
-        if (preferCerebras && hasAnthropic) {
+        await respondCerebras(epoch, transcript);
+      } catch (e: any) {
+        log(`[Cerebras] Failed (${e.message}) — falling back to Claude`);
+        try {
           await respondAnthropicFallback(epoch, transcript);
-        } else if (hasCerebras) {
-          await respondCerebras(epoch, transcript);
-        } else {
-          await speak(sorry, epoch);
+        } catch (e2: any) {
+          log(`[Claude] Also failed: ${e2.message}`);
+          try { await speak(sorry, epoch); } catch {}
         }
-      } catch (e2: any) {
-        log(`[ERROR] All LLMs failed: ${e2.message}`);
-        try { await speak(sorry, epoch); } catch {}
+      }
+    } else {
+      // Default: Claude first, Cerebras as fallback
+      try {
+        await respondAnthropicFallback(epoch, transcript);
+      } catch (e: any) {
+        log(`[Claude] Failed (${e.message}) — falling back to Cerebras`);
+        try {
+          await respondCerebras(epoch, transcript);
+        } catch (e2: any) {
+          log(`[Cerebras] Also failed: ${e2.message}`);
+          try { await speak(sorry, epoch); } catch {}
+        }
       }
     }
     traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
@@ -633,7 +631,7 @@ export function createCallEngine(opts: EngineOptions): void {
     }));
 
     const stream = await client.messages.stream({
-      model: process.env.CLAUDE_MODEL || "claude-opus-4-5",
+      model: process.env.CLAUDE_MODEL || "claude-3-5-haiku-20241022",
       max_tokens: ENV.voiceLlmMaxTokens,
       temperature: ENV.voiceLlmTemperature,
       system: prompt,
