@@ -28,6 +28,10 @@ import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Security from "./pages/Security";
 
+import Platform from "@/pages/Platform";
+import Solutions from "@/pages/Solutions";
+import Resources from "@/pages/Resources";
+
 function RootPage() {
   const { user, loading } = useAuth();
   if (loading) return (
@@ -49,6 +53,9 @@ function Router() {
       <Route path="/" component={RootPage} />
       <Route path="/login" component={Login} />
       <Route path="/about" component={About} />
+      <Route path="/platform" component={Platform} />
+      <Route path="/solutions" component={Solutions} />
+      <Route path="/resources" component={Resources} />
       <Route path="/pricing" component={Pricing} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />

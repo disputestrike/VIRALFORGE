@@ -82,6 +82,7 @@ async function runMigrations() {
           "ALTER TABLE `users` ADD COLUMN `whiteLabel` tinyint(1) DEFAULT 0",
           "ALTER TABLE `users` ADD COLUMN `picture` varchar(512) NULL",
           "ALTER TABLE `users` ADD COLUMN `voiceProfileId` varchar(100) NULL",
+"CREATE TABLE IF NOT EXISTS `zapier_webhooks` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `targetUrl` varchar(2048) NOT NULL, `events` varchar(500), `isActive` tinyint(1) DEFAULT 1 NOT NULL, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
           "ALTER TABLE `users` ADD COLUMN `stripeCustomerId` varchar(255) NULL",
           "ALTER TABLE `users` ADD COLUMN `stripeSubscriptionId` varchar(255) NULL",
           "ALTER TABLE `users` ADD COLUMN `stripeSubscriptionStatus` varchar(64) NULL",
