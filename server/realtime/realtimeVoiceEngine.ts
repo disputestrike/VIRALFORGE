@@ -2,7 +2,7 @@
  * realtimeVoiceEngine.ts — THE CORE ORCHESTRATOR
  * 
  * Pipeline: SignalWire → Deepgram STT → Cerebras → Cartesia TTS → SignalWire
- * (Claude only if LLM_ALLOW_ANTHROPIC_FALLBACK=true)
+ * Claude if LLM_ALLOW_ANTHROPIC_FALLBACK=true and ANTHROPIC_API_KEY (matches voiceRealtimePipeline).
  * 
  * Key principles:
  * 1. Telephony: mulaw 8kHz to/from SignalWire; Cartesia outputs pcm_mulaw for outbound TTS
@@ -521,21 +521,54 @@ export function createCallEngine(opts: EngineOptions): void {
       } catch {}
     });
 
-    // PRIMARY: Cerebras qwen-3-235b (fast + intelligent)
-    // FALLBACK: Claude (if Cerebras fails for any reason)
-    const sorry = "Sorry, I'm having a brief connection issue. Could you repeat that?";
-    traceEvent(callId, "llm_route", { path: "cerebras-qwen" });
-    log("[ROUTE] Cerebras qwen-3-235b → Claude fallback");
+    // PRIMARY: Cerebras (multi-key + model rotation in respondCerebras)
+    // FALLBACK: Claude only when LLM_ALLOW_ANTHROPIC_FALLBACK=true and ANTHROPIC_API_KEY is set (matches voiceRealtimePipeline)
+    const reprompt =
+      "I didn't quite catch that—could you say that again in a few words?";
+    const allowAnthropic =
+      ENV.llmAllowAnthropicFallback &&
+      !!(process.env.ANTHROPIC_API_KEY ?? "").trim();
+    traceEvent(callId, "llm_route", {
+      path: "cerebras",
+      anthropicFallback: allowAnthropic,
+    });
+    log(
+      `[ROUTE] Cerebras primary${allowAnthropic ? " → Claude if Cerebras fails" : ""}`
+    );
+
+    async function tryCerebras(): Promise<void> {
+      await respondCerebras(epoch, transcript);
+    }
 
     try {
-      await respondCerebras(epoch, transcript);
+      await tryCerebras();
     } catch (e: any) {
-      log(`[Cerebras] Failed: ${e.message} — falling back to Claude`);
-      try {
-        await respondAnthropicFallback(epoch, transcript);
-      } catch (e2: any) {
-        log(`[Claude] Also failed: ${e2.message}`);
-        try { await speak(sorry, epoch); } catch {}
+      log(`[Cerebras] Failed: ${e?.message ?? e}`);
+      if (allowAnthropic) {
+        try {
+          await respondAnthropicFallback(epoch, transcript);
+        } catch (e2: any) {
+          log(`[Claude] Failed: ${e2?.message ?? e2}`);
+          try {
+            await new Promise((r) => setTimeout(r, 400));
+            await tryCerebras();
+          } catch (e3: any) {
+            log(`[Cerebras] Retry after Claude fail: ${e3?.message ?? e3}`);
+            try {
+              await speak(reprompt, epoch);
+            } catch {}
+          }
+        }
+      } else {
+        try {
+          await new Promise((r) => setTimeout(r, 400));
+          await tryCerebras();
+        } catch (e2: any) {
+          log(`[Cerebras] Retry: ${e2?.message ?? e2}`);
+          try {
+            await speak(reprompt, epoch);
+          } catch {}
+        }
       }
     }
     traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
@@ -561,6 +594,15 @@ export function createCallEngine(opts: EngineOptions): void {
     return base;
   }
 
+  function httpStatusFromUnknown(e: unknown): number | undefined {
+    if (e && typeof e === "object") {
+      const o = e as { status?: number; response?: { status?: number } };
+      if (typeof o.status === "number") return o.status;
+      if (typeof o.response?.status === "number") return o.response.status;
+    }
+    return undefined;
+  }
+
   async function respondCerebras(epoch: number, userTranscript: string): Promise<void> {
     const prompt = await buildSystemPromptWithTenant(userTranscript);
     const messages = [
@@ -569,44 +611,70 @@ export function createCallEngine(opts: EngineOptions): void {
     ];
 
     const models = cerebrasModelCandidates();
+    const nSlots = cerebrasPool.keySlotCount();
+    const maxKeyPasses = Math.max(1, Math.min(5, nSlots || 1));
+
     let lastErr: unknown;
-    for (let i = 0; i < models.length; i++) {
-      const model = models[i]!;
-      try {
-        log(`[Cerebras] streaming model=${model} maxTok=${ENV.voiceLlmMaxTokens} temp=${ENV.voiceLlmTemperature}`);
-        // Get next key from shared pool (handles rotation + rate-limit cooldown)
-        const keySlot = cerebrasPool.getKey();
-        if (!keySlot) throw new Error("No Cerebras keys available");
-        const cerebrasClient = new OpenAI({ apiKey: keySlot.key, baseURL: "https://api.cerebras.ai/v1" });
-        const body: Record<string, unknown> = {
-          model,
-          messages,
-          stream: true,
-          max_tokens: ENV.voiceLlmMaxTokens,
-          temperature: ENV.voiceLlmTemperature,
-        };
-        const stream = await cerebrasClient.chat.completions.create(
-          body as unknown as OpenAI.Chat.ChatCompletionCreateParamsStreaming
-        );
-        log(`[Cerebras] Key #${keySlot.index + 1} model=${model}`);
-        await streamToCartesia(stream as any, epoch, "cerebras");
-        return;
-      } catch (e: unknown) {
-        lastErr = e;
-        const msg = e instanceof Error ? e.message : String(e);
-        const is404 =
-          (e as { status?: number })?.status === 404 || /\b404\b/.test(msg);
-        log(`[Cerebras] model ${model} failed: ${msg}`);
-        if (is404 && i < models.length - 1) continue;
-        throw e;
+
+    for (let pass = 0; pass < maxKeyPasses; pass++) {
+      const keySlot = cerebrasPool.getKey();
+      if (!keySlot) throw new Error("No Cerebras keys available");
+
+      for (let i = 0; i < models.length; i++) {
+        const model = models[i]!;
+        try {
+          log(
+            `[Cerebras] streaming model=${model} pass=${pass + 1}/${maxKeyPasses} maxTok=${ENV.voiceLlmMaxTokens} temp=${ENV.voiceLlmTemperature}`
+          );
+          const cerebrasClient = new OpenAI({
+            apiKey: keySlot.key,
+            baseURL: "https://api.cerebras.ai/v1",
+          });
+          const body: Record<string, unknown> = {
+            model,
+            messages,
+            stream: true,
+            max_tokens: ENV.voiceLlmMaxTokens,
+            temperature: ENV.voiceLlmTemperature,
+          };
+          const stream = await cerebrasClient.chat.completions.create(
+            body as unknown as OpenAI.Chat.ChatCompletionCreateParamsStreaming
+          );
+          log(`[Cerebras] Key #${keySlot.index + 1} model=${model}`);
+          const { clean, full } = await streamToCartesia(stream as any, epoch, "cerebras");
+          if (!clean.trim() && !full.trim()) throw new Error("Empty Cerebras response");
+          return;
+        } catch (e: unknown) {
+          lastErr = e;
+          const msg = e instanceof Error ? e.message : String(e);
+          const status = httpStatusFromUnknown(e);
+          log(
+            `[Cerebras] model ${model} pass ${pass + 1} failed: ${msg}${status != null ? ` status=${status}` : ""}`
+          );
+          if (status === 429) {
+            cerebrasPool.markRateLimited(keySlot.index, 60_000);
+            break;
+          }
+          if (status === 401 || status === 403) {
+            cerebrasPool.markRateLimited(keySlot.index, 600_000);
+            break;
+          }
+          const is404 = status === 404 || /\b404\b/.test(msg);
+          if (is404 && i < models.length - 1) continue;
+          if (i < models.length - 1) continue;
+          break;
+        }
       }
     }
-    throw lastErr;
+
+    throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
   }
 
   async function respondAnthropicFallback(epoch: number, userTranscript: string): Promise<void> {
+    const anthropicKey = (process.env.ANTHROPIC_API_KEY ?? "").trim();
+    if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY not set");
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+    const client = new Anthropic({ apiKey: anthropicKey });
     const prompt = await buildSystemPromptWithTenant(userTranscript);
     const messages = historyForLlm().map(m => ({
       role: m.role as "user" | "assistant",
@@ -621,7 +689,8 @@ export function createCallEngine(opts: EngineOptions): void {
       messages,
     });
 
-    await streamToCartesia(stream as any, epoch, "claude");
+    const { clean, full } = await streamToCartesia(stream as any, epoch, "claude");
+    if (!clean.trim() && !full.trim()) throw new Error("Empty Claude response");
   }
 
   // ── Stream LLM tokens → Cartesia clause by clause ────────────────────────
@@ -629,7 +698,7 @@ export function createCallEngine(opts: EngineOptions): void {
     stream: any,
     epoch: number,
     source: "cerebras" | "claude"
-  ): Promise<void> {
+  ): Promise<{ clean: string; full: string }> {
     // Fresh context for this entire response — all clauses share it via continue=true
     // stopSpeaking() cancels this one context ID to stop all audio instantly
     cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
@@ -702,6 +771,7 @@ export function createCallEngine(opts: EngineOptions): void {
 
     // Handle tool calls
     await handleToolCalls(fullText, epoch);
+    return { clean: cleanResponse, full: fullText };
   }
 
   async function speak(text: string, epoch: number): Promise<void> {

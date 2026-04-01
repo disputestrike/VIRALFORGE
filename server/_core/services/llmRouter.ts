@@ -159,6 +159,11 @@ class CerebrasKeyPool {
     return this.slots.length > 0;
   }
 
+  /** Number of configured API keys (for voice multi-pass retries). */
+  keySlotCount(): number {
+    return this.slots.length;
+  }
+
   /** Get next available key using round-robin, skipping cooling-down keys */
   getKey(): { key: string; index: number } | null {
     const slot = this.nextAvailableSlot();
