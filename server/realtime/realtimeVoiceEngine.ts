@@ -521,34 +521,44 @@ export function createCallEngine(opts: EngineOptions): void {
       } catch {}
     });
 
-    traceEvent(callId, "llm_route", { path: "cerebras" });
-    log("[ROUTE] Cerebras (A/B — set LLM_ALLOW_ANTHROPIC_FALLBACK for Claude)");
-
-    // Anthropic is ON by default — only disabled if explicitly set to false
-    const allowAnthropic =
-      process.env.LLM_ALLOW_ANTHROPIC_FALLBACK !== "false" &&
-      !!(process.env.ANTHROPIC_API_KEY ?? "").trim();
+    const hasAnthropic = !!(process.env.ANTHROPIC_API_KEY ?? "").trim();
+    const hasCerebras = cerebrasPool.hasKeys();
+    // Use Cerebras fast-path if available and 70b model works; Claude for full intelligence
+    const preferCerebras = process.env.LLM_PREFER_CEREBRAS === "true";
+    
+    traceEvent(callId, "llm_route", { path: preferCerebras ? "cerebras" : "claude" });
+    log(`[ROUTE] ${preferCerebras ? "Cerebras (fast)" : "Claude (intelligent)"}`);
 
     const sorry =
       "Sorry, I'm having a brief connection issue. Could you repeat that?";
 
     try {
-      await respondCerebras(epoch, transcript);
-    } catch (e: any) {
-      log(`[ERROR] Cerebras failed: ${e.message} — trying Claude`);
-      if (allowAnthropic) {
-        try {
-          await respondAnthropicFallback(epoch, transcript);
-          return;
-        } catch (e2: any) {
-          log(`[ERROR] Claude fallback failed: ${e2.message}`);
-        }
-      }
-      try {
+      if (preferCerebras && hasCerebras) {
         await respondCerebras(epoch, transcript);
+      } else if (hasAnthropic) {
+        await respondAnthropicFallback(epoch, transcript);
+      } else if (hasCerebras) {
+        await respondCerebras(epoch, transcript);
+      } else {
+        throw new Error("No LLM available");
+      }
+    } catch (e: any) {
+      log(`[ERROR] Primary LLM failed: ${e.message} — trying fallback`);
+      try {
+        if (preferCerebras && hasAnthropic) {
+          await respondAnthropicFallback(epoch, transcript);
+        } else if (hasCerebras) {
+          await respondCerebras(epoch, transcript);
+        } else {
+          throw new Error("All LLMs failed");
+        }
       } catch (e2: any) {
-        log(`[ERROR] Cerebras retry failed: ${e2.message}`);
-        if (allowAnthropic) {
+        log(`[ERROR] Fallback LLM failed: ${e2.message}`);
+        try {
+          await respondCerebras(epoch, transcript);
+        } catch (e2: any) {
+          log(`[ERROR] Cerebras retry failed: ${e2.message}`);
+          if (hasAnthropic) {
           try {
             await respondAnthropicFallback(epoch, transcript);
           } catch (e3: any) {
@@ -668,11 +678,14 @@ CALLER SENTIMENT: ${currentSentiment.toUpperCase()} — adjust your tone accordi
 
     const sendClause = (text: string) => {
       if (!text.trim() || epoch !== generationEpoch || isEnded) return;
-      // Strip tool calls from speech
+      // Strip tool calls, URLs, markdown from speech
       const clean = text
-        .replace(/TOOL:\s*\w+\s*\{[^}]*\}/g, "")
+        .replace(/TOOL:\s*\w+\s*\{[^}]*\}/g, "")  // remove tool calls
+        .replace(/https?:\/\/[^\s]+/gi, "")           // remove URLs
+        .replace(/www\.[^\s]+/gi, "")                  // remove www links
         .replace(/\*+/g, "")
         .replace(/[_#`]/g, " ")
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")   // [text](url) → text only
         .replace(/\s+/g, " ")
         .trim();
       if (!clean) return;
