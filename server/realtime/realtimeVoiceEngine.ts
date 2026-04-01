@@ -128,6 +128,20 @@ function resolveVoiceProfileForEngine(id?: string | null): VoiceProfile {
 }
 
 /** Mu-law frame energy (same idea as VoiceRealtimePipeline) — fast path for barge-in before STT text. */
+function pcm16ToMulaw(pcm: Buffer): Buffer {
+  const out = Buffer.allocUnsafe(Math.floor(pcm.length / 2));
+  for (let i = 0; i < pcm.length - 1; i += 2) {
+    let s = pcm.readInt16LE(i);
+    const sign = s < 0 ? 0x80 : 0;
+    s = Math.min(32767, Math.abs(s) + 33);
+    let exp = 7;
+    for (let mask = 0x4000; (s & mask) === 0 && exp > 0; mask >>= 1) exp--;
+    const mant = (s >> (exp + 3)) & 0x0f;
+    out[Math.floor(i / 2)] = ~(sign | (exp << 4) | mant) & 0xff;
+  }
+  return out;
+}
+
 function estimateMulawEnergy(mulawBuf: Buffer): number {
   let sum = 0;
   for (let i = 0; i < mulawBuf.length; i++) {
@@ -257,13 +271,15 @@ export function createCallEngine(opts: EngineOptions): void {
       try {
         const msg = JSON.parse(text);
         if (msg.type === "chunk" && msg.data) {
-          // Request pcm_mulaw + 8kHz in cartesiaSend — same as voiceRealtimePipeline; forward base64 mulaw to SignalWire.
+          // Cartesia returns pcm_s16le — convert to mulaw for SignalWire
           if (streamSid && sigWs.readyState === WebSocket.OPEN) {
             if (greetingDone) logSttFinalToTtsLatencyIfPending(callId);
+            const pcm16 = Buffer.from(msg.data, "base64");
+            const mulaw = pcm16ToMulaw(pcm16);
             sigWs.send(JSON.stringify({
               event: "media",
               streamSid,
-              media: { payload: msg.data },
+              media: { payload: mulaw.toString("base64") },
             }));
             isSpeaking = true;
             turnCtl = onAssistantSpeakStart(turnCtl);
@@ -310,12 +326,12 @@ export function createCallEngine(opts: EngineOptions): void {
       voice: {
         mode: "id",
         id: voiceId,
+        __experimental_controls: { speed: ttsSpeed },
       },
       transcript: text,
-      speed: ttsSpeed,
       output_format: {
         container: "raw",
-        encoding: "pcm_mulaw",
+        encoding: "pcm_s16le",
         sample_rate: 8000,
       },
       continue: continueCtx,
