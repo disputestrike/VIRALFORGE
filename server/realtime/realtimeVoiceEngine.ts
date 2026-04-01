@@ -274,12 +274,19 @@ export function createCallEngine(opts: EngineOptions): void {
           }
         } else if (msg.type === "error") {
           log(`Cartesia error: ${JSON.stringify(msg)}`);
+          const errStr = typeof msg.error === "string" ? msg.error : JSON.stringify(msg.error ?? "");
+          if (
+            /context has closed|no longer accepting|invalid context id/i.test(errStr) ||
+            (msg.status_code === 400 && /closed|context/i.test(errStr))
+          ) {
+            cartesiaContextId = "";
+          }
         } else if (msg.type === "done") {
           isSpeaking = false;
-          // Do NOT clear cartesiaContextId here. Cartesia emits `done` per audio segment; clearing
-          // mid-utterance made the next clause use a new context_id with continue=true →
-          // "Invalid context ID ... cancelled" and silent/broken TTS. speak() / streamToCartesia()
-          // always assign a fresh context_id before their first send for the next utterance.
+          // Cartesia closes the WS context when a segment finishes; further sends with the same
+          // context_id + continue:true get "Context has closed". Clearing here is safe because
+          // cartesiaSend() mints a new id and coerces continue=false when starting a new context.
+          cartesiaContextId = "";
           if (streamSid && sigWs.readyState === WebSocket.OPEN) {
             sigWs.send(JSON.stringify({ event: "mark", streamSid, mark: { name: "done" } }));
           }
@@ -332,9 +339,9 @@ export function createCallEngine(opts: EngineOptions): void {
     }));
   }
 
-  function cartesiaFlush() {
-    if (!cartesiaWs || cartesiaWs.readyState !== WebSocket.OPEN || !cartesiaContextId) return;
-    cartesiaWs.send(JSON.stringify({ context_id: cartesiaContextId, flush: true }));
+  function cartesiaFlushExplicit(contextId: string | undefined) {
+    if (!cartesiaWs || cartesiaWs.readyState !== WebSocket.OPEN || !contextId) return;
+    cartesiaWs.send(JSON.stringify({ context_id: contextId, flush: true }));
   }
 
   function stopSpeaking() {
@@ -649,6 +656,7 @@ export function createCallEngine(opts: EngineOptions): void {
             body as unknown as OpenAI.Chat.ChatCompletionCreateParamsStreaming
           );
           log(`[Cerebras] Key #${keySlot.index + 1} model=${model}`);
+          traceEvent(callId, "llm_stream_start", { provider: "cerebras", model });
           const { clean, full } = await streamToCartesia(stream as any, epoch, "cerebras");
           if (!clean.trim() && !full.trim()) throw new Error("Empty Cerebras response");
           return;
@@ -689,14 +697,16 @@ export function createCallEngine(opts: EngineOptions): void {
       content: m.content,
     }));
 
+    const claudeModel = process.env.CLAUDE_MODEL || "claude-3-5-haiku-20241022";
     const stream = await client.messages.stream({
-      model: process.env.CLAUDE_MODEL || "claude-3-5-haiku-20241022",
+      model: claudeModel,
       max_tokens: ENV.voiceLlmMaxTokens,
       temperature: ENV.voiceLlmTemperature,
       system: prompt,
       messages,
     });
 
+    traceEvent(callId, "llm_stream_start", { provider: "anthropic", model: claudeModel });
     const { clean, full } = await streamToCartesia(stream as any, epoch, "claude");
     if (!clean.trim() && !full.trim()) throw new Error("Empty Claude response");
   }
@@ -762,12 +772,13 @@ export function createCallEngine(opts: EngineOptions): void {
       throw e;
     }
 
-    // Flush anything left (stream ended mid-phrase)
+    // Flush anything left (stream ended mid-phrase). Capture id so async `done` cannot clear before flush.
     if (epoch === generationEpoch && !isEnded) {
       spokenUpTo = drainSpeakableToTts(assembled, spokenUpTo, sendClause);
       const remaining = fullText.slice(spokenUpTo);
       if (remaining.trim()) sendClause(remaining);
-      cartesiaFlush();
+      const flushId = cartesiaContextId;
+      cartesiaFlushExplicit(flushId);
     }
 
     // Store assistant response
@@ -788,8 +799,9 @@ export function createCallEngine(opts: EngineOptions): void {
     // Always start a new Cartesia context — reusing ctx after greeting without a timely
     // `done` causes 400 "unable to infer voice mode" and loops the sorry line.
     cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    const flushId = cartesiaContextId;
     cartesiaSend(text, false);
-    cartesiaFlush();
+    cartesiaFlushExplicit(flushId);
     appendHistory("assistant", text);
   }
 

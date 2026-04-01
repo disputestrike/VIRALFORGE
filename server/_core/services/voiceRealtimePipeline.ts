@@ -249,10 +249,19 @@ export class VoiceRealtimePipeline {
             if (this.replyStartTimer) { clearTimeout(this.replyStartTimer); this.replyStartTimer = null; }
           }
 
-          // Stream done (per segment). Do not null cartesiaContextId — same bug as realtimeVoiceEngine:
-          // mid-utterance clear + continue=true on next clause → Cartesia 400 invalid context.
+          if (msg.type === "error") {
+            const errStr = typeof msg.error === "string" ? msg.error : JSON.stringify(msg.error ?? "");
+            if (
+              /context has closed|no longer accepting|invalid context id/i.test(errStr) ||
+              (msg.status_code === 400 && /closed|context/i.test(errStr))
+            ) {
+              this.cartesiaContextId = null;
+            }
+          }
+
           if (msg.type === "done") {
             this.isSpeaking = false;
+            this.cartesiaContextId = null;
             this.sendMark("assistant_done");
             this.setSpeakingTimeout(0); // clear
           }
@@ -302,9 +311,13 @@ export class VoiceRealtimePipeline {
     }));
   }
 
+  private cartesiaFlushExplicit(contextId: string | null | undefined): void {
+    if (!this.cartesiaWs || this.cartesiaWs.readyState !== 1 || !contextId) return;
+    this.cartesiaWs.send(JSON.stringify({ context_id: contextId, flush: true }));
+  }
+
   private cartesiaFlush(): void {
-    if (!this.cartesiaWs || this.cartesiaWs.readyState !== 1 || !this.cartesiaContextId) return;
-    this.cartesiaWs.send(JSON.stringify({ context_id: this.cartesiaContextId, flush: true }));
+    this.cartesiaFlushExplicit(this.cartesiaContextId);
   }
 
   private cartesiaCancel(): void {
@@ -329,7 +342,8 @@ export class VoiceRealtimePipeline {
       this.cartesiaNeedsNewContext = true;
       // Stream greeting through Cartesia WS
       await this.cartesiaSendText(greeting);
-      this.cartesiaFlush();
+      const flushId = this.cartesiaContextId;
+      this.cartesiaFlushExplicit(flushId);
       this.setSpeakingTimeout(3000);
     } else {
       // Fallback: batch TTS
@@ -688,7 +702,8 @@ export class VoiceRealtimePipeline {
     // Send any remaining text
     const remaining = sanitizeForSpeech(assembled.slice(spokenUpTo));
     if (remaining.trim()) await this.cartesiaSendText(remaining);
-    this.cartesiaFlush();
+    const flushCerebrasId = this.cartesiaContextId;
+    this.cartesiaFlushExplicit(flushCerebrasId);
 
     const rawText = assembled.trim();
     const fullText = sanitizeForSpeech(rawText);
@@ -749,7 +764,8 @@ export class VoiceRealtimePipeline {
 
     const remaining = sanitizeForSpeech(assembled.slice(spokenUpTo));
     if (remaining.trim()) await this.cartesiaSendText(remaining);
-    this.cartesiaFlush();
+    const flushClaudeId = this.cartesiaContextId;
+    this.cartesiaFlushExplicit(flushClaudeId);
 
     const rawText = assembled.trim();
     const fullText = sanitizeForSpeech(rawText);

@@ -13,6 +13,7 @@ export type VoiceTracePhase =
   | "stt_final"
   | "response_pause"
   | "llm_route"
+  | "llm_stream_start"
   | "tts_first_chunk"
   | "hangup_signal"
   | "cleanup"
