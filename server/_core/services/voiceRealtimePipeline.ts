@@ -588,7 +588,7 @@ export class VoiceRealtimePipeline {
 
     // Build messages with full context (last 8 turns)
     const recentHistory = history.slice(-8);
-    const systemPrompt = this.buildSystemPrompt(session);
+    const systemPrompt = await this.buildSystemPromptAsync(session, transcript);
     const messages = [
       { role: "system" as const, content: systemPrompt },
       ...recentHistory.map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
@@ -970,6 +970,22 @@ export class VoiceRealtimePipeline {
   }
 
   // ── SYSTEM PROMPT ─────────────────────────────────────────────────────────
+
+  private async buildSystemPromptAsync(session: any, userMessage: string): Promise<string> {
+    const base = this.buildSystemPrompt(session);
+    try {
+      const { buildVoiceTenantContextBlock } = await import("./tenantContextForVoice");
+      const ctx = await buildVoiceTenantContextBlock({
+        userId: session?.userId,
+        leadId: session?.leadId,
+        userMessage,
+      });
+      if (ctx) return `${base}\n\n${ctx}`;
+    } catch (e) {
+      this.logger.warn("[PIPE] tenant KB/memory context failed", e);
+    }
+    return base;
+  }
 
   private buildSystemPrompt(session: any): string {
     // ── CONVERSATION MODE SYSTEM ──────────────────────────────────────────────

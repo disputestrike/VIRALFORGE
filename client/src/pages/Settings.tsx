@@ -101,12 +101,53 @@ export default function Settings() {
     onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
   });
   const kbAddSite = trpc.knowledgeBase.addWebsiteSource.useMutation({
-    onSuccess: () => { utils.knowledgeBase.list.invalidate(); toast.success("Website queued for training"); },
+    onSuccess: (_d, vars) => {
+      utils.knowledgeBase.list.invalidate();
+      utils.knowledgeBase.listSources.invalidate({ knowledgeBaseId: vars.knowledgeBaseId });
+      utils.knowledgeBase.stats.invalidate({ knowledgeBaseId: vars.knowledgeBaseId });
+      toast.success("Crawling and embedding started — status updates below.");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+  const kbReprocess = trpc.knowledgeBase.reprocessSource.useMutation({
+    onSuccess: () => {
+      utils.knowledgeBase.list.invalidate();
+      void utils.knowledgeBase.listSources.invalidate();
+      void utils.knowledgeBase.stats.invalidate();
+      toast.success("Source re-queued");
+    },
     onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
   });
   const [kbName, setKbName] = useState("");
   const [kbWebsite, setKbWebsite] = useState("https://");
   const [selectedKbId, setSelectedKbId] = useState<number | null>(null);
+  const [kbSearchQ, setKbSearchQ] = useState("");
+  const [kbSearchActive, setKbSearchActive] = useState("");
+
+  const { data: kbSources, isLoading: kbSourcesLoading } = trpc.knowledgeBase.listSources.useQuery(
+    { knowledgeBaseId: selectedKbId! },
+    {
+      enabled: !!selectedKbId,
+      refetchInterval: (q) => {
+        const rows = q.state.data as Array<{ status: string }> | undefined;
+        return rows?.some((s) => s.status === "pending" || s.status === "processing") ? 4000 : false;
+      },
+    }
+  );
+  const { data: kbStats } = trpc.knowledgeBase.stats.useQuery(
+    { knowledgeBaseId: selectedKbId! },
+    {
+      enabled: !!selectedKbId,
+      refetchInterval: (q) => {
+        const d = q.state.data as { pending?: number } | undefined;
+        return (d?.pending ?? 0) > 0 ? 4000 : false;
+      },
+    }
+  );
+  const { data: kbSearchHit } = trpc.knowledgeBase.search.useQuery(
+    { query: kbSearchActive, knowledgeBaseId: selectedKbId ?? undefined },
+    { enabled: kbSearchActive.length >= 2 }
+  );
 
   const { data: zapierRow } = trpc.zapier.get.useQuery();
   const [zapierUrl, setZapierUrl] = useState("");
@@ -516,7 +557,8 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Add your public website URL so we can crawl and train the AI on your content. Document upload and embeddings are processed in the background once the worker pipeline is connected.
+            Add your public website URL: the server fetches the page, extracts text, chunks it, and stores OpenAI embeddings (set{" "}
+            <span className="font-mono text-xs">OPENAI_API_KEY</span> on Railway for semantic search). Retrieved chunks are injected into live voice calls for this account.
           </p>
           <div className="flex flex-wrap gap-2 items-end">
             <div className="flex-1 min-w-[160px] space-y-1.5">
@@ -589,6 +631,91 @@ export default function Settings() {
                   {kbAddSite.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Add website"}
                 </Button>
               </div>
+              {selectedKbId != null && kbStats != null && (
+                <p className="text-xs text-muted-foreground">
+                  Status: <span className="font-mono">{kbStats.kbStatus}</span> · Chunks stored:{" "}
+                  <span className="font-mono">{kbStats.chunks}</span> · Sources:{" "}
+                  <span className="font-mono">{kbStats.sources}</span>
+                  {kbStats.pending > 0 ? " · Processing…" : null}
+                </p>
+              )}
+              {selectedKbId != null && (
+                <div className="space-y-2 rounded-lg border border-border p-3 bg-secondary/40">
+                  <Label className="text-xs">Test semantic search (same index as voice)</Label>
+                  <div className="flex flex-wrap gap-2">
+                    <Input
+                      className="flex-1 min-w-[160px] bg-secondary border-border text-sm"
+                      placeholder="Ask about your site…"
+                      value={kbSearchQ}
+                      onChange={(e) => setKbSearchQ(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={kbSearchQ.trim().length < 2}
+                      onClick={() => setKbSearchActive(kbSearchQ.trim())}
+                    >
+                      Search
+                    </Button>
+                  </div>
+                  {kbSearchActive.length >= 2 && kbSearchHit && kbSearchHit.length > 0 && (
+                    <ul className="text-[11px] text-muted-foreground space-y-1 max-h-40 overflow-y-auto">
+                      {kbSearchHit.map((h: { content: string; score: number }, i: number) => (
+                        <li key={i} className="border-b border-border/50 pb-1">
+                          <span className="text-primary/80">{(h.score * 100).toFixed(1)}%</span> — {h.content.slice(0, 220)}
+                          {h.content.length > 220 ? "…" : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {kbSearchActive.length >= 2 && kbSearchHit && kbSearchHit.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground">No chunks yet — finish training or widen your query.</p>
+                  )}
+                </div>
+              )}
+              {selectedKbId != null && (
+                <div className="space-y-1">
+                  <Label className="text-xs">Sources</Label>
+                  {kbSourcesLoading ? (
+                    <p className="text-xs text-muted-foreground">Loading sources…</p>
+                  ) : !kbSources?.length ? (
+                    <p className="text-xs text-muted-foreground">No sources yet.</p>
+                  ) : (
+                    <ul className="text-xs space-y-1">
+                      {kbSources.map(
+                        (s: {
+                          id: number;
+                          sourceUrl: string | null;
+                          status: string;
+                          errorMessage: string | null;
+                        }) => (
+                          <li key={s.id} className="flex flex-wrap items-center gap-2 justify-between border-b border-border/40 pb-1">
+                            <span className="font-mono truncate max-w-[min(100%,280px)]">{s.sourceUrl ?? "—"}</span>
+                            <span className="text-muted-foreground">{s.status}</span>
+                            {s.status === "failed" && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-[11px]"
+                                onClick={() => kbReprocess.mutate({ sourceId: s.id })}
+                              >
+                                Retry
+                              </Button>
+                            )}
+                          </li>
+                        )
+                      )}
+                    </ul>
+                  )}
+                  {kbSources?.some((s: { status: string }) => s.status === "failed") && (
+                    <p className="text-[11px] text-red-400">
+                      {kbSources.find((s: { status: string }) => s.status === "failed")?.errorMessage ?? "Ingest failed"}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -604,7 +731,8 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Paste your Zapier catch hook URL. Event delivery from ApexAI jobs is still being wired — this stores the target and lets you verify it responds.
+            Paste your Zapier catch hook URL. ApexAI POSTs <span className="font-mono">call.completed</span> and{" "}
+            <span className="font-mono">lead.created</span> to this URL when you save it; use “Send test” to verify.
           </p>
           <div className="space-y-1.5">
             <Label className="text-xs">Webhook URL</Label>

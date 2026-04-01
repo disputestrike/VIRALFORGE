@@ -80,7 +80,7 @@ Use this table to prove **DB + API + UI** for each shipped row. Paths are relati
 | # | Evidence: DB / SQL | Evidence: API | Evidence: UI | Evidence: tests / runtime |
 |---|-------------------|---------------|-------------|---------------------------|
 | 1 | `drizzle/schema.ts` → `userPhoneNumbers`; `0018_user_phone_numbers_align.sql` | `server/routers.ts` → `settings.listPhoneNumbers`, `setPhoneNumberActive`, `onboarding.provisionNumber` | `client/src/pages/Settings.tsx` (Dedicated phone numbers) | Inbound tenant resolution: `server/db.ts` `getUserIdByPhoneNumber`, `server/_core/index.ts` SMS/voice |
-| 2 | `knowledge_bases` + sources (`0011`, Drizzle) | `server/routers/knowledgeBaseRouter.ts` → `appRouter.knowledgeBase` | `Settings.tsx` (Knowledge base) | — |
+| 2 | `knowledge_bases` + sources + `knowledge_base_chunks` (`0011`) | `knowledgeBaseRouter.ts` + `knowledgeBaseIngestion.ts` (crawl/chunk/embed) + `tenantContextForVoice.ts` (voice RAG) | `Settings.tsx` KB card + search test | `knowledgeBaseIngestion.test.ts` |
 | 3 | `drizzle/schema.ts` → `leads` + `createdBy` | `server/routers.ts` → `leads.*` | `client/src/pages/Leads.tsx` | `server/comprehensive.test.ts` |
 | 4 | `call_recordings.aiSummary` | `server/_core/services/callSummaryService.ts`, persist in `voiceSessionManager` | Voice AI / recordings UI | — |
 | 5 | `lead_scoring_rules` (`0012`) | `server/routers/leadScoringRouter.ts` | `Settings.tsx` (Lead scoring) | `leadScoringApply` on `leads.create` |
@@ -88,9 +88,9 @@ Use this table to prove **DB + API + UI** for each shipped row. Paths are relati
 | 7 | `blocked_phone_numbers` (`0013`) | `server/routers/phoneBlocklistRouter.ts` | `Settings.tsx` (Blocklist) | Inbound filter `server/_core/index.ts` |
 | 8 | `escalation_rules` (`0013`) | `server/routers/escalationRouter.ts` | `Settings.tsx` (Escalation) | `server/_core/services/voiceRealtimePipeline.ts` transfer |
 | 9 | `zapier_webhooks` (`0012`) | `server/routers/zapierRouter.ts`, `server/_core/services/zapierEmit.ts` | `Settings.tsx` (Zapier) | Emitted on lead + call persist |
-| 10 | `crm_connections` (`0014`) | `server/routers/crmRouter.ts` | `Settings.tsx` (CRM connections) | OAuth stubs |
-| 11 | `workflows` (`0015`) | `server/routers/workflowRouter.ts` | `Settings.tsx` (Workflows) | JSON draft |
-| 12 | `customer_memories` (`0015`) | `server/routers/memoryRouter.ts` | `Settings.tsx` (Memory) | — |
+| 10 | `crm_connections` (`0014`) | `server/routers/crmRouter.ts` | `Settings.tsx` (CRM connections) | Connection rows; OAuth per vendor |
+| 11 | `workflows` (`0015`) | `workflowRouter.ts` + `workflowEngine.ts` (`lead.created`) | `Settings.tsx` (Workflows) | `http_post` steps |
+| 12 | `customer_memories` (`0015`) | `memoryRouter.ts` + `tenantContextForVoice.ts` | `Settings.tsx` (Memory) | Voice context |
 | 13 | `call_recordings.sentiment` | `analytics.sentimentSummary`, `server/_core/services/sentimentInfer.ts` | `client/src/pages/Analytics.tsx` | `server/sentimentInfer.test.ts` |
 | 14 | `support_tickets` (`0015`) | `server/routers/ticketsRouter.ts` | `Settings.tsx` (Tickets) | — |
 | 15 | `mobile_devices` (`0016`) | `server/routers/mobileRouter.ts` | `Settings.tsx` (Mobile devices) | — |

@@ -1,4 +1,4 @@
-/** No-code workflow definitions — execution engine TBD. */
+/** No-code workflow definitions — `lead.created` runs `definition.steps` with `http_post` actions. */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";

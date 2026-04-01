@@ -374,7 +374,7 @@ export const knowledgeBaseChunks = mysqlTable("knowledge_base_chunks", {
   knowledgeBaseId: int("knowledgeBaseId").notNull(),
   sourceId: int("sourceId"),
   content: text("content").notNull(),
-  /** Embedding blob or serialized vector — optional until ingestion worker runs */
+  /** JSON array of floats — OpenAI `text-embedding-3-small` written by `knowledgeBaseIngestion.ts` */
   embedding: text("embedding"),
   metadata: text("metadata"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -383,7 +383,7 @@ export const knowledgeBaseChunks = mysqlTable("knowledge_base_chunks", {
 export type KnowledgeBaseChunk = typeof knowledgeBaseChunks.$inferSelect;
 export type InsertKnowledgeBaseChunk = typeof knowledgeBaseChunks.$inferInsert;
 
-// ─── Zapier outbound webhooks (stub — worker emits events later) ─────────────
+// ─── Zapier outbound webhooks (`zapierEmit` on lead + call persist) ───────────
 export const zapierWebhooks = mysqlTable("zapier_webhooks", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),

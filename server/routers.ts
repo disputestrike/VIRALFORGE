@@ -113,6 +113,16 @@ const leadsRouter = router({
         company: input.company,
         phone: input.phone,
       }).catch((e) => console.warn("[EmailSequence] lead.created:", e));
+      const { runWorkflowsOnLeadCreated } = await import("./_core/services/workflowEngine");
+      void runWorkflowsOnLeadCreated(ctx.user.id, {
+        id: leadId,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        email: input.email,
+        phone: input.phone,
+        company: input.company,
+        source: input.source,
+      }).catch((e) => console.warn("[Workflow] lead.created:", e));
       return { success: true };
     }),
 

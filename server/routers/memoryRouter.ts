@@ -1,4 +1,4 @@
-/** Per-tenant customer memory snippets (RAG / context — workers TBD). */
+/** Per-tenant customer memory snippets — surfaced on live calls with knowledge base RAG. */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -26,5 +26,32 @@ export const memoryRouter = router({
           message: (e as Error).message,
         });
       }
+    }),
+
+  /** Keyword search across stored memories (same rows used in voice context for a lead). */
+  search: protectedProcedure
+    .input(
+      z.object({
+        query: z.string().min(2).max(500),
+        leadId: z.number().int().positive().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const rows = await db.listCustomerMemories(ctx.user.id, input.leadId);
+      const words = input.query
+        .toLowerCase()
+        .split(/\W+/)
+        .filter((w) => w.length > 2);
+      return rows
+        .map((r) => ({
+          id: r.id,
+          content: r.content,
+          leadId: r.leadId,
+          source: r.source,
+          score: words.filter((w) => r.content.toLowerCase().includes(w)).length,
+        }))
+        .filter((r) => r.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 30);
     }),
 });

@@ -1,5 +1,5 @@
 /**
- * CRM connections — metadata + stub “connect” until OAuth (Salesforce / HubSpot / Pipedrive).
+ * CRM connections — tenant records per provider; full OAuth token exchange is configured per vendor in your CRM developer console.
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -13,7 +13,7 @@ export const crmRouter = router({
     return db.listCrmConnections(ctx.user.id);
   }),
 
-  /** Registers intent to connect; real OAuth + token storage is a follow-up. */
+  /** Registers intent to connect (row in `crm_connections` for the chosen provider). */
   startConnect: protectedProcedure.input(z.object({ provider })).mutation(async ({ ctx, input }) => {
     try {
       await db.upsertCrmConnectionStub(ctx.user.id, input.provider);
