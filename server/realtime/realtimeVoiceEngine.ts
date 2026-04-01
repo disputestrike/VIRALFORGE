@@ -50,7 +50,7 @@ import {
   lookupDiscountsSpoken,
   lookupServiceAreaSpoken,
 } from "./toolLayer";
-import { cerebrasModelCandidates } from "../_core/services/llmRouter";
+import { cerebrasModelCandidates, cerebrasPool } from "../_core/services/llmRouter";
 import { buildVoiceSystemPrompt } from "./dynamicPrompt";
 
 /**
@@ -99,31 +99,7 @@ function drainSpeakableToTts(
 }
 
 // ── Clients ───────────────────────────────────────────────────────────────────
-// Cerebras key pool — round robin across up to 10 keys (+ legacy CEREBRAS_API_KEY)
-class CerebrasPool {
-  private keys: string[] = [];
-  private idx = 0;
-
-  constructor() {
-    for (let i = 1; i <= 10; i++) {
-      const key = process.env[`CEREBRAS_API_KEY_${i}`];
-      if (key?.trim()) this.keys.push(key.trim());
-    }
-    if (this.keys.length === 0 && process.env.CEREBRAS_API_KEY?.trim()) {
-      this.keys.push(process.env.CEREBRAS_API_KEY.trim());
-    }
-    console.log(`[Cerebras] Pool: ${this.keys.length} key(s)`);
-  }
-
-  getClient(): OpenAI {
-    if (this.keys.length === 0) throw new Error("No Cerebras keys");
-    const key = this.keys[this.idx % this.keys.length];
-    this.idx++;
-    return new OpenAI({ apiKey: key, baseURL: "https://api.cerebras.ai/v1" });
-  }
-}
-
-const cerebrasPool = new CerebrasPool();
+// Use the shared cerebrasPool from llmRouter (has cooldown + rate-limit handling)
 
 /** Map dashboard / DB voice IDs (_core) to Cartesia ids the streaming engine uses; keep realtime-only IDs working. */
 function mapCoreCartesiaToRt(core: CoreVoiceProfile): VoiceProfile {
@@ -215,6 +191,7 @@ export function createCallEngine(opts: EngineOptions): void {
   let keepaliveTimer: NodeJS.Timeout | null = null;
   let voiceProfile: VoiceProfile = resolveVoiceProfileForEngine(voiceProfileId);
   const conversationHistory: { role: "user" | "assistant"; content: string }[] = [];
+  let currentSentiment = "neutral"; // updated per turn from sentimentInfer
   /** Prevents overlapping handleUserTurn from concurrent Deepgram speech_final events (epoch churn + broken LLM turns). */
   let userTurnBusy = false;
   let pendingUserTranscript: string | null = null;
@@ -535,6 +512,15 @@ export function createCallEngine(opts: EngineOptions): void {
 
     appendHistory("user", transcript);
 
+    // Run sentiment in background — update for next turn
+    setImmediate(async () => {
+      try {
+        const { inferSentimentFromTranscript } = await import("../_core/services/sentimentInfer");
+        const result = inferSentimentFromTranscript(transcript);
+        if (result) { currentSentiment = result; }
+      } catch {}
+    });
+
     traceEvent(callId, "llm_route", { path: "cerebras" });
     log("[ROUTE] Cerebras (A/B — set LLM_ALLOW_ANTHROPIC_FALLBACK for Claude)");
 
@@ -582,7 +568,12 @@ export function createCallEngine(opts: EngineOptions): void {
   }
 
   async function buildSystemPromptWithTenant(userTranscript: string): Promise<string> {
-    const base = buildVoiceSystemPrompt(callState, businessName, industry, clientConfig);
+    const sentimentNote = currentSentiment !== "neutral"
+      ? `
+
+CALLER SENTIMENT: ${currentSentiment.toUpperCase()} — adjust your tone accordingly. If frustrated: be direct and factual. If confused: simplify. If positive: keep momentum.`
+      : "";
+    const base = buildVoiceSystemPrompt(callState, businessName, industry, clientConfig) + sentimentNote;
     if (!activeUserId) return base;
     try {
       const { buildVoiceTenantContextBlock } = await import("../_core/services/tenantContextForVoice");
@@ -599,7 +590,6 @@ export function createCallEngine(opts: EngineOptions): void {
   }
 
   async function respondCerebras(epoch: number, userTranscript: string): Promise<void> {
-    const client = cerebrasPool.getClient();
     const prompt = await buildSystemPromptWithTenant(userTranscript);
     const messages = [
       { role: "system" as const, content: prompt },
@@ -612,6 +602,10 @@ export function createCallEngine(opts: EngineOptions): void {
       const model = models[i]!;
       try {
         log(`[Cerebras] streaming model=${model} maxTok=${ENV.voiceLlmMaxTokens} temp=${ENV.voiceLlmTemperature}`);
+        // Get next key from shared pool (handles rotation + rate-limit cooldown)
+        const keySlot = cerebrasPool.getKey();
+        if (!keySlot) throw new Error("No Cerebras keys available");
+        const cerebrasClient = new OpenAI({ apiKey: keySlot.key, baseURL: "https://api.cerebras.ai/v1" });
         const body: Record<string, unknown> = {
           model,
           messages,
@@ -619,12 +613,10 @@ export function createCallEngine(opts: EngineOptions): void {
           max_tokens: ENV.voiceLlmMaxTokens,
           temperature: ENV.voiceLlmTemperature,
         };
-        if (/gpt-oss/i.test(model)) {
-          body.reasoning_effort = ENV.voiceGptOssReasoningEffort;
-        }
-        const stream = await client.chat.completions.create(
+        const stream = await cerebrasClient.chat.completions.create(
           body as unknown as OpenAI.Chat.ChatCompletionCreateParamsStreaming
         );
+        log(`[Cerebras] Key #${keySlot.index + 1} model=${model}`);
         await streamToCartesia(stream as any, epoch, "cerebras");
         return;
       } catch (e: unknown) {
@@ -795,6 +787,21 @@ export function createCallEngine(opts: EngineOptions): void {
     if (isEnded) return;
     isEnded = true;
     log("Call cleanup");
+
+    // Auto-generate call summary in background
+    if (conversationHistory.length > 1 && activeUserId) {
+      const history = [...conversationHistory];
+      const uid = activeUserId;
+      const lid = activeLeadId;
+      setImmediate(async () => {
+        try {
+          const { generateCallSummaryFromTranscript } = await import("../_core/services/callSummaryService");
+          const transcript2 = history.map(m => (m.role === "user" ? "Caller" : "AI") + ": " + m.content).join("\n");
+          await generateCallSummaryFromTranscript(transcript2, undefined);
+          log("[SUMMARY] Call summary generated");
+        } catch (e) { log(`[SUMMARY] Failed: ${e instanceof Error ? e.message : String(e)}`); }
+      });
+    }
 
     if (keepaliveTimer) { clearInterval(keepaliveTimer); keepaliveTimer = null; }
     try { dgWs?.close(); } catch {}

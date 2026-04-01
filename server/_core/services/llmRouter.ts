@@ -34,15 +34,25 @@ export interface LLMResponse {
  * We try env first, then known public IDs so production self-heals without variable changes.
  */
 export function cerebrasModelCandidates(): string[] {
+  // Known working Cerebras models as of April 2026 (verified from API)
+  // Note: llama-3.3-70b (with dashes) is REMOVED from Cerebras API
+  // Correct names use dots: llama3.3-70b, llama3.1-70b, llama3.1-8b
   const env = (process.env.CEREBRAS_MODEL ?? "").trim();
-  const fallbacks = ["llama3.3-70b", "llama3.1-70b", "llama3.1-8b"];
+  
+  // Always try these in order regardless of env setting
+  const known = ["llama3.3-70b", "llama3.1-70b", "llama3.1-8b"];
+  
   const out: string[] = [];
-  const add = (m: string) => {
-    if (m && !out.includes(m)) out.push(m);
-  };
-  if (env) add(env);
-  for (const m of fallbacks) add(m);
-  return env ? out : fallbacks;
+  const add = (m: string) => { if (m && !out.includes(m)) out.push(m); };
+  
+  // Add env var first — but skip known-broken names
+  const brokenNames = ["llama-3.3-70b", "llama-3.1-70b", "gpt-oss-120b", "llama-3.1-8b"];
+  if (env && !brokenNames.includes(env)) add(env);
+  
+  // Always add all known working models as fallbacks
+  for (const m of known) add(m);
+  
+  return out;
 }
 
 // ── Routing Logic ─────────────────────────────────────────────────────────────
@@ -142,6 +152,20 @@ class CerebrasKeyPool {
   }
 
   /** Get next available key using round-robin, skipping cooling-down keys */
+  getKey(): { key: string; index: number } | null {
+    const slot = this.nextAvailableSlot();
+    if (!slot) return null;
+    slot.requestCount++;
+    return { key: slot.key, index: slot.index };
+  }
+
+  /** Mark a key as rate-limited (triggers cooldown) */
+  markRateLimited(index: number, cooldownMs = 60_000): void {
+    const slot = this.slots.find(s => s.index === index);
+    if (slot) slot.cooldownUntil = Date.now() + cooldownMs;
+  }
+
+  /** Private — used by call() and getKey() */
   private nextAvailableSlot(): KeySlot | null {
     const now = Date.now();
     const total = this.slots.length;
