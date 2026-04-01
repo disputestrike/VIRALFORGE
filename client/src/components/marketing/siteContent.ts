@@ -6,15 +6,18 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
+  BrainCircuit,
   Calendar,
   Headphones,
   Layers,
+  Link2,
   Megaphone,
   Mic2,
   Phone,
   PhoneIncoming,
   PhoneOutgoing,
   Radio,
+  RefreshCw,
   Shield,
   Sparkles,
   Target,
@@ -33,8 +36,78 @@ export type NavMegaItem = {
 export const platformOverview = {
   title: "The ApexAI platform",
   subtitle:
-    "One stack for inbound answering, outbound campaigns, booking, SMS/email follow-up, and analytics — built for high-intent phone businesses.",
+    "Unified communications for revenue teams: inbound and outbound voice, SMS, and email — one knowledge base, one CRM, one place to measure outcomes. Built for businesses that win or lose on the phone.",
 };
+
+/** Landing: omnichannel / “one brain” narrative (no competitor names). */
+export const unifiedCommunicationsSection = {
+  eyebrow: "Unified communications",
+  title: "Voice, SMS, and email — same context, same customer record",
+  subtitle:
+    "Callers do not live in a single channel. ApexAI keeps your facts, tone, and next steps aligned whether someone is on a live call, getting a text, or in a campaign sequence — so handoffs feel intentional, not fragmented.",
+  pillars: [
+    {
+      title: "Voice as the spine",
+      description:
+        "Live telephony is where urgency and revenue concentrate. We optimize for natural conversation, barge-in, booking, and handoff — not a chatbot taped onto a phone line.",
+      icon: Phone,
+    },
+    {
+      title: "Consistent follow-up",
+      description:
+        "SMS confirmations, reminders, and outbound sequences pull from the same lead and knowledge you use on calls — fewer contradictions, faster resolution.",
+      icon: Link2,
+    },
+    {
+      title: "Proof in the data",
+      description:
+        "Transcripts, recordings, and dashboards show what people ask, what converts, and where to tighten scripts — so performance improves from real conversations.",
+      icon: RefreshCw,
+    },
+  ] as { title: string; description: string; icon: LucideIcon }[],
+};
+
+/** How teams operationalize the product — mirrors “platform + practice” ideas without naming vendors. */
+export const scaleWithApexSection = {
+  eyebrow: "How teams scale",
+  title: "From first live call to a repeatable revenue engine",
+  subtitle:
+    "Personalized experiences at scale only work when deployment, channels, and improvement loops stay in one system — not three tools that never agree.",
+  items: [
+    {
+      title: "Deploy and orchestrate",
+      description:
+        "Spin up numbers, voice profiles, knowledge sources, and campaigns from one dashboard. Inbound and outbound share the same engine and analytics.",
+      icon: Layers,
+    },
+    {
+      title: "Guided by real conversations",
+      description:
+        "Every call and message feeds qualification, scoring, and summaries — so you scale what works instead of guessing from anecdotes.",
+      icon: BrainCircuit,
+    },
+    {
+      title: "Tune for your business",
+      description:
+        "Industry packs, escalation rules, and human transfer keep AI aligned with how you already sell — with room to tighten flows as you learn.",
+      icon: Target,
+    },
+  ] as { title: string; description: string; icon: LucideIcon }[],
+};
+
+/** Extra trust copy — honest; do not claim specific certifications unless you hold them. */
+export const trustEnterpriseBullets = [
+  {
+    title: "Accuracy-minded design",
+    description:
+      "Knowledge-grounded answers, URL stripping on voice, and reviewable transcripts help teams catch drift early and coach with evidence.",
+  },
+  {
+    title: "Privacy-conscious defaults",
+    description:
+      "Tenant-scoped data, encryption in transit and at rest, and clear activity trails — structured for teams that take compliance seriously as they grow.",
+  },
+];
 
 /** What the product is — maps to landing anchors */
 export const platformPillars: NavMegaItem[] = [
@@ -205,6 +278,7 @@ export const channelFeatures: NavMegaItem[] = [
 
 export const resourcesNav: NavMegaItem[] = [
   { href: "#results", title: "Customer stories", description: "Results across roofing, solar, HVAC, and more." },
+  { href: "#unified-comms", title: "Unified communications", description: "Voice, SMS, and email with one context and customer record." },
   { href: "#capabilities", title: "Platform stack", description: "Phones, CRM, Zapier, workflows, webchat, analytics — what ships in-app." },
   { href: "#faq", title: "FAQ", description: "Setup, compliance, and how billing maps to usage." },
   { href: "/pricing", title: "Pricing", description: "Inbound minutes and outbound lead tiers." },

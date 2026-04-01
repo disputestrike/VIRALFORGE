@@ -17,7 +17,10 @@ import {
   pricingInboundBullets,
   pricingOutboundBullets,
   productFeatures,
+  scaleWithApexSection,
   solutionsByIndustry,
+  trustEnterpriseBullets,
+  unifiedCommunicationsSection,
 } from "@/components/marketing/siteContent";
 import {
   ArrowRight,
@@ -220,7 +223,7 @@ export default function LandingPage() {
           </div>
           <h1 className="text-balance text-4xl font-black leading-[1.08] tracking-tight md:text-6xl md:leading-[1.05]">
             Inbound and outbound AI voice.
-            <span className="block text-blue-400">Bookings, SMS, analytics — one ApexAI stack.</span>
+            <span className="block text-blue-400">Unified communications — voice, SMS, email, one ApexAI stack.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-pretty text-lg leading-relaxed text-zinc-400">
             {platformOverview.subtitle}
@@ -241,7 +244,7 @@ export default function LandingPage() {
             {[
               { value: "< 1s", label: "Typical pickup" },
               { value: "24/7", label: "Inbound coverage" },
-              { value: "Voice + SMS", label: "Same campaigns" },
+              { value: "1 brain", label: "Voice + SMS + email" },
               { value: "8+", label: "Cartesia voices" },
             ].map((s) => (
               <div key={s.label}>
@@ -263,6 +266,31 @@ export default function LandingPage() {
                 {l}
               </span>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* UNIFIED COMMUNICATIONS — talking points: omnichannel, voice-first, proof */}
+      <section id="unified-comms" className="scroll-mt-24 border-b border-white/20 bg-black px-6 py-20 md:py-24">
+        <div className="mx-auto max-w-6xl">
+          <div className="mx-auto mb-14 max-w-2xl text-center">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-400">{unifiedCommunicationsSection.eyebrow}</p>
+            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">{unifiedCommunicationsSection.title}</h2>
+            <p className="mt-4 text-lg leading-relaxed text-zinc-300">{unifiedCommunicationsSection.subtitle}</p>
+          </div>
+          <div className="grid gap-6 md:grid-cols-3">
+            {unifiedCommunicationsSection.pillars.map((p) => {
+              const Icon = p.icon;
+              return (
+                <div key={p.title} className="rounded-2xl border border-white/20 bg-white/[0.04] p-8">
+                  <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-blue-600/20 text-blue-400">
+                    <Icon className="size-6" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white">{p.title}</h3>
+                  <p className="mt-3 text-sm leading-relaxed text-zinc-400">{p.description}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -415,10 +443,10 @@ export default function LandingPage() {
       <section id="capabilities" className="scroll-mt-24 border-b border-white/20 bg-black px-6 py-20 md:py-24">
         <div className="mx-auto max-w-6xl">
           <div className="mx-auto mb-12 max-w-2xl text-center">
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-400">Unified platform</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-400">Full product surface</p>
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">Everything we ship in the product</h2>
             <p className="mt-4 text-lg text-zinc-300">
-              Same stack behind voice: phones, CRM, Zapier, workflows, webchat, analytics — surfaced in Settings and live calls. Mirrors our integration crosswalk (20 core capabilities).
+              One account ties together voice, SMS, email campaigns, CRM, knowledge, and integrations — so your team does not juggle disconnected tools. Mirrors our integration crosswalk (20 core capabilities).
             </p>
           </div>
           <div className="mb-14 grid gap-6 lg:grid-cols-2">
@@ -452,6 +480,31 @@ export default function LandingPage() {
           <p className="mt-8 text-center text-xs text-zinc-500">
             Detailed status: <code className="rounded bg-white/5 px-1.5 py-0.5 text-zinc-400">docs/integration/CROSSWALK.md</code>
           </p>
+        </div>
+      </section>
+
+      {/* SCALE / OPERATING MODEL — deploy, data-driven, tune */}
+      <section id="scale-with-apex" className="scroll-mt-24 border-b border-white/20 bg-black px-6 py-20 md:py-24">
+        <div className="mx-auto max-w-6xl">
+          <div className="mx-auto mb-14 max-w-2xl text-center">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-400">{scaleWithApexSection.eyebrow}</p>
+            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">{scaleWithApexSection.title}</h2>
+            <p className="mt-4 text-lg leading-relaxed text-zinc-300">{scaleWithApexSection.subtitle}</p>
+          </div>
+          <div className="grid gap-6 md:grid-cols-3">
+            {scaleWithApexSection.items.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.title} className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] p-8">
+                  <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-blue-600/25 text-blue-300">
+                    <Icon className="size-6" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white">{item.title}</h3>
+                  <p className="mt-3 text-sm leading-relaxed text-zinc-400">{item.description}</p>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </section>
 
@@ -621,12 +674,17 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {[
               { icon: <Shield className="size-4 text-blue-400" />, title: "Encrypted transport", desc: "Traffic is encrypted in transit and platform data is encrypted at rest." },
               { icon: <MessageSquare className="size-4 text-blue-400" />, title: "Consent-aware flows", desc: "Outbound workflows keep consent and opt-out handling visible and organized." },
               { icon: <Star className="size-4 text-blue-400" />, title: "Audit visibility", desc: "Calls, transcripts, and activity logs are reviewable for QA and accountability." },
               { icon: <Phone className="size-4 text-blue-400" />, title: "Human handoff", desc: "Any conversation can transfer to a human when needed." },
+              ...trustEnterpriseBullets.map((b) => ({
+                icon: <CheckCircle2 className="size-4 text-emerald-400" />,
+                title: b.title,
+                desc: b.description,
+              })),
             ].map(({ icon, title, desc }) => (
               <div key={title} className="rounded-xl border border-white/10 bg-black/30 p-4">
                 <div className="mb-2 flex items-center gap-2">
