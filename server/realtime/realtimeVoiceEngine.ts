@@ -259,7 +259,7 @@ export function createCallEngine(opts: EngineOptions): void {
   function connectCartesia() {
     if (cartesiaWs && cartesiaWs.readyState === WebSocket.CONNECTING) return;
     const ws = new WebSocket(
-      `wss://api.cartesia.ai/tts/websocket?api_key=${process.env.CARTESIA_API_KEY}&cartesia_version=2024-06-10`
+      `wss://api.cartesia.ai/tts/websocket?api_key=${process.env.CARTESIA_API_KEY}&cartesia_version=2024-11-13`
     );
     cartesiaWs = ws;
 

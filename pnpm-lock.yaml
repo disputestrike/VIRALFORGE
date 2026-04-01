@@ -233,7 +233,7 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0(@types/react@19.2.1)(react@19.2.1)
       stripe:
-        specifier: ^17.5.0
+        specifier: ^17.7.0
         version: 17.7.0
       superjson:
         specifier: ^1.13.3
