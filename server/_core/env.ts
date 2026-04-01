@@ -79,7 +79,20 @@ export const ENV = {
   /** Multiply Cartesia voice profile speed (~0.90 = slightly slower / more natural vs default). */
   voiceTtsSpeedScale: Math.min(1.25, Math.max(0.55, parseFloat(process.env.VOICE_TTS_SPEED_SCALE ?? "0.90") || 0.9)),
   /** After user stops speaking (STT final), brief pause before LLM/TTS — structured pacing (~200–350ms; set 0 to disable). */
-  voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "260", 10) || 0),
+  voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "240", 10) || 0),
+  /** Cerebras streaming (phone): max completion tokens per turn — keep low for snappy replies. */
+  voiceLlmMaxTokens: Math.min(220, Math.max(56, parseInt(process.env.VOICE_LLM_MAX_TOKENS ?? "105", 10) || 105)),
+  /** Cerebras streaming temperature — lower = more consistent; higher = more varied. */
+  voiceLlmTemperature: Math.min(0.85, Math.max(0.2, parseFloat(process.env.VOICE_LLM_TEMPERATURE ?? "0.40") || 0.4)),
+  /**
+   * Cerebras `gpt-oss-120b` only: reasoning_effort none|low|medium|high.
+   * `low` or `none` = faster time-to-first-token for voice (default low).
+   */
+  voiceGptOssReasoningEffort: (() => {
+    const v = (process.env.VOICE_GPT_OSS_REASONING_EFFORT ?? "low").toLowerCase();
+    if (v === "none" || v === "low" || v === "medium" || v === "high") return v;
+    return "low";
+  })(),
 
   // ── Legacy (kept for backward compat) ─────────────────────
   appId: process.env.VITE_APP_ID ?? "",

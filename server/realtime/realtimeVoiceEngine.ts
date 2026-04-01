@@ -61,18 +61,19 @@ function drainSpeakableToTts(
       continue;
     }
 
-    const comma = rest.match(/^([^,\n]{8,120},)/);
+    const comma = rest.match(/^([^,\n]{6,120},)/);
     if (comma?.[1]?.trim()) {
       sendClause(comma[1]);
       i += comma[1].length;
       continue;
     }
 
-    if (rest.length >= 54) {
-      const cut = rest.lastIndexOf(" ", 80);
-      if (cut >= 34) {
+    // Slightly shorter thresholds than before → earlier TTS start (snappier feel on phone).
+    if (rest.length >= 46) {
+      const cut = rest.lastIndexOf(" ", 72);
+      if (cut >= 28) {
         const frag = rest.slice(0, cut);
-        if (frag.trim().length >= 20) {
+        if (frag.trim().length >= 18) {
           sendClause(frag);
           i += frag.length;
           continue;
@@ -144,12 +145,13 @@ CONFIG FACTS (prefer these over guessing):
 
 VOICE & PACE (sound human, not a script):
 - You're a sharp human on the phone — warm, confident, brief. Never stiff or robotic.
-- Max 2 short sentences per turn; ~18 words per sentence max. Keep it tight.
+- Max 2 short sentences per turn; ~16 words per sentence max. Keep it tight.
 - Skip long filler ("um", "uh", "one moment", "let me check", "as an AI"). Short natural nods are OK: "Yeah," "Okay," "Sure —" before the answer.
+- If the caller is frustrated or blunt: one calm acknowledgment ("I hear you —" / "Got it —") then answer directly. No lecturing, no arguing.
 - One question per turn max unless they asked two things.
 - Answer what they asked first; then one clear next step if needed.
 - If caller declines: say "No problem, thanks for calling, have a great day." then TOOL: end_call {}
-- Never say "as an AI" or name any technology.
+- Never say "as an AI", "language model", "connection issue", or name any technology. Do not repeat the same apology line twice in one call.
 - Spoken words only — no markdown, bullets, or lists.
 
 RESPONSE SHAPE: [optional 1–4 word nod] → [direct answer] → [optional one short follow-up]
@@ -496,14 +498,20 @@ export function createCallEngine(opts: EngineOptions): void {
     for (let i = 0; i < models.length; i++) {
       const model = models[i]!;
       try {
-        log(`[Cerebras] streaming model=${model}`);
-        const stream = await client.chat.completions.create({
+        log(`[Cerebras] streaming model=${model} maxTok=${ENV.voiceLlmMaxTokens} temp=${ENV.voiceLlmTemperature}`);
+        const body: Record<string, unknown> = {
           model,
           messages,
           stream: true,
-          max_tokens: 110,
-          temperature: 0.45,
-        });
+          max_tokens: ENV.voiceLlmMaxTokens,
+          temperature: ENV.voiceLlmTemperature,
+        };
+        if (/gpt-oss/i.test(model)) {
+          body.reasoning_effort = ENV.voiceGptOssReasoningEffort;
+        }
+        const stream = await client.chat.completions.create(
+          body as unknown as OpenAI.Chat.ChatCompletionCreateParamsStreaming
+        );
         await streamToCartesia(stream as any, epoch, "cerebras");
         return;
       } catch (e: unknown) {
