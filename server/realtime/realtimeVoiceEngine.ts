@@ -22,6 +22,11 @@ import {
   type CallState,
 } from "./callPolicy";
 import { getVoiceProfile, type VoiceProfile } from "./voiceProfiles";
+import {
+  getVoiceProfileById as getCoreVoiceProfile,
+  VOICE_PROFILES as CORE_VOICE_PROFILES,
+  type VoiceProfile as CoreVoiceProfile,
+} from "../_core/services/voiceProfiles";
 import voiceSessionManager from "../_core/services/voiceSessionManager";
 import { ENV } from "../_core/env";
 import {
@@ -118,6 +123,31 @@ class CerebrasPool {
 }
 
 const cerebrasPool = new CerebrasPool();
+
+/** Map dashboard / DB voice IDs (_core) to Cartesia ids the streaming engine uses; keep realtime-only IDs working. */
+function mapCoreCartesiaToRt(core: CoreVoiceProfile): VoiceProfile {
+  const base = getVoiceProfile("professional-female");
+  return {
+    ...base,
+    id: core.id,
+    name: core.label,
+    description: core.style ?? base.description,
+    cartesiaId: core.externalVoiceId,
+    speed: typeof core.speed === "number" ? core.speed : base.speed,
+  };
+}
+
+function resolveVoiceProfileForEngine(id?: string | null): VoiceProfile {
+  if (id && CORE_VOICE_PROFILES.some((p) => p.id === id)) {
+    const core = getCoreVoiceProfile(id);
+    if (core.provider === "cartesia") return mapCoreCartesiaToRt(core);
+    console.warn(`[VoiceEngine] Profile ${id} is not Cartesia — using default telephony voice`);
+    return getVoiceProfile("professional-female");
+  }
+  if (id) return getVoiceProfile(id);
+  const core = getCoreVoiceProfile(null);
+  return mapCoreCartesiaToRt(core);
+}
 
 /** Mu-law frame energy (same idea as VoiceRealtimePipeline) — fast path for barge-in before STT text. */
 function estimateMulawEnergy(mulawBuf: Buffer): number {
@@ -242,7 +272,7 @@ export function createCallEngine(opts: EngineOptions): void {
   let callState = createCallState();
   let turnCtl: TurnControllerState = createTurnController();
   let keepaliveTimer: NodeJS.Timeout | null = null;
-  let voiceProfile: VoiceProfile = getVoiceProfile(voiceProfileId || "professional-female");
+  let voiceProfile: VoiceProfile = resolveVoiceProfileForEngine(voiceProfileId);
   const conversationHistory: { role: "user" | "assistant"; content: string }[] = [];
   let turnStartedAt = 0;
   let firstMediaLogged = false;
@@ -363,7 +393,7 @@ export function createCallEngine(opts: EngineOptions): void {
   function connectDeepgram() {
     if (dgWs && dgWs.readyState === WebSocket.CONNECTING) return;
     const params = new URLSearchParams({
-      model: "nova-2-phonecall",
+      model: "nova-2",
       encoding: "mulaw",
       sample_rate: "8000",
       channels: "1",
@@ -796,7 +826,7 @@ export function createCallEngine(opts: EngineOptions): void {
             }
           }
           const sess = activeSessionId ? voiceSessionManager.getSession(activeSessionId) : null;
-          if (sess?.voiceProfileId) voiceProfile = getVoiceProfile(sess.voiceProfileId);
+          if (sess?.voiceProfileId) voiceProfile = resolveVoiceProfileForEngine(sess.voiceProfileId);
           if (sess?.userId) activeUserId = sess.userId ?? undefined;
           if (activeSessionId && callSid) {
             voiceSessionManager.updateSession(activeSessionId, { callSid } as any);

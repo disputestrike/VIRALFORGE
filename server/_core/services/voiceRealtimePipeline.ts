@@ -153,7 +153,7 @@ export class VoiceRealtimePipeline {
     }
 
     const params = new URLSearchParams({
-      model: "nova-2-phonecall",
+      model: "nova-2",
       encoding: "mulaw",
       sample_rate: "8000",
       channels: "1",

@@ -700,7 +700,7 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
       }
     }
 
-    // Create lead and session
+    // Create lead and session (match /api/voice/start: tenant voice + language from called number)
     const sid = CallSid || `session_${Date.now()}`;
     try {
       const db = await import("../db");
@@ -713,7 +713,29 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
         });
         lead = newLead as any;
       }
-      voiceSessionManager.createSession((lead as any).id ?? 0, "default", sid);
+      let ownerId = (lead as any)?.createdBy ?? 1;
+      if (To) {
+        const byLine = await db.getUserIdByPhoneNumber(To);
+        if (byLine) ownerId = byLine;
+      }
+      let language = "en";
+      try {
+        const { getDb } = await import("../db");
+        const { users } = await import("../../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const dbInst = await getDb();
+        if (dbInst && ownerId) {
+          const [ownerUser] = await (dbInst as any).select().from(users).where(eq(users.id, ownerId)).limit(1);
+          if (ownerUser?.language) language = ownerUser.language;
+        }
+      } catch {}
+      const { getUserVoiceSettings } = await import("./services/voiceProfiles");
+      const voiceSettings = await getUserVoiceSettings(ownerId);
+      voiceSessionManager.createSession((lead as any).id ?? 0, "default", sid, {
+        userId: ownerId,
+        language,
+        voiceProfileId: voiceSettings.voiceProfileId,
+      });
       voiceSessionManager.startSessionPersistenceInterval(sid);
       console.log(`[Inbound] Session ${sid} created for lead ${(lead as any)?.id}`);
     } catch (error) {
@@ -1134,6 +1156,8 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
         let resolvedUserId: number | undefined;
         let resolvedLeadId: number | undefined;
         let businessName: string | undefined;
+        let industry: string | undefined;
+        let voiceProfileId: string | undefined;
 
         if (sessionId) {
           try {
@@ -1141,12 +1165,33 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
             if (session) {
               resolvedUserId = session.userId ?? undefined;
               resolvedLeadId = session.leadId ?? undefined;
+              voiceProfileId = session.voiceProfileId ?? undefined;
             }
           } catch {}
         }
 
         if (leadId) {
           resolvedLeadId = leadId ? parseInt(leadId, 10) : undefined;
+        }
+
+        if (!voiceProfileId && resolvedUserId) {
+          try {
+            const { getUserVoiceSettings } = await import("./services/voiceProfiles");
+            const vs = await getUserVoiceSettings(resolvedUserId);
+            voiceProfileId = vs.voiceProfileId;
+          } catch {}
+        }
+
+        if (resolvedLeadId) {
+          try {
+            const db = await import("../db");
+            const lead = await db.getLeadById(resolvedLeadId);
+            if (lead) {
+              const l = lead as { company?: string | null; industry?: string | null };
+              if (l.company?.trim()) businessName = l.company.trim();
+              if (l.industry?.trim()) industry = l.industry.trim();
+            }
+          } catch {}
         }
 
         // ── NEW: Real-time voice engine ─────────────────────────────────
@@ -1157,9 +1202,9 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
           sessionId: sessionId || undefined,
           leadId: resolvedLeadId,
           userId: resolvedUserId,
-          businessName: undefined,
-          industry: undefined,
-          voiceProfileId: undefined,
+          businessName,
+          industry,
+          voiceProfileId,
         });
 
       });
