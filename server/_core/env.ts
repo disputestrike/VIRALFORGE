@@ -86,7 +86,7 @@ export const ENV = {
   voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "180", 10) || 0),
   /**
    * Mu-law barge-in threshold on the 0–127 scale used by estimateEnergy (avg distance from silence).
-   * Lower = easier interrupt. Values &gt; 127 are treated as legacy mis-scaled (e.g. 600) and mapped with /5 so they still work.
+   * Lower = easier interrupt. Values above 127 are treated as legacy mis-scaled (e.g. 600) and mapped with /5 so they still work.
    */
   voiceBargeInEnergyThreshold: (() => {
     const raw =
