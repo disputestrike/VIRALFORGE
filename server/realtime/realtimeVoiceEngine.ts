@@ -838,7 +838,7 @@ export function createCallEngine(opts: EngineOptions): void {
     }
 
     else if (event === "start") {
-      ensureAudioPipeline();
+      // Pipeline already started on "connected" — don't call again or we get duplicate connections
       streamSid = msg.streamSid || msg.start?.streamSid || "";
       callSid = msg.start?.callSid || msg.callSid || streamSid;
       const params = msg.start?.customParameters || msg.customParameters || {};
