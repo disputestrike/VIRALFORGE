@@ -118,8 +118,29 @@ export default function Settings() {
     },
     onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
   });
+  const kbPdfUrlMut = trpc.knowledgeBase.addPdfUrlSource.useMutation({
+    onSuccess: (_d, vars) => {
+      utils.knowledgeBase.list.invalidate();
+      utils.knowledgeBase.listSources.invalidate({ knowledgeBaseId: vars.knowledgeBaseId });
+      utils.knowledgeBase.stats.invalidate({ knowledgeBaseId: vars.knowledgeBaseId });
+      toast.success("PDF URL queued for ingestion");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+  const kbTxtUrlMut = trpc.knowledgeBase.addTextUrlSource.useMutation({
+    onSuccess: (_d, vars) => {
+      utils.knowledgeBase.list.invalidate();
+      utils.knowledgeBase.listSources.invalidate({ knowledgeBaseId: vars.knowledgeBaseId });
+      utils.knowledgeBase.stats.invalidate({ knowledgeBaseId: vars.knowledgeBaseId });
+      toast.success("Text URL queued");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
   const [kbName, setKbName] = useState("");
   const [kbWebsite, setKbWebsite] = useState("https://");
+  const [pdfUrlStr, setPdfUrlStr] = useState("https://");
+  const [txtUrlStr, setTxtUrlStr] = useState("https://");
+  const [pdfUploading, setPdfUploading] = useState(false);
   const [selectedKbId, setSelectedKbId] = useState<number | null>(null);
   const [kbSearchQ, setKbSearchQ] = useState("");
   const [kbSearchActive, setKbSearchActive] = useState("");
@@ -557,8 +578,9 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Add your public website URL: the server fetches the page, extracts text, chunks it, and stores OpenAI embeddings (set{" "}
-            <span className="font-mono text-xs">OPENAI_API_KEY</span> on Railway for semantic search). Retrieved chunks are injected into live voice calls for this account.
+            Required training sources: <strong>website</strong> (we also read og:title, description, logo, theme-color for branding),{" "}
+            <strong>PDF</strong> by URL or file upload, and <strong>plain-text</strong> by URL. Text is chunked and embedded with{" "}
+            <span className="font-mono text-xs">OPENAI_API_KEY</span> on Railway; chunks and branding feed live voice calls.
           </p>
           <div className="flex flex-wrap gap-2 items-end">
             <div className="flex-1 min-w-[160px] space-y-1.5">
@@ -631,6 +653,102 @@ export default function Settings() {
                   {kbAddSite.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Add website"}
                 </Button>
               </div>
+              <div className="flex flex-wrap gap-2 items-end">
+                <div className="flex-1 min-w-[200px] space-y-1.5">
+                  <Label className="text-xs">PDF document URL</Label>
+                  <Input
+                    type="url"
+                    placeholder="https://example.com/brochure.pdf"
+                    value={pdfUrlStr}
+                    onChange={(e) => setPdfUrlStr(e.target.value)}
+                    className="bg-secondary border-border"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={!selectedKbId || kbPdfUrlMut.isPending}
+                  onClick={() => {
+                    if (!selectedKbId) return;
+                    try {
+                      new URL(pdfUrlStr);
+                    } catch {
+                      toast.error("Enter a valid PDF URL");
+                      return;
+                    }
+                    kbPdfUrlMut.mutate({ knowledgeBaseId: selectedKbId, url: pdfUrlStr.trim() });
+                  }}
+                >
+                  {kbPdfUrlMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Add PDF URL"}
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-2 items-end">
+                <div className="flex-1 min-w-[200px] space-y-1.5">
+                  <Label className="text-xs">Plain text URL (.txt / raw)</Label>
+                  <Input
+                    type="url"
+                    placeholder="https://example.com/faq.txt"
+                    value={txtUrlStr}
+                    onChange={(e) => setTxtUrlStr(e.target.value)}
+                    className="bg-secondary border-border"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={!selectedKbId || kbTxtUrlMut.isPending}
+                  onClick={() => {
+                    if (!selectedKbId) return;
+                    try {
+                      new URL(txtUrlStr);
+                    } catch {
+                      toast.error("Enter a valid URL");
+                      return;
+                    }
+                    kbTxtUrlMut.mutate({ knowledgeBaseId: selectedKbId, url: txtUrlStr.trim() });
+                  }}
+                >
+                  {kbTxtUrlMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Add text URL"}
+                </Button>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Upload PDF from disk</Label>
+                <Input
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  disabled={!selectedKbId || pdfUploading}
+                  className="bg-secondary border-border text-sm"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file || !selectedKbId) return;
+                    setPdfUploading(true);
+                    try {
+                      const fd = new FormData();
+                      fd.append("document", file);
+                      fd.append("knowledgeBaseId", String(selectedKbId));
+                      const res = await fetch("/api/knowledge-base/upload", {
+                        method: "POST",
+                        body: fd,
+                        credentials: "include",
+                      });
+                      const j = (await res.json().catch(() => ({}))) as { error?: string };
+                      if (!res.ok) throw new Error(j.error || "Upload failed");
+                      toast.success("PDF ingested and embedded");
+                      await utils.knowledgeBase.list.invalidate();
+                      await utils.knowledgeBase.listSources.invalidate({ knowledgeBaseId: selectedKbId });
+                      await utils.knowledgeBase.stats.invalidate({ knowledgeBaseId: selectedKbId });
+                    } catch (err: unknown) {
+                      toast.error(err instanceof Error ? err.message : "Upload failed");
+                    } finally {
+                      setPdfUploading(false);
+                      e.target.value = "";
+                    }
+                  }}
+                />
+                {pdfUploading ? <p className="text-[11px] text-muted-foreground">Processing PDF…</p> : null}
+              </div>
               {selectedKbId != null && kbStats != null && (
                 <p className="text-xs text-muted-foreground">
                   Status: <span className="font-mono">{kbStats.kbStatus}</span> · Chunks stored:{" "}
@@ -639,6 +757,56 @@ export default function Settings() {
                   {kbStats.pending > 0 ? " · Processing…" : null}
                 </p>
               )}
+              {selectedKbId != null &&
+                kbStats != null &&
+                (kbStats as { brandProfile?: string | null }).brandProfile && (
+                  <div className="rounded-lg border border-border p-3 bg-secondary/30 space-y-2">
+                    <Label className="text-xs text-primary">Brand extracted from website</Label>
+                    {(() => {
+                      try {
+                        const b = JSON.parse(
+                          (kbStats as { brandProfile: string }).brandProfile
+                        ) as Record<string, string | undefined>;
+                        return (
+                          <div className="text-[11px] text-muted-foreground space-y-1">
+                            {b.title ? (
+                              <p>
+                                <span className="text-foreground/90 font-medium">Title:</span> {b.title}
+                              </p>
+                            ) : null}
+                            {b.description ? (
+                              <p>
+                                <span className="text-foreground/90 font-medium">Description:</span>{" "}
+                                {b.description.slice(0, 400)}
+                                {b.description.length > 400 ? "…" : ""}
+                              </p>
+                            ) : null}
+                            {b.primaryColor ? (
+                              <p className="flex items-center gap-2">
+                                <span className="text-foreground/90 font-medium">Theme:</span>
+                                <span
+                                  className="inline-block w-5 h-5 rounded border border-border"
+                                  style={{ backgroundColor: b.primaryColor }}
+                                />
+                                {b.primaryColor}
+                              </p>
+                            ) : null}
+                            {b.logoUrl ? (
+                              <p className="truncate">
+                                <span className="text-foreground/90 font-medium">Logo:</span>{" "}
+                                <a href={b.logoUrl} target="_blank" rel="noreferrer" className="text-primary underline">
+                                  {b.logoUrl}
+                                </a>
+                              </p>
+                            ) : null}
+                          </div>
+                        );
+                      } catch {
+                        return null;
+                      }
+                    })()}
+                  </div>
+                )}
               {selectedKbId != null && (
                 <div className="space-y-2 rounded-lg border border-border p-3 bg-secondary/40">
                   <Label className="text-xs">Test semantic search (same index as voice)</Label>

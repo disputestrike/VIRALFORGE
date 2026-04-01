@@ -85,6 +85,7 @@ async function runMigrations() {
           "ALTER TABLE `users` ADD COLUMN `stripeCustomerId` varchar(255) NULL",
           "ALTER TABLE `users` ADD COLUMN `stripeSubscriptionId` varchar(255) NULL",
           "ALTER TABLE `users` ADD COLUMN `stripeSubscriptionStatus` varchar(64) NULL",
+          "ALTER TABLE `knowledge_bases` ADD COLUMN `brandProfile` text NULL",
         ];
         for (const sql of alterStatements) {
           try {
@@ -934,6 +935,54 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
     }
   });
 
+
+  // ─── Knowledge base: PDF upload (multipart) → chunk + embed ─────────────────
+  app.post("/api/knowledge-base/upload", apiRateLimiter, async (req, res) => {
+    let user: { id: number };
+    try {
+      const { sdk } = await import("./sdk");
+      user = await sdk.authenticateRequest(req);
+    } catch {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    try {
+      const multer = (await import("multer")).default;
+      const upload = multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: 12 * 1024 * 1024 },
+        fileFilter: (_req, file, cb) => {
+          if (file.mimetype === "application/pdf" || /\.pdf$/i.test(file.originalname)) cb(null, true);
+          else cb(new Error("PDF files only"));
+        },
+      }).single("document");
+
+      upload(req, res, async (err: unknown) => {
+        if (err) {
+          res.status(400).json({ error: String((err as Error).message) });
+          return;
+        }
+        const r = req as { body?: { knowledgeBaseId?: string }; file?: { buffer: Buffer; originalname: string } };
+        const kbId = parseInt(String(r.body?.knowledgeBaseId ?? ""), 10);
+        const file = r.file;
+        if (!kbId || !file?.buffer) {
+          res.status(400).json({ error: "knowledgeBaseId and PDF file required" });
+          return;
+        }
+        try {
+          const { ingestUploadedPdfSource } = await import("./services/knowledgeBaseIngestion");
+          const r = await ingestUploadedPdfSource(kbId, user.id, file.buffer, file.originalname || "upload.pdf");
+          res.json({ success: true, sourceId: r.sourceId });
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : String(e);
+          res.status(500).json({ error: msg || "Ingest failed" });
+        }
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ error: msg });
+    }
+  });
 
   // ─── PDF/DOCUMENT UPLOAD → Business Extractor ────────────────────────────────
   app.post("/api/extract/document", async (req, res) => {

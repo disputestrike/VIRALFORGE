@@ -1,10 +1,10 @@
 /**
- * Knowledge base: fetch URL → text → chunk → OpenAI embeddings → MySQL chunks.
- * Search: embedding cosine similarity, or keyword overlap when OPENAI_API_KEY is unset.
+ * Knowledge base: website (text + branding) + PDF/URL documents → chunk → OpenAI embeddings → MySQL.
+ * Search: embedding cosine similarity, or keyword overlap when embeddings unavailable.
  */
 import * as cheerio from "cheerio";
 import { createHash } from "crypto";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, desc } from "drizzle-orm";
 import { getDb } from "../../db";
 import {
   knowledgeBases,
@@ -18,6 +18,16 @@ const CHUNK_OVERLAP = 120;
 const MAX_FETCH_BYTES = 2_500_000;
 const FETCH_TIMEOUT_MS = 25_000;
 const EMBED_MODEL = "text-embedding-3-small";
+
+export type KbBrandProfile = {
+  siteUrl?: string;
+  title?: string;
+  description?: string;
+  logoUrl?: string;
+  faviconUrl?: string;
+  primaryColor?: string;
+  extractedAt?: string;
+};
 
 export function chunkText(text: string, size = CHUNK_SIZE, overlap = CHUNK_OVERLAP): string[] {
   const t = text.replace(/\s+/g, " ").trim();
@@ -61,7 +71,50 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return d === 0 ? 0 : dot / d;
 }
 
-async function fetchWebsiteText(url: string): Promise<string> {
+function absUrl(base: string, href: string | undefined): string | undefined {
+  if (!href?.trim()) return undefined;
+  try {
+    return new URL(href.trim(), base).href;
+  } catch {
+    return undefined;
+  }
+}
+
+/** og:* / meta theme-color / icons — checklist “branding from website”. */
+export function extractBrandingFromHtml(html: string, pageUrl: string): KbBrandProfile {
+  const $ = cheerio.load(html);
+  const title =
+    $('meta[property="og:title"]').attr("content")?.trim() ||
+    $("title").first().text().trim() ||
+    $("h1").first().text().trim();
+  const description =
+    $('meta[property="og:description"]').attr("content")?.trim() ||
+    $('meta[name="description"]').attr("content")?.trim();
+  const logoUrl = absUrl(pageUrl, $('meta[property="og:image"]').attr("content"));
+  const faviconUrl =
+    absUrl(pageUrl, $('link[rel="apple-touch-icon"]').attr("href")) ||
+    absUrl(pageUrl, $('link[rel="icon"]').attr("href")) ||
+    absUrl(pageUrl, $('link[rel="shortcut icon"]').attr("href"));
+  const theme = $('meta[name="theme-color"]').attr("content")?.trim();
+  return {
+    siteUrl: pageUrl,
+    title: title || undefined,
+    description: description || undefined,
+    logoUrl,
+    faviconUrl,
+    primaryColor: theme || undefined,
+    extractedAt: new Date().toISOString(),
+  };
+}
+
+function htmlToPlainText(html: string): string {
+  const $ = cheerio.load(html);
+  $("script, style, nav, footer, noscript, iframe").remove();
+  const text = $("body").text() || $.root().text();
+  return text.replace(/\s+/g, " ").trim();
+}
+
+async function fetchHtml(url: string): Promise<string> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -77,14 +130,46 @@ async function fetchWebsiteText(url: string): Promise<string> {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const buf = await res.arrayBuffer();
     if (buf.byteLength > MAX_FETCH_BYTES) throw new Error("Page too large");
-    const html = Buffer.from(buf).toString("utf-8");
-    const $ = cheerio.load(html);
-    $("script, style, nav, footer, noscript, iframe").remove();
-    const text = $("body").text() || $.root().text();
-    return text.replace(/\s+/g, " ").trim();
+    return Buffer.from(buf).toString("utf-8");
   } finally {
     clearTimeout(t);
   }
+}
+
+async function fetchWebsiteTextAndBrand(url: string): Promise<{ text: string; brand: KbBrandProfile | null }> {
+  const html = await fetchHtml(url);
+  const text = htmlToPlainText(html);
+  const brand = extractBrandingFromHtml(html, url);
+  const hasBrand = !!(brand.title || brand.description || brand.logoUrl || brand.primaryColor);
+  return { text, brand: hasBrand ? brand : null };
+}
+
+async function fetchBinary(url: string, accept: string): Promise<Buffer> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      signal: ctrl.signal,
+      redirect: "follow",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; ApexAI-KB/1.0)",
+        Accept: accept,
+      },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const buf = await res.arrayBuffer();
+    if (buf.byteLength > MAX_FETCH_BYTES) throw new Error("File too large");
+    return Buffer.from(buf);
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  const pdfModule = await import("pdf-parse");
+  const pdfParse = (pdfModule as { default?: (b: Buffer) => Promise<{ text: string }> }).default ?? pdfModule;
+  const data = await (pdfParse as (b: Buffer) => Promise<{ text: string }>)(buffer);
+  return (data.text || "").replace(/\s+/g, " ").trim();
 }
 
 async function embedTexts(texts: string[]): Promise<(number[] | null)[]> {
@@ -112,6 +197,58 @@ async function embedTexts(texts: string[]): Promise<(number[] | null)[]> {
     return texts.map(() => null);
   }
   return out;
+}
+
+async function mergeBrandOnKnowledgeBase(knowledgeBaseId: number, incoming: KbBrandProfile): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const [kb] = await db.select().from(knowledgeBases).where(eq(knowledgeBases.id, knowledgeBaseId)).limit(1);
+  if (!kb) return;
+  let cur: Record<string, unknown> = {};
+  if (kb.brandProfile) {
+    try {
+      cur = JSON.parse(kb.brandProfile) as Record<string, unknown>;
+    } catch {}
+  }
+  const merged = { ...cur, ...incoming, extractedAt: new Date().toISOString() };
+  await db
+    .update(knowledgeBases)
+    .set({ brandProfile: JSON.stringify(merged), updatedAt: new Date() })
+    .where(eq(knowledgeBases.id, knowledgeBaseId));
+}
+
+async function persistChunks(
+  knowledgeBaseId: number,
+  sourceId: number,
+  text: string,
+  meta: { url?: string | null; kind: string }
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+
+  const hash = createHash("sha256").update(text).digest("hex");
+  await db
+    .update(knowledgeBaseSources)
+    .set({ contentHash: hash, updatedAt: new Date() })
+    .where(eq(knowledgeBaseSources.id, sourceId));
+
+  await db.delete(knowledgeBaseChunks).where(eq(knowledgeBaseChunks.sourceId, sourceId));
+
+  const parts = chunkText(text);
+  if (!parts.length) throw new Error("Chunking produced no segments");
+
+  const embeddings = await embedTexts(parts);
+
+  for (let i = 0; i < parts.length; i++) {
+    const emb = embeddings[i];
+    await db.insert(knowledgeBaseChunks).values({
+      knowledgeBaseId,
+      sourceId,
+      content: parts[i]!,
+      embedding: emb ? JSON.stringify(emb) : null,
+      metadata: JSON.stringify({ index: i, url: meta.url ?? undefined, kind: meta.kind }),
+    });
+  }
 }
 
 async function refreshKbStatus(knowledgeBaseId: number): Promise<void> {
@@ -154,7 +291,7 @@ async function refreshKbStatus(knowledgeBaseId: number): Promise<void> {
     .where(eq(knowledgeBases.id, knowledgeBaseId));
 }
 
-/** Background: crawl + chunk + embed + persist. */
+/** Background: crawl / PDF → chunk → embed → persist. */
 export async function ingestKnowledgeBaseSource(sourceId: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
@@ -180,39 +317,31 @@ export async function ingestKnowledgeBaseSource(sourceId: number): Promise<void>
 
   try {
     let text: string;
+    let meta: { url?: string | null; kind: string } = { kind: src.sourceType };
+
     if (src.sourceType === "website" && src.sourceUrl) {
-      text = await fetchWebsiteText(src.sourceUrl);
+      const { text: t, brand } = await fetchWebsiteTextAndBrand(src.sourceUrl);
+      text = t;
+      if (brand) await mergeBrandOnKnowledgeBase(src.knowledgeBaseId, brand);
+      meta = { url: src.sourceUrl, kind: "website" };
+    } else if (src.sourceType === "pdf" && src.sourceUrl) {
+      const buf = await fetchBinary(src.sourceUrl, "application/pdf,*/*");
+      text = await extractPdfText(buf);
+      meta = { url: src.sourceUrl, kind: "pdf" };
+    } else if (src.sourceType === "txt" && src.sourceUrl) {
+      const buf = await fetchBinary(src.sourceUrl, "text/plain,*/*");
+      text = buf.toString("utf-8").replace(/\s+/g, " ").trim();
+      meta = { url: src.sourceUrl, kind: "txt" };
     } else {
-      throw new Error(`Unsupported source type for auto-ingest: ${src.sourceType}`);
+      throw new Error(`Unsupported or incomplete source: ${src.sourceType}`);
     }
 
-    if (!text || text.length < 80) {
-      throw new Error("Not enough text extracted from page");
+    const minLen = src.sourceType === "website" ? 80 : 40;
+    if (!text || text.length < minLen) {
+      throw new Error("Not enough text extracted from source");
     }
 
-    const hash = createHash("sha256").update(text).digest("hex");
-    await db
-      .update(knowledgeBaseSources)
-      .set({ contentHash: hash, updatedAt: new Date() })
-      .where(eq(knowledgeBaseSources.id, sourceId));
-
-    await db.delete(knowledgeBaseChunks).where(eq(knowledgeBaseChunks.sourceId, sourceId));
-
-    const parts = chunkText(text);
-    if (!parts.length) throw new Error("Chunking produced no segments");
-
-    const embeddings = await embedTexts(parts);
-
-    for (let i = 0; i < parts.length; i++) {
-      const emb = embeddings[i];
-      await db.insert(knowledgeBaseChunks).values({
-        knowledgeBaseId: src.knowledgeBaseId,
-        sourceId: src.id,
-        content: parts[i]!,
-        embedding: emb ? JSON.stringify(emb) : null,
-        metadata: JSON.stringify({ index: i, url: src.sourceUrl }),
-      });
-    }
+    await persistChunks(src.knowledgeBaseId, sourceId, text, meta);
 
     await db
       .update(knowledgeBaseSources)
@@ -227,6 +356,66 @@ export async function ingestKnowledgeBaseSource(sourceId: number): Promise<void>
   }
 
   await refreshKbStatus(src.knowledgeBaseId);
+}
+
+/**
+ * Ingest an uploaded PDF from memory (multipart upload route).
+ * Inserts the source row, then runs the same chunk/embed pipeline.
+ */
+export async function ingestUploadedPdfSource(
+  knowledgeBaseId: number,
+  userId: number,
+  buffer: Buffer,
+  filename: string
+): Promise<{ sourceId: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+
+  const [kb] = await db
+    .select()
+    .from(knowledgeBases)
+    .where(eq(knowledgeBases.id, knowledgeBaseId))
+    .limit(1);
+  if (!kb || kb.userId !== userId) throw new Error("Knowledge base not found");
+
+  await db.insert(knowledgeBaseSources).values({
+    knowledgeBaseId,
+    sourceType: "pdf",
+    sourceUrl: null,
+    fileName: filename.slice(0, 255),
+    fileSize: buffer.length,
+    status: "processing",
+  });
+  const rows = await db
+    .select()
+    .from(knowledgeBaseSources)
+    .where(eq(knowledgeBaseSources.knowledgeBaseId, knowledgeBaseId))
+    .orderBy(desc(knowledgeBaseSources.id))
+    .limit(1);
+  const src = rows[0];
+  if (!src) throw new Error("Insert failed");
+
+  const sourceId = src.id;
+
+  try {
+    const text = await extractPdfText(buffer);
+    if (!text || text.length < 40) throw new Error("Not enough text in PDF");
+    await persistChunks(knowledgeBaseId, sourceId, text, { url: filename, kind: "pdf_upload" });
+    await db
+      .update(knowledgeBaseSources)
+      .set({ status: "completed", errorMessage: null, updatedAt: new Date() })
+      .where(eq(knowledgeBaseSources.id, sourceId));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await db
+      .update(knowledgeBaseSources)
+      .set({ status: "failed", errorMessage: msg.slice(0, 2000), updatedAt: new Date() })
+      .where(eq(knowledgeBaseSources.id, sourceId));
+    throw e;
+  }
+
+  await refreshKbStatus(knowledgeBaseId);
+  return { sourceId };
 }
 
 export function scheduleIngestKnowledgeBaseSource(sourceId: number): void {

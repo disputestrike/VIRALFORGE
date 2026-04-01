@@ -333,6 +333,8 @@ export const knowledgeBases = mysqlTable("knowledge_bases", {
   userId: int("userId").notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
+  /** JSON: siteUrl, title, description, logoUrl, faviconUrl, primaryColor — filled when crawling a website */
+  brandProfile: text("brandProfile"),
   status: mysqlEnum("status", ["training", "active", "failed"]).default("training").notNull(),
   trainingProgress: int("trainingProgress").default(0).notNull(),
   lastTrainedAt: timestamp("lastTrainedAt"),

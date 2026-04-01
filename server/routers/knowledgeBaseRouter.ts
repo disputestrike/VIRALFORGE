@@ -93,6 +93,80 @@ export const knowledgeBaseRouter = router({
       return { success: true as const, sourceId: src.id };
     }),
 
+  /** Public URL to a PDF — fetch, extract text, chunk, embed (checklist: document ingestion). */
+  addPdfUrlSource: protectedProcedure
+    .input(
+      z.object({
+        knowledgeBaseId: z.number().int().positive(),
+        url: z.string().url().max(2048),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+      const [kb] = await db
+        .select()
+        .from(knowledgeBases)
+        .where(eq(knowledgeBases.id, input.knowledgeBaseId))
+        .limit(1);
+      if (!kb || kb.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Knowledge base not found" });
+      }
+      await db.insert(knowledgeBaseSources).values({
+        knowledgeBaseId: input.knowledgeBaseId,
+        sourceType: "pdf",
+        sourceUrl: input.url,
+        status: "pending",
+      });
+      const rows = await db
+        .select()
+        .from(knowledgeBaseSources)
+        .where(eq(knowledgeBaseSources.knowledgeBaseId, input.knowledgeBaseId))
+        .orderBy(desc(knowledgeBaseSources.id))
+        .limit(1);
+      const src = rows[0];
+      if (!src) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Insert failed" });
+      scheduleIngestKnowledgeBaseSource(src.id);
+      return { success: true as const, sourceId: src.id };
+    }),
+
+  /** Plain-text URL (e.g. .txt or raw markdown hosted). */
+  addTextUrlSource: protectedProcedure
+    .input(
+      z.object({
+        knowledgeBaseId: z.number().int().positive(),
+        url: z.string().url().max(2048),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+      const [kb] = await db
+        .select()
+        .from(knowledgeBases)
+        .where(eq(knowledgeBases.id, input.knowledgeBaseId))
+        .limit(1);
+      if (!kb || kb.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Knowledge base not found" });
+      }
+      await db.insert(knowledgeBaseSources).values({
+        knowledgeBaseId: input.knowledgeBaseId,
+        sourceType: "txt",
+        sourceUrl: input.url,
+        status: "pending",
+      });
+      const rows = await db
+        .select()
+        .from(knowledgeBaseSources)
+        .where(eq(knowledgeBaseSources.knowledgeBaseId, input.knowledgeBaseId))
+        .orderBy(desc(knowledgeBaseSources.id))
+        .limit(1);
+      const src = rows[0];
+      if (!src) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Insert failed" });
+      scheduleIngestKnowledgeBaseSource(src.id);
+      return { success: true as const, sourceId: src.id };
+    }),
+
   /** Re-run failed or stale website ingest. */
   reprocessSource: protectedProcedure
     .input(z.object({ sourceId: z.number().int().positive() }))
@@ -167,6 +241,7 @@ export const knowledgeBaseRouter = router({
         pending,
         kbStatus: kb.status,
         trainingProgress: kb.trainingProgress,
+        brandProfile: kb.brandProfile,
       };
     }),
 

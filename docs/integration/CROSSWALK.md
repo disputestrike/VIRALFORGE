@@ -80,7 +80,7 @@ Use this table to prove **DB + API + UI** for each shipped row. Paths are relati
 | # | Evidence: DB / SQL | Evidence: API | Evidence: UI | Evidence: tests / runtime |
 |---|-------------------|---------------|-------------|---------------------------|
 | 1 | `drizzle/schema.ts` → `userPhoneNumbers`; `0018_user_phone_numbers_align.sql` | `server/routers.ts` → `settings.listPhoneNumbers`, `setPhoneNumberActive`, `onboarding.provisionNumber` | `client/src/pages/Settings.tsx` (Dedicated phone numbers) | Inbound tenant resolution: `server/db.ts` `getUserIdByPhoneNumber`, `server/_core/index.ts` SMS/voice |
-| 2 | `knowledge_bases` + sources + `knowledge_base_chunks` (`0011`) | `knowledgeBaseRouter.ts` + `knowledgeBaseIngestion.ts` (crawl/chunk/embed) + `tenantContextForVoice.ts` (voice RAG) | `Settings.tsx` KB card + search test | `knowledgeBaseIngestion.test.ts` |
+| 2 | `knowledge_bases` + `brandProfile` (`0020`) + sources + chunks | `knowledgeBaseRouter.ts` + `knowledgeBaseIngestion.ts` (site+PDF+txt+branding) + upload route + `tenantContextForVoice.ts` | `Settings.tsx` KB (URLs, upload, brand panel, search) | `knowledgeBaseIngestion.test.ts` |
 | 3 | `drizzle/schema.ts` → `leads` + `createdBy` | `server/routers.ts` → `leads.*` | `client/src/pages/Leads.tsx` | `server/comprehensive.test.ts` |
 | 4 | `call_recordings.aiSummary` | `server/_core/services/callSummaryService.ts`, persist in `voiceSessionManager` | Voice AI / recordings UI | — |
 | 5 | `lead_scoring_rules` (`0012`) | `server/routers/leadScoringRouter.ts` | `Settings.tsx` (Lead scoring) | `leadScoringApply` on `leads.create` |
