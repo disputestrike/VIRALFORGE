@@ -530,23 +530,30 @@ export default function LandingPage() {
 
       <LandingFaq variant="dark" />
 
-      {/* TRUST */}
-      <section id="trust" className="scroll-mt-24 border-b border-white/20 bg-black px-6 py-16 md:py-20">
-        <div className="mx-auto max-w-6xl">
-          <h2 className="mb-10 text-center text-2xl font-extrabold text-white md:text-3xl">Enterprise-grade reliability</h2>
-          <div className="grid-3 grid gap-4 md:grid-cols-3">
+      {/* TRUST (lightweight) */}
+      <section id="trust" className="scroll-mt-24 border-b border-white/20 bg-black px-6 py-12 md:py-14">
+        <div className="mx-auto max-w-5xl rounded-2xl border border-white/15 bg-white/[0.03] p-6 md:p-8">
+          <div className="text-center">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-400">Data & security</p>
+            <h2 className="mt-2 text-2xl font-extrabold text-white md:text-3xl">Your data is handled with care</h2>
+            <p className="mx-auto mt-3 max-w-2xl text-sm text-zinc-400 md:text-base">
+              Lightweight safeguards built into ApexAI so your team can move fast without losing control.
+            </p>
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
             {[
-              { icon: <Shield className="size-6 text-blue-400" />, title: "SOC 2 ready", desc: "Security controls aligned with enterprise standards. Data encrypted in transit and at rest." },
-              { icon: <MessageSquare className="size-6 text-blue-400" />, title: "TCPA-aware", desc: "Built-in controls for outbound at scale. You manage consent; we help you stay organized." },
-              { icon: <Zap className="size-6 text-blue-400" />, title: "99.9% uptime", desc: "Hosted on redundant cloud infrastructure with monitoring and failover." },
-              { icon: <Phone className="size-6 text-blue-400" />, title: "Human handoff", desc: "Instant live transfer anytime a caller needs a real person. Seamless." },
-              { icon: <Star className="size-6 text-blue-400" />, title: "All calls recorded", desc: "Full transcripts and recordings for every conversation. Review anytime." },
-              { icon: <Calendar className="size-6 text-blue-400" />, title: "12+ languages", desc: "English, Spanish, French, German, Portuguese, and more. Global ready." },
+              { icon: <Shield className="size-4 text-blue-400" />, title: "Encrypted transport", desc: "Traffic is encrypted in transit and platform data is encrypted at rest." },
+              { icon: <MessageSquare className="size-4 text-blue-400" />, title: "Consent-aware flows", desc: "Outbound workflows keep consent and opt-out handling visible and organized." },
+              { icon: <Star className="size-4 text-blue-400" />, title: "Audit visibility", desc: "Calls, transcripts, and activity logs are reviewable for QA and accountability." },
+              { icon: <Phone className="size-4 text-blue-400" />, title: "Human handoff", desc: "Any conversation can transfer to a human when needed." },
             ].map(({ icon, title, desc }) => (
-              <div key={title} className="rounded-2xl border border-white/20 bg-white/5 p-6">
-                <div className="mb-3">{icon}</div>
-                <h3 className="font-bold text-white">{title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-400">{desc}</p>
+              <div key={title} className="rounded-xl border border-white/10 bg-black/30 p-4">
+                <div className="mb-2 flex items-center gap-2">
+                  {icon}
+                  <h3 className="text-sm font-semibold text-white">{title}</h3>
+                </div>
+                <p className="text-xs leading-relaxed text-zinc-400">{desc}</p>
               </div>
             ))}
           </div>

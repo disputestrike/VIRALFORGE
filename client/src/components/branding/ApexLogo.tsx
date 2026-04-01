@@ -14,6 +14,11 @@ const LOGO_ALT: Record<ApexLogoVariant, string> = {
   wordmark: "ApexAI wordmark",
 };
 
+function withBaseUrl(path: string): string {
+  const base = import.meta.env.BASE_URL || "/";
+  return `${base}${path.replace(/^\/+/, "")}`;
+}
+
 export default function ApexLogo({
   variant = "full",
   className,
@@ -26,7 +31,7 @@ export default function ApexLogo({
   return (
     <span className={cn("inline-flex items-center", className)}>
       <img
-        src={LOGO_SRC[variant]}
+        src={withBaseUrl(LOGO_SRC[variant])}
         alt={LOGO_ALT[variant]}
         className={cn("block h-auto w-auto max-w-full object-contain", imgClassName)}
         loading="eager"
