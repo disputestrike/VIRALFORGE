@@ -151,6 +151,9 @@ export default function DemoCallWidget() {
               {error && <p className="text-red-400 text-sm text-center">{error}</p>}
 
               <div className="pt-2 space-y-4">
+                <p className="text-center text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>
+                  No credit card. No account required for this demo.
+                </p>
                 <Button
                   className="w-full min-h-[56px] text-base font-bold"
                   onClick={handleSubmit}

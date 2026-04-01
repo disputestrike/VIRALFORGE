@@ -176,7 +176,10 @@ export default function LandingPage() {
   ];
 
   return (
-    <div className="min-w-0 bg-black text-white antialiased" style={{ fontFamily: "-apple-system, 'Helvetica Neue', Arial, sans-serif" }}>
+    <div
+      className="min-w-0 bg-black pb-24 text-white antialiased md:pb-0"
+      style={{ fontFamily: "-apple-system, 'Helvetica Neue', Arial, sans-serif" }}
+    >
       <style>{`
         .show-mobile{display:none!important}
         @media(max-width:768px){
@@ -586,6 +589,29 @@ export default function LandingPage() {
       </section>
 
       <MarketingFooter />
+
+      {/* Mobile sticky conversion bar — hidden on md+ */}
+      <div
+        className="fixed inset-x-0 bottom-0 z-50 flex gap-2 border-t border-white/20 bg-black/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden"
+        role="region"
+        aria-label="Quick actions"
+      >
+        <a href="#demo" className="min-w-0 flex-1">
+          <Button size="lg" className="h-12 w-full gap-2 bg-blue-600 px-3 font-bold text-white hover:bg-blue-500">
+            <Phone className="size-4 shrink-0" />
+            <span className="truncate">Hear it on your phone</span>
+          </Button>
+        </a>
+        <a href={getLoginUrl()} className="min-w-0 flex-1">
+          <Button
+            size="lg"
+            variant="outline"
+            className="h-12 w-full border-zinc-600 bg-transparent px-3 font-semibold text-white hover:bg-white/10"
+          >
+            <span className="truncate">Start free trial</span>
+          </Button>
+        </a>
+      </div>
     </div>
   );
 }

@@ -113,12 +113,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
         {/* Logo + collapse button */}
         <div className="h-14 flex items-center border-b border-border px-3 gap-2 overflow-hidden">
           {!collapsed && (
-            <Link href="/dashboard" className="flex items-center gap-2 no-underline flex-1 min-w-0">
-              <ApexLogo variant="mark" imgClassName="h-6 w-auto rounded-md border border-border/40 sm:h-7" />
-              <div className="min-w-0">
-                <ApexLogo variant="wordmark" imgClassName="h-3.5 w-auto sm:h-4" />
-                <p className="text-[9px] text-muted-foreground leading-none mt-0.5">Outbound Engine</p>
-              </div>
+            <Link href="/dashboard" className="flex flex-col gap-0.5 no-underline flex-1 min-w-0">
+              <ApexLogo
+                variant="full"
+                imgClassName="h-7 w-auto max-w-[148px] object-left object-contain rounded-md border border-border/40 sm:h-8"
+              />
+              <p className="text-[9px] text-muted-foreground leading-none">Outbound Engine</p>
             </Link>
           )}
           {collapsed && (
