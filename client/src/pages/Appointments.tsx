@@ -247,7 +247,7 @@ export default function AppointmentsPage() {
           <div className="space-y-4 mt-2">
             <div className="space-y-1.5">
               <Label className="text-xs">Lead <span className="text-red-400">*</span></Label>
-              <Select value={newAppt.leadId} onValueChange={(v) => setNewAppt(a => ({ ...a, leadId: v }))}>
+              <Select value={newAppt.leadId || undefined} onValueChange={(v) => setNewAppt(a => ({ ...a, leadId: v }))}>
                 <SelectTrigger className="bg-secondary border-border">
                   <SelectValue placeholder="Select a lead..." />
                 </SelectTrigger>

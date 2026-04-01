@@ -106,8 +106,8 @@ export default function IndustryDemos() {
 
   return (
     <div id="demos" className="w-full">
-      <div className="max-w-[1180px] mx-auto w-full px-1 sm:px-0">
-        <div className="text-center mb-12 sm:mb-14">
+      <div className="max-w-[1280px] mx-auto w-full px-2 sm:px-0">
+        <div className="text-center mb-12 sm:mb-16">
           <div className="inline-block px-4 py-1.5 rounded-full text-xs font-semibold mb-4"
             style={{ backgroundColor: `${BLUE}18`, border: `1px solid ${BLUE}35`, color: BLUE_LIGHT }}>
             Industry samples
@@ -115,14 +115,14 @@ export default function IndustryDemos() {
           <h2 className="text-3xl sm:text-4xl font-black text-white mb-4 tracking-tight">
             Hear it by industry
           </h2>
-          <p className="text-base sm:text-lg max-w-2xl mx-auto leading-relaxed px-2" style={{ color: DIM2 }}>
+          <p className="text-base sm:text-lg max-w-3xl mx-auto leading-relaxed px-2" style={{ color: DIM2 }}>
             Short recordings from real-style flows. Then get a live call to your phone.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-9 lg:gap-11">
           {DEMOS.map((demo) => (
-            <div key={demo.id} className="group flex flex-col p-7 sm:p-8 rounded-2xl sm:rounded-3xl transition-all duration-200 min-h-0"
+            <div key={demo.id} className="group flex flex-col p-8 sm:p-9 lg:p-10 rounded-2xl sm:rounded-3xl transition-all duration-200 min-h-0"
               style={{ backgroundColor: D2, border: `1px solid ${DIM3}` }}
               onMouseEnter={e => (e.currentTarget.style.borderColor = `${demo.color}45`)}
               onMouseLeave={e => (e.currentTarget.style.borderColor = DIM3)}>

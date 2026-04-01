@@ -179,7 +179,10 @@ export default function VoiceAI() {
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
               <Label className="text-xs">Select Lead</Label>
-              <Select value={selectedLeadId?.toString() ?? ""} onValueChange={(v) => setSelectedLeadId(parseInt(v))}>
+              <Select
+                value={selectedLeadId != null ? String(selectedLeadId) : undefined}
+                onValueChange={(v) => setSelectedLeadId(parseInt(v, 10))}
+              >
                 <SelectTrigger className="bg-secondary border-border">
                   <SelectValue placeholder="Choose a lead to call..." />
                 </SelectTrigger>
@@ -425,7 +428,7 @@ export default function VoiceAI() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Industry <span className="text-red-400">*</span></Label>
-                  <Select value={sf.industry} onValueChange={(v) => {
+                  <Select value={sf.industry || undefined} onValueChange={(v) => {
                     setSF("industry", v);
                     // Auto-populate value props when industry selected
                     const data = INDUSTRY_DATA[v];

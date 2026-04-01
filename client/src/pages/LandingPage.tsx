@@ -397,14 +397,14 @@ export default function LandingPage() {
 
       {/* LIVE DEMO — wide frame + generous inner padding */}
       <section id="demo" style={{backgroundColor:C.bg2,padding:"88px clamp(20px,5vw,48px) 104px",borderTop:`1px solid ${C.borderW}`}}>
-        <div style={{maxWidth:1120,margin:"0 auto",width:"100%"}}>
+        <div style={{maxWidth:1240,margin:"0 auto",width:"100%"}}>
           <div style={{textAlign:"center",marginBottom:12}}>
             <div style={{color:C.blue2,fontWeight:700,fontSize:13,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:16}}>Live demo</div>
-            <p style={{color:C.dim,fontSize:17,maxWidth:640,margin:"0 auto",lineHeight:1.65}}>
+            <p style={{color:C.dim,fontSize:17,maxWidth:720,margin:"0 auto",lineHeight:1.65}}>
               No signup. No credit card. We call you so you can hear the same experience your leads get.
             </p>
           </div>
-          <div style={{backgroundColor:C.bg3,borderRadius:24,padding:"clamp(32px,5vw,56px) clamp(24px,5vw,56px)",marginTop:40,border:`1px solid ${C.borderW}`,boxSizing:"border-box"}}>
+          <div style={{backgroundColor:C.bg3,borderRadius:24,padding:"clamp(28px,4vw,48px) clamp(20px,4vw,40px)",marginTop:36,border:`1px solid ${C.borderW}`,boxSizing:"border-box",width:"100%"}}>
             <DemoCallWidget />
           </div>
         </div>
@@ -426,7 +426,7 @@ export default function LandingPage() {
 
       {/* ROI CALCULATOR */}
       <section id="outbound" style={{backgroundColor:C.bg2,padding:"88px clamp(20px,5vw,48px)",borderTop:`1px solid ${C.borderW}`}}>
-        <div style={{maxWidth:1200,margin:"0 auto",textAlign:"center",width:"100%"}}>
+        <div style={{maxWidth:1280,margin:"0 auto",textAlign:"center",width:"100%"}}>
           <div style={{color:C.blue2,fontWeight:700,fontSize:13,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:16}}>Revenue calculator</div>
           <h2 style={{color:C.white,fontSize:"clamp(26px,4vw,44px)",fontWeight:800,marginBottom:16,letterSpacing:"-0.03em"}}>
             Model the gap

@@ -316,7 +316,7 @@ export default function Templates() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Industry *</Label>
-                  <Select value={aiForm.industry} onValueChange={(v) => setAiForm((f) => ({ ...f, industry: v }))}>
+                  <Select value={aiForm.industry || undefined} onValueChange={(v) => setAiForm((f) => ({ ...f, industry: v }))}>
                     <SelectTrigger className="bg-secondary border-border">
                       <SelectValue placeholder="Select..." />
                     </SelectTrigger>
@@ -342,7 +342,7 @@ export default function Templates() {
 
               <div className="space-y-1.5">
                 <Label className="text-xs">Goal *</Label>
-                <Select value={aiForm.goal} onValueChange={(v) => setAiForm((f) => ({ ...f, goal: v }))}>
+                <Select value={aiForm.goal || undefined} onValueChange={(v) => setAiForm((f) => ({ ...f, goal: v }))}>
                   <SelectTrigger className="bg-secondary border-border">
                     <SelectValue placeholder="What should this message achieve?" />
                   </SelectTrigger>

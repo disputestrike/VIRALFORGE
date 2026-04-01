@@ -43,10 +43,10 @@ export default function ROICalculator() {
   const fmt = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 0 });
 
   return (
-    <div className="w-full max-w-[1180px] mx-auto min-w-0 px-1 sm:px-0">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-14 items-start">
+    <div className="w-full max-w-[1280px] mx-auto min-w-0 px-1 sm:px-0">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-14 items-start lg:items-stretch">
         <div
-          className="space-y-8 sm:space-y-9 p-8 sm:p-10 md:p-12 rounded-2xl sm:rounded-3xl min-w-0"
+          className="space-y-8 sm:space-y-9 p-8 sm:p-10 md:p-12 lg:p-14 rounded-2xl sm:rounded-3xl min-w-0 w-full"
           style={{ backgroundColor: D3, border: `1px solid ${DIM3}`, boxSizing: "border-box" }}
         >
           <h3 className="font-bold text-white text-xl tracking-tight">Your business today</h3>
@@ -111,10 +111,9 @@ export default function ROICalculator() {
           </div>
         </div>
 
-        {/* Results: single full-width column so every block matches button width */}
-        <div className="flex flex-col gap-5 w-full min-w-0 [&>*]:w-full [&>*]:max-w-full [&>*]:box-border">
-          <div className="grid grid-cols-2 gap-4 w-full">
-            <div className="p-6 sm:p-7 rounded-2xl min-h-[200px] flex flex-col" style={{ backgroundColor: D3, border: `1px solid ${DIM3}` }}>
+        <div className="flex flex-col gap-5 w-full min-w-0 self-stretch">
+          <div className="grid grid-cols-2 gap-4 w-full min-w-0 box-border">
+            <div className="p-6 sm:p-7 rounded-2xl min-h-[200px] flex flex-col w-full min-w-0 box-border" style={{ backgroundColor: D3, border: `1px solid ${DIM3}` }}>
               <p className="text-xs mb-3 font-semibold uppercase tracking-wide" style={{ color: DIM2 }}>Without ApexAI</p>
               <p className="text-2xl sm:text-3xl font-black text-white">${fmt(currentDailyRevenue)}</p>
               <p className="text-sm mt-1" style={{ color: DIM2 }}>daily revenue</p>
@@ -136,7 +135,7 @@ export default function ROICalculator() {
             </div>
           </div>
 
-          <div className="p-7 sm:p-8 rounded-2xl w-full" style={{ backgroundColor: "rgba(251,191,36,0.08)", border: `1px solid ${AMBER}35` }}>
+          <div className="p-7 sm:p-8 rounded-2xl w-full min-w-0 box-border" style={{ backgroundColor: "rgba(251,191,36,0.08)", border: `1px solid ${AMBER}35` }}>
             <div className="flex items-start gap-3 mb-3">
               <TrendingUp className="w-5 h-5 shrink-0 mt-0.5" style={{ color: AMBER }} />
               <p className="text-base font-bold leading-snug" style={{ color: AMBER }}>Estimated revenue left on the table (daily)</p>
@@ -157,8 +156,8 @@ export default function ROICalculator() {
             </p>
           </div>
 
-          <Link href="/dashboard" className="w-full block">
-            <Button className="w-full min-h-[52px] text-base font-bold rounded-xl" style={{ backgroundColor: BLUE }}>
+          <Link href="/dashboard" className="w-full min-w-0 block box-border">
+            <Button className="w-full min-w-0 min-h-[52px] text-base font-bold rounded-xl box-border" style={{ backgroundColor: BLUE }}>
               Start free — see your dashboard
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>

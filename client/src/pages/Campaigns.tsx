@@ -353,7 +353,7 @@ AI Opening Script: "${data.campaignScript}"`.trim()
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Industry</Label>
-                <Select value={form.industry} onValueChange={(v) => setForm((f) => ({ ...f, industry: v }))}>
+                <Select value={form.industry || undefined} onValueChange={(v) => setForm((f) => ({ ...f, industry: v }))}>
                   <SelectTrigger className="bg-secondary border-border">
                     <SelectValue placeholder="Select industry" />
                   </SelectTrigger>

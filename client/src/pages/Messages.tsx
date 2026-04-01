@@ -315,8 +315,8 @@ export default function Messages() {
             {templates.length > 0 && (
               <div className="p-3 rounded-lg bg-secondary/50 border border-border space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">Use a Template</p>
-                <Select value={sendForm.templateId} onValueChange={(v) => applyTemplate(v, "send")}>
-                  <SelectTrigger className="bg-secondary border-border text-xs h-8">
+                <Select value={sendForm.templateId || undefined} onValueChange={(v) => applyTemplate(v, "send")}>
+                  <SelectTrigger className="bg-secondary border-border text-xs h-8 w-full min-w-0">
                     <SelectValue placeholder="Pick a template to auto-fill..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -444,8 +444,8 @@ export default function Messages() {
             {templates.length > 0 && (
               <div className="p-3 rounded-lg bg-secondary/50 border border-border space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">Use a Template</p>
-                <Select value={bulkForm.templateId} onValueChange={(v) => applyTemplate(v, "bulk")}>
-                  <SelectTrigger className="bg-secondary border-border text-xs h-8">
+                <Select value={bulkForm.templateId || undefined} onValueChange={(v) => applyTemplate(v, "bulk")}>
+                  <SelectTrigger className="bg-secondary border-border text-xs h-8 w-full min-w-0">
                     <SelectValue placeholder="Pick a template..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -461,7 +461,7 @@ export default function Messages() {
 
             <div className="space-y-1.5">
               <Label className="text-xs">Campaign *</Label>
-              <Select value={bulkForm.campaignId} onValueChange={(v) => setBulkForm((f) => ({ ...f, campaignId: v }))}>
+              <Select value={bulkForm.campaignId || undefined} onValueChange={(v) => setBulkForm((f) => ({ ...f, campaignId: v }))}>
                 <SelectTrigger className="bg-secondary border-border">
                   <SelectValue placeholder="Select campaign..." />
                 </SelectTrigger>
