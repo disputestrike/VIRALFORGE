@@ -589,10 +589,13 @@ async function startServer() {
         const { getUserVoiceSettings } = await import("./services/voiceProfiles");
         const voiceSettings = ownerId ? await getUserVoiceSettings(ownerId) : { voiceProfileId: "cartesia-sarah-sales" };
         if (!vm.getSession(sessionId)) {
+          const contactPhone =
+            outboundLeadId && To ? String(To) : String(From || "");
           vm.createSession((lead as any).id ?? 0, "default", sessionId, {
             userId: ownerId ?? 1,
             language: ownerSettings.language || "en",
             voiceProfileId: voiceSettings.voiceProfileId,
+            callerPhone: contactPhone || undefined,
           });
           vm.startSessionPersistenceInterval(sessionId);
         }
@@ -803,6 +806,7 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
         userId: ownerId,
         language,
         voiceProfileId: voiceSettings.voiceProfileId,
+        callerPhone: From || undefined,
       });
       voiceSessionManager.startSessionPersistenceInterval(sid);
       inboundLeadId = String((lead as any)?.id ?? "");

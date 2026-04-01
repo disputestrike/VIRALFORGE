@@ -30,21 +30,37 @@ export interface LLMResponse {
 }
 
 /**
- * Cerebras model IDs to try in order. Railway often sets CEREBRAS_MODEL=llama-3.3-70b (removed → 404).
- * We try env first, then known public IDs so production self-heals without variable changes.
+ * Maps common Railway typos / old names to Cerebras API ids (dots not dashes where required).
+ * Llama 70B "disappeared" from this stack when Cerebras returned 404 for those ids on the account —
+ * not because we prefer Qwen ideologically. Re-add Llama here when your Cerebras dashboard lists it.
+ */
+const CEREBRAS_MODEL_ALIASES: Record<string, string> = {
+  "llama-3.3-70b": "llama3.3-70b",
+  "llama-3.1-70b": "llama3.1-70b",
+  "llama-3.1-8b": "llama3.1-8b",
+  "llama-3.3-8b": "llama3.3-8b",
+};
+
+const DEFAULT_VOICE_MODELS = "qwen-3-235b-a22b-instruct-2507";
+
+/**
+ * Ordered list of Cerebras model ids to try for voice (and pool-based calls that use this helper).
+ * Set `CEREBRAS_VOICE_MODELS` to a comma-separated list, e.g.
+ *   qwen-3-235b-a22b-instruct-2507,llama3.1-8b
+ * If unset, uses `CEREBRAS_MODEL` (single) or the default Qwen id above.
+ * Voice engine falls through each until one returns non-404; then Claude if all fail.
  */
 export function cerebrasModelCandidates(): string[] {
-  // CEREBRAS_MODEL env in Railway = "llama-3.3-70b" (with dashes, trailing space)
-  // Cerebras API model name map (dashes → dots, confirmed working):
-  // CONFIRMED available on this account (tested April 2026):
-  //   qwen-3-235b-a22b-instruct-2507  ← 235B model, excellent quality
-  //   llama3.1-8b                     ← fast but small, fallback only
-  // llama-3.3-70b / llama3.3-70b do NOT exist on this account (404)
-
-  // qwen-3-235b is the ONLY model we use on Cerebras — fast + intelligent
-  // If Cerebras fails entirely, Claude is the fallback (handled in voice engine)
-  console.log("[Cerebras] Model: qwen-3-235b-a22b-instruct-2507");
-  return ["qwen-3-235b-a22b-instruct-2507"];
+  const raw =
+    (process.env.CEREBRAS_VOICE_MODELS || process.env.CEREBRAS_MODEL || DEFAULT_VOICE_MODELS).trim();
+  const parts = raw
+    .split(/[,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const resolved = parts.map((id) => CEREBRAS_MODEL_ALIASES[id] ?? id);
+  const uniq = Array.from(new Set(resolved));
+  console.log("[Cerebras] Model candidates:", uniq.join(", "));
+  return uniq.length ? uniq : [DEFAULT_VOICE_MODELS];
 }
 
 // ── Routing Logic ─────────────────────────────────────────────────────────────

@@ -65,7 +65,7 @@ Legend: **DB** = Drizzle + `drizzle/*.sql` | **API** = tRPC namespace | **UI** =
 | Topic | Location |
 |-------|----------|
 | Background jobs | `server/_core/services/queue.ts`; workers in `server/_core/index.ts` |
-| Knowledge base RAG + branding | `knowledgeBaseIngestion.ts` + `tenantContextForVoice.ts` + `voiceRealtimePipeline.ts` |
+| Knowledge base RAG + branding | `knowledgeBaseIngestion.ts` + `tenantContextForVoice.ts` + **`realtimeVoiceEngine.ts`** (live) + `voiceRealtimePipeline.ts` (legacy) |
 | Webhooks | `server/routers/webhooksRouter.ts`; tests `webhooksRouter.test.ts` |
 | Stripe billing | `stripeBilling.ts`; `POST /api/stripe/webhook`; `saas.billing.*`; Settings; `server/_core/env.ts` |
 | Schema | `drizzle/schema.ts`; migrations `drizzle/*.sql` |
@@ -89,6 +89,24 @@ Integration env sanity: `node scripts/verify-integrations.mjs`.
 ## Third-party credentials (required for *live* vendor features — not “optional features”)
 
 These are **external accounts** you must configure in **Railway** (or your host): SignalWire, `OPENAI_API_KEY`, Deepgram, Cartesia, Cerebras, Resend, Stripe, CRM OAuth apps, RCS carrier, FCM/APNs, social app keys. **The app code exposes the integration points**; keys are your deployment responsibility.
+
+---
+
+---
+
+## Enterprise pre-launch verification — automated evidence (local run)
+
+**Run date:** 2026-04-01 (America/New_York). **Machine:** dev workspace (CI-equivalent). **What this proves:** compile safety, **213** automated tests green, production bundle builds; **not** live PSTN/SMS (requires Railway secrets).
+
+| Pass | Command | Result | Evidence |
+|------|---------|--------|----------|
+| **1 TypeScript** | `pnpm run check` | **exit 0** | `tsc --noEmit` — no errors |
+| **2 Tests** | `pnpm run test` | **exit 0** | **15** files, **213** tests passed (`vitest run`) |
+| **3 Build** | `pnpm run build` | **exit 0** | `vite build` + `esbuild` → `dist/index.js` (~384 KB) + `dist/public/` |
+| **4 Integration env report** | `node scripts/verify-integrations.mjs` | **exit 0** | Local `.env` had **DATABASE_URL** set; SignalWire/Resend/Redis/Auth/Stripe **not** set locally (expected on dev machine — **Railway must** carry them for production) |
+| **5 Critical wiring (static)** | ripgrep + file existence | **PASS** | `notifyOwnerAfterVoiceCall` imported from `realtimeVoiceEngine.ts` → `callOwnerNotifyService.ts`; `ensureLeadIdForPersist` in `voiceSessionManager.ts`; `buildVoiceTenantContextBlock` imported in `realtimeVoiceEngine.ts` |
+
+**Honest boundary:** “Production-ready” for **code** = green CI + shipable `dist/`. **Live** enterprise readiness requires **Railway** `VERIFY_STRICT=1`-style completion of SignalWire, Resend, Redis, JWT/OAuth, Stripe, plus **one human** dial test and **dashboard** confirmation of `call_recordings` + owner SMS/email.
 
 ---
 

@@ -808,9 +808,13 @@ export function createCallEngine(opts: EngineOptions): void {
 
     traceEnd(callId);
     if (activeSessionId) {
+      const sessionIdForNotify = activeSessionId;
       try {
-        voiceSessionManager.completeSession(activeSessionId);
-        await voiceSessionManager.persistSessionToDatabase(activeSessionId);
+        voiceSessionManager.completeSession(sessionIdForNotify);
+        await voiceSessionManager.persistSessionToDatabase(sessionIdForNotify);
+        void import("../_core/services/callOwnerNotifyService").then(({ notifyOwnerAfterVoiceCall }) =>
+          notifyOwnerAfterVoiceCall(sessionIdForNotify)
+        );
       } catch {}
     }
 

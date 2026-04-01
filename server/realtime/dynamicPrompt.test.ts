@@ -19,5 +19,7 @@ describe("buildVoiceSystemPrompt", () => {
     expect(out).toContain("20008");
     expect(out).toContain("MANDATORY COMPANY FACTS");
     expect(out).toContain("what_is:");
+    expect(out).toContain("3–6 short sentences");
+    expect(out).not.toContain("2-3 sentences MAX");
   });
 });

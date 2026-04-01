@@ -24,6 +24,8 @@ export interface VoiceSession {
   sentiment?: "positive" | "neutral" | "negative";
   language?: string;
   voiceProfileId?: string;
+  /** Other party's phone (inbound = caller From; outbound = callee To) — used to recover/create lead if leadId was 0 */
+  callerPhone?: string | null;
   transcript: string;
   trace: Array<{ ts: number; event: string; data?: Record<string, unknown> }>;
 }
@@ -39,6 +41,7 @@ export function createSession(
     userId?: number | null;
     language?: string;
     voiceProfileId?: string;
+    callerPhone?: string | null;
   }
 ): VoiceSession {
   const sessionId = callSid || `session_${leadId}_${Date.now()}`;
@@ -58,6 +61,7 @@ export function createSession(
     transcript: "",
     language: options?.language ?? "en",
     voiceProfileId: options?.voiceProfileId,
+    callerPhone: options?.callerPhone ?? null,
     trace: [],
   };
   sessions.set(sessionId, session);
@@ -146,9 +150,57 @@ export function endSession(sessionId: string): void {
 // Track which sessions have already created a DB record (to avoid duplicates)
 const sessionRecordingIds = new Map<string, number>();
 
+/** If leadId was missing, attach or create a lead from callerPhone so transcripts always have a DB home. */
+async function ensureLeadIdForPersist(session: VoiceSession): Promise<boolean> {
+  if (session.leadId > 0) return true;
+  if (!session.userId || !session.callerPhone?.trim()) {
+    console.warn(
+      `[VoiceSession] Cannot persist — no leadId and no callerPhone/userId (session ${session.sessionId})`
+    );
+    return false;
+  }
+  try {
+    const { getLeadByPhone, createLead } = await import("../../db");
+    const { normalizeToE164US } = await import("../phoneE164");
+    const raw = session.callerPhone.trim();
+    const phone = normalizeToE164US(raw) || raw;
+    let existing = await getLeadByPhone(phone);
+    if (!existing && raw !== phone) {
+      existing = await getLeadByPhone(raw);
+    }
+    const foundId = existing && typeof (existing as { id?: number }).id === "number" ? (existing as { id: number }).id : 0;
+    if (foundId > 0) {
+      session.leadId = foundId;
+      console.log(`[VoiceSession] Recovered leadId ${session.leadId} from phone for persist`);
+      return true;
+    }
+    const { insertId } = await createLead({
+      firstName: "Voice",
+      lastName: phone.replace(/\D/g, "").slice(-4) || "Call",
+      phone,
+      source: "voice_recovered",
+      status: "new",
+      score: 50,
+      segment: "warm",
+      createdBy: session.userId,
+    });
+    session.leadId = insertId;
+    console.log(`[VoiceSession] Created lead ${insertId} from callerPhone for transcript persist`);
+    return true;
+  } catch (e) {
+    console.error("[VoiceSession] ensureLeadIdForPersist failed:", e);
+    return false;
+  }
+}
+
 export async function persistSessionToDatabase(sessionId: string): Promise<void> {
   const session = sessions.get(sessionId);
-  if (!session || !session.leadId) return;
+  if (!session) return;
+
+  if (!session.leadId) {
+    const ok = await ensureLeadIdForPersist(session);
+    if (!ok) return;
+  }
 
   // Only persist on completion — not on every interval tick during active calls
   // The interval is just a safety net for crashes; normal flow completes via completeSession
