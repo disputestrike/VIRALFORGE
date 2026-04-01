@@ -33,6 +33,7 @@ import {
 } from "./ui/dropdown-menu";
 import { useState, useEffect } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
+import ApexLogo from "@/components/branding/ApexLogo";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -83,11 +84,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-6 max-w-sm mx-auto px-4">
-          <div className="flex items-center justify-center gap-2 mb-8">
-            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-              <Zap className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-2xl font-bold">ApexAI</span>
+          <div className="mb-8 flex items-center justify-center">
+            <ApexLogo variant="wordmark" imgClassName="h-10 w-auto rounded-md border border-border/40 sm:h-12" />
           </div>
           <h2 className="text-xl font-semibold">Sign in to continue</h2>
           <p className="text-muted-foreground text-sm">Access your campaign management dashboard</p>
@@ -116,20 +114,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <div className="h-14 flex items-center border-b border-border px-3 gap-2 overflow-hidden">
           {!collapsed && (
             <Link href="/dashboard" className="flex items-center gap-2 no-underline flex-1 min-w-0">
-              <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-                <Zap className="w-3.5 h-3.5 text-white" />
-              </div>
+              <ApexLogo variant="mark" imgClassName="h-6 w-auto rounded-md border border-border/40 sm:h-7" />
               <div className="min-w-0">
-                <span className="text-sm font-bold text-foreground">ApexAI</span>
+                <ApexLogo variant="wordmark" imgClassName="h-3.5 w-auto sm:h-4" />
                 <p className="text-[9px] text-muted-foreground leading-none mt-0.5">Outbound Engine</p>
               </div>
             </Link>
           )}
           {collapsed && (
             <Link href="/dashboard" className="flex items-center justify-center w-full no-underline">
-              <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
-                <Zap className="w-3.5 h-3.5 text-white" />
-              </div>
+              <ApexLogo variant="mark" imgClassName="h-6 w-auto rounded-md border border-border/40 sm:h-7" />
             </Link>
           )}
         </div>

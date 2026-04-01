@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/navigation-menu";
 import { ChevronDown, Menu, X } from "lucide-react";
 import { landingColors as C } from "./landingTheme";
+import ApexLogo from "@/components/branding/ApexLogo";
 import {
   channelFeatures,
   platformOverview,
@@ -193,18 +194,8 @@ export default function MarketingNav() {
         }
       `}</style>
       <div className="mx-auto flex h-[60px] max-w-[1280px] items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-2.5 no-underline">
-          <div
-            className="flex size-[34px] items-center justify-center rounded-[9px]"
-            style={{ backgroundColor: C.blue }}
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden>
-              <path d="M9 2L15.5 14H2.5L9 2Z" fill="white" />
-            </svg>
-          </div>
-          <span className="text-[19px] font-extrabold tracking-tight text-white">
-            Apex<span style={{ color: C.blue2 }}>AI</span>
-          </span>
+        <Link href="/" className="flex items-center gap-2.5 no-underline" aria-label="ApexAI home">
+          <ApexLogo variant="wordmark" imgClassName="h-[28px] w-auto sm:h-[34px]" />
         </Link>
 
         <div className="hide-mobile flex items-center gap-0">

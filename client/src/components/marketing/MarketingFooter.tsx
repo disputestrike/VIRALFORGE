@@ -1,4 +1,5 @@
 import { landingColors as C } from "./landingTheme";
+import ApexLogo from "@/components/branding/ApexLogo";
 
 export default function MarketingFooter() {
   const link = "text-sm text-[rgba(255,255,255,0.62)] transition-colors hover:text-white";
@@ -23,24 +24,7 @@ export default function MarketingFooter() {
         >
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-              <div
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 8,
-                  background: C.blue,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <svg width="15" height="15" viewBox="0 0 18 18" fill="none" aria-hidden>
-                  <path d="M9 2L15.5 14H2.5L9 2Z" fill="white" />
-                </svg>
-              </div>
-              <span style={{ color: C.white, fontWeight: 800, fontSize: 18 }}>
-                Apex<span style={{ color: C.blue3 }}>AI</span>
-              </span>
+              <ApexLogo variant="full" imgClassName="h-[44px] w-auto rounded-md border border-white/10 sm:h-[52px]" />
             </div>
             <p style={{ color: C.dim2, fontSize: 13, lineHeight: 1.65, maxWidth: 280 }}>
               AI phone agents for inbound and outbound. Book more appointments without scaling headcount.
