@@ -641,9 +641,9 @@ const voiceAIRouter = router({
         voice: !!(process.env.SIGNALWIRE_PROJECT_ID && process.env.SIGNALWIRE_TOKEN),
         sms: !!(process.env.SIGNALWIRE_PROJECT_ID && process.env.SIGNALWIRE_TOKEN),
         email: !!(process.env.RESEND_API_KEY),
-        stt: !!(process.env.OPENAI_API_KEY),
+        stt: !!(process.env.DEEPGRAM_API_KEY),
         tts: !!(process.env.CARTESIA_API_KEY ?? "").trim(),
-        ai: !!(process.env.ANTHROPIC_API_KEY),
+        ai: !!(process.env.XAI_API_KEY),
         gcal: !!(process.env.VITE_GCAL_BOOKING_URL),
       };
 

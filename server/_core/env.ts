@@ -97,32 +97,14 @@ export const ENV = {
   voiceDeepgramEndpointingMs: Math.max(100, Math.min(2000, parseInt(process.env.VOICE_DEEPGRAM_ENDPOINTING_MS ?? "250", 10) || 250)),
   /** Deepgram utterance_end_ms — cap wait for utterance boundary. */
   voiceDeepgramUtteranceEndMs: Math.max(300, Math.min(3000, parseInt(process.env.VOICE_DEEPGRAM_UTTERANCE_END_MS ?? "800", 10) || 800)),
-  /** Voice LLM (Anthropic Claude streaming): max tokens per turn. Default 800; cap 1200. */
+  /** Voice LLM max tokens per turn. */
   voiceLlmMaxTokens: Math.min(1200, Math.max(400, parseInt(process.env.VOICE_LLM_MAX_TOKENS ?? "800", 10) || 800)),
-  /** Voice LLM temperature — lower = more consistent; higher = more varied. */
+  /** Voice LLM temperature. */
   voiceLlmTemperature: Math.min(0.85, Math.max(0.2, parseFloat(process.env.VOICE_LLM_TEMPERATURE ?? "0.40") || 0.4)),
-  /**
-   * Anthropic model for live voice streaming. claude-3-5-haiku-20241022 was retired 2026-02-19.
-   * Override with VOICE_CLAUDE_MODEL or CLAUDE_MODEL.
-   */
-  voiceClaudeModel: (
-    process.env.VOICE_CLAUDE_MODEL ||
-    process.env.CLAUDE_MODEL ||
-    "claude-haiku-4-5-20251001"
-  ).trim(),
-  /**
-   * Live voice LLM: `openai` (default) or `anthropic`. OpenAI is tried first when primary is openai;
-   * Anthropic is used as fallback if OpenAI fails or is unavailable.
-   */
-  voiceLlmPrimary:
-    (process.env.VOICE_LLM_PRIMARY ?? "openai").trim().toLowerCase() === "anthropic"
-      ? ("anthropic" as const)
-      : ("openai" as const),
-  /**
-   * OpenAI Chat model for voice (streaming). Default gpt-4o-mini ≈ Haiku-class: fast, cost-efficient.
-   * Upgrade: gpt-4o for higher quality (higher cost). Override with VOICE_OPENAI_MODEL.
-   */
-  voiceOpenAiModel: (process.env.VOICE_OPENAI_MODEL ?? "gpt-4o-mini").trim(),
+
+  // ── GROK ONLY — xAI is the sole LLM provider for live voice ──
+  xaiApiKey: (process.env.XAI_API_KEY ?? "").trim(),
+  grokModel: (process.env.GROK_MODEL ?? "grok-3-fast").trim(),
 
   /** Barge-in: spoken ack only when enabled and heuristics pass (see realtimeVoiceEngine). */
   interruptAckEnabled: process.env.INTERRUPT_ACK_ENABLED !== "false",
@@ -154,13 +136,13 @@ export const ENV = {
   get smsEnabled()    { return this.signalwireProjectId !== "" && this.signalwireToken !== ""; },
   get emailEnabled()  { return this.resendApiKey !== ""; },
   get ttsEnabled()    { return (process.env.CARTESIA_API_KEY ?? "").trim() !== ""; },
-  get sttEnabled()    { return this.openAiApiKey !== "" || this.deepgramApiKey !== ""; },
-  /** Live SignalWire streaming voice: Deepgram + Cartesia + OpenAI and/or Anthropic (LLM). */
+  get sttEnabled()    { return this.deepgramApiKey !== ""; },
+  /** Live SignalWire streaming voice: Deepgram + Cartesia + xAI Grok (LLM). */
   get voiceRealtimeReady() {
     return (
       this.deepgramApiKey !== "" &&
       this.cartesiaApiKey !== "" &&
-      (this.openAiApiKey !== "" || this.anthropicApiKey !== "")
+      this.xaiApiKey !== ""
     );
   },
   /** When true and a transfer target exists (user profile or env), live voice may transfer via SignalWire. */
@@ -176,8 +158,8 @@ export const ENV = {
     const name = (this.resendFromName || "ApexAI").trim() || "ApexAI";
     return `${name} <${email}>`;
   },
-  /** TRPC / templates / SMS-email AI — Claude (Anthropic). */
+  /** AI enabled — xAI Grok for all LLM tasks. */
   get aiEnabled() {
-    return this.anthropicApiKey !== "";
+    return this.xaiApiKey !== "";
   },
 };

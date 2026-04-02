@@ -1,7 +1,7 @@
 /**
  * realtimeVoiceEngine.ts — THE CORE ORCHESTRATOR
  *
- * Pipeline: SignalWire → Deepgram STT → OpenAI or Anthropic (LLM) → Cartesia TTS → SignalWire
+ * Pipeline: SignalWire → Deepgram STT → xAI Grok (LLM) → Cartesia TTS → SignalWire
  *
  * Key principles:
  * 1. Telephony: mulaw 8kHz to/from SignalWire; Cartesia pcm_s16le → convert to mulaw outbound
@@ -1006,19 +1006,17 @@ export function createCallEngine(opts: EngineOptions): void {
 
     const reprompt =
       "I didn't quite catch that—could you say that again in a few words?";
-    const openAiKey = ENV.openAiApiKey.trim();
-    const anthropicKey = ENV.anthropicApiKey.trim();
+    const xaiKey = ENV.xaiApiKey;
     traceEvent(callId, "llm_route", {
-      path: ENV.voiceLlmPrimary === "openai" ? "openai-primary" : "anthropic-primary",
-      model:
-        ENV.voiceLlmPrimary === "openai" ? ENV.voiceOpenAiModel : ENV.voiceClaudeModel,
+      path: "xai-grok",
+      model: ENV.grokModel,
     });
     log(
-      `[ROUTE] Voice LLM primary=${ENV.voiceLlmPrimary} openai=${Boolean(openAiKey)} anthropic=${Boolean(anthropicKey)}`
+      `[ROUTE] Voice LLM: xAI Grok model=${ENV.grokModel} key=${Boolean(xaiKey)}`
     );
 
-    if (!openAiKey && !anthropicKey) {
-      log("[Voice] Missing OPENAI_API_KEY and ANTHROPIC_API_KEY — configure at least one for live voice");
+    if (!xaiKey) {
+      log("[Voice] Missing XAI_API_KEY — configure it for live voice");
       try {
         await speak(
           "I'm sorry, this line isn't fully configured right now. Please try again later.",
@@ -1138,7 +1136,7 @@ export function createCallEngine(opts: EngineOptions): void {
     policyState = plan.policyForPrompt;
     syncPolicySnapshot(synthetic, plan.trace);
 
-    if (!ENV.openAiApiKey.trim() && !ENV.anthropicApiKey.trim()) {
+    if (!ENV.xaiApiKey) {
       try {
         await speak(
           "You still with me? I want to make sure this is useful — what’s the biggest strain on your inbound calls, after hours or when you’re slammed?",
@@ -1165,15 +1163,7 @@ export function createCallEngine(opts: EngineOptions): void {
     traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
   }
 
-  async function* anthropicTextDeltas(stream: AsyncIterable<unknown>): AsyncGenerator<string, void, void> {
-    for await (const event of stream as AsyncIterable<{ type?: string; delta?: { type?: string; text?: string } }>) {
-      if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
-        const t = event.delta.text;
-        if (typeof t === "string" && t) yield t;
-      }
-    }
-  }
-
+  /** xAI Grok uses OpenAI-compatible streaming format */
   async function* openAiTextDeltas(stream: AsyncIterable<unknown>): AsyncGenerator<string, void, void> {
     for await (const chunk of stream as AsyncIterable<{
       choices?: { delta?: { content?: string | null } }[];
@@ -1190,9 +1180,7 @@ export function createCallEngine(opts: EngineOptions): void {
     recoveryPrefixDone: boolean,
     opts?: { blueprintIntentOverride?: BlueprintIntent }
   ): Promise<void> {
-    const openAiKey = ENV.openAiApiKey.trim();
-    const anthropicKey = ENV.anthropicApiKey.trim();
-    const primary = ENV.voiceLlmPrimary;
+    const xaiKey = ENV.xaiApiKey;
 
     const blueprintIntent = opts?.blueprintIntentOverride ?? classifyIntent(userTranscript);
     const blueprintBlock = buildApexBlueprintPromptBlock(apexState, blueprintIntent);
@@ -1215,85 +1203,23 @@ export function createCallEngine(opts: EngineOptions): void {
       content: m.content,
     }));
 
-    const runOpenAi = async () => {
-      if (!openAiKey) throw new Error("OPENAI_API_KEY not set");
-      const { default: OpenAI } = await import("openai");
-      const client = new OpenAI({ apiKey: openAiKey });
-      const stream = await client.chat.completions.create({
-        model: ENV.voiceOpenAiModel,
-        messages: [{ role: "system", content: prompt }, ...messages],
-        max_tokens: ENV.voiceLlmMaxTokens,
-        temperature: ENV.voiceLlmTemperature,
-        stream: true,
-      });
-      traceEvent(callId, "llm_stream_start", {
-        provider: "openai",
-        model: ENV.voiceOpenAiModel,
-      });
-      const { clean, full } = await streamToCartesia(openAiTextDeltas(stream), epoch, userTranscript);
-      if (!clean.trim() && !full.trim()) throw new Error("Empty OpenAI response");
-    };
-
-    const runAnthropic = async () => {
-      if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY not set");
-      const { default: Anthropic } = await import("@anthropic-ai/sdk");
-      const client = new Anthropic({ apiKey: anthropicKey });
-      const stream = await client.messages.stream({
-        model: ENV.voiceClaudeModel,
-        max_tokens: ENV.voiceLlmMaxTokens,
-        temperature: ENV.voiceLlmTemperature,
-        system: prompt,
-        messages,
-      });
-      traceEvent(callId, "llm_stream_start", {
-        provider: "anthropic",
-        model: ENV.voiceClaudeModel,
-      });
-      const { clean, full } = await streamToCartesia(anthropicTextDeltas(stream), epoch, userTranscript);
-      if (!clean.trim() && !full.trim()) throw new Error("Empty Claude response");
-    };
-
-    if (primary === "openai") {
-      if (openAiKey) {
-        try {
-          await runOpenAi();
-          return;
-        } catch (e: unknown) {
-          const msg = e instanceof Error ? e.message : String(e);
-          log(`[Voice LLM] OpenAI failed, trying Anthropic fallback: ${msg}`);
-          if (anthropicKey) {
-            await runAnthropic();
-            return;
-          }
-          throw e;
-        }
-      }
-      if (anthropicKey) {
-        await runAnthropic();
-        return;
-      }
-      throw new Error("No voice LLM API key configured (OPENAI_API_KEY or ANTHROPIC_API_KEY)");
-    }
-
-    if (anthropicKey) {
-      try {
-        await runAnthropic();
-        return;
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
-        log(`[Voice LLM] Anthropic failed, trying OpenAI fallback: ${msg}`);
-        if (openAiKey) {
-          await runOpenAi();
-          return;
-        }
-        throw e;
-      }
-    }
-    if (openAiKey) {
-      await runOpenAi();
-      return;
-    }
-    throw new Error("No voice LLM API key configured (OPENAI_API_KEY or ANTHROPIC_API_KEY)");
+    // ── xAI Grok — SOLE LLM provider (OpenAI-compatible API) ──
+    if (!xaiKey) throw new Error("XAI_API_KEY not configured");
+    const { default: OpenAI } = await import("openai");
+    const client = new OpenAI({ apiKey: xaiKey, baseURL: "https://api.x.ai/v1" });
+    const stream = await client.chat.completions.create({
+      model: ENV.grokModel,
+      messages: [{ role: "system", content: prompt }, ...messages],
+      max_tokens: ENV.voiceLlmMaxTokens,
+      temperature: ENV.voiceLlmTemperature,
+      stream: true,
+    });
+    traceEvent(callId, "llm_stream_start", {
+      provider: "xai-grok",
+      model: ENV.grokModel,
+    });
+    const { clean, full } = await streamToCartesia(openAiTextDeltas(stream), epoch, userTranscript);
+    if (!clean.trim() && !full.trim()) throw new Error("Empty Grok response");
   }
 
   // ── Stream LLM → buffer → direct-answer guard → Cartesia sentence-by-sentence ────────────────────────
