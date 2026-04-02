@@ -48,4 +48,14 @@ describe("postProcessAssistantResponse", () => {
     expect(r.askedFollowupBeforeAnswer || r.strippedFollowUp).toBe(true);
     expect(r.text.toLowerCase()).not.toMatch(/would you like/);
   });
+
+  it("strips spoken meta-labels like Here's the direct answer", () => {
+    const r = postProcessAssistantResponse(
+      "What do you do?",
+      "Here's the direct answer: Apex answers every inbound call and books qualified leads on your calendar.",
+      "core_explain"
+    );
+    expect(r.text.toLowerCase()).not.toMatch(/^here'?s (the )?(direct )?answer/);
+    expect(r.text).toMatch(/apex|inbound|calendar/i);
+  });
 });

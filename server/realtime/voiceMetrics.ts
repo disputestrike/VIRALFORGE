@@ -24,6 +24,7 @@ export type VoiceTracePhase =
   | "sigws_ended"
   | "llm_slow_ack_800ms"
   | "failsafe_silence_2s_outbound"
+  | "user_silence_reengage"
   | "strict_classify"
   | "date_authority_short_circuit";
 

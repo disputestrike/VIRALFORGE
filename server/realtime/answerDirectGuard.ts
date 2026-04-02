@@ -16,6 +16,10 @@ export { MAX_SENTENCES, MAX_FOLLOW_UP_QUESTIONS, TARGET_MAX_SPOKEN_MS };
 const FILLER_OPENERS =
   /^(that'?s a great question|great question|good question|sure thing|absolutely)[,.]?\s*/i;
 
+/** Spoken meta-labels the guard must never leave in output (they sound robotic on the phone). */
+const META_ANSWER_PREFIX =
+  /^(here'?s|here is)\s+(the\s+)?(direct\s+|right\s+|quick\s+)?(answer|response|thing)\s*[:\u2014\-\s]+/i;
+
 const SOFTENERS =
   /\b(typically|generally|might|could help|tends to|usually|may help|can help improve)\b/gi;
 
@@ -136,14 +140,11 @@ export function compressAssertive(text: string): string {
   return text.replace(SOFTENERS, "").replace(/\s+/g, " ").replace(/ ,/g, ",").trim();
 }
 
-export function rewriteToDirectAnswer(userQuestion: string, draftedResponse: string): string {
-  const stripped = draftedResponse.replace(FILLER_OPENERS, "").trim();
+export function rewriteToDirectAnswer(_userQuestion: string, draftedResponse: string): string {
+  const stripped = draftedResponse.replace(FILLER_OPENERS, "").replace(META_ANSWER_PREFIX, "").trim();
   const core = stripFollowUpQuestion(stripped);
-  if (answeredDirectly(userQuestion, core)) return clampSentences(core, MAX_SENTENCES);
-  return clampSentences(
-    `Here's the direct answer: ${core}`,
-    MAX_SENTENCES
-  );
+  // Never prepend meta like "Here's the direct answer" — speak substance only.
+  return clampSentences(core, MAX_SENTENCES);
 }
 
 export type DirectGuardResult = {
@@ -166,7 +167,7 @@ export function postProcessAssistantResponse(
   let askedFollowupBeforeAnswer = false;
   let answerInsufficient = false;
 
-  text = compressAssertive(text);
+  text = compressAssertive(text).replace(META_ANSWER_PREFIX, "").trim();
 
   if (looksLikeQuestion(userQuestion) && !answeredDirectly(userQuestion, text)) {
     const before = text;
@@ -180,14 +181,11 @@ export function postProcessAssistantResponse(
 
   if (looksLikeQuestion(userQuestion) && !isAnswerSufficient(text, userQuestion, intent)) {
     answerInsufficient = true;
-    text = stripFollowUpQuestion(text);
+    text = stripFollowUpQuestion(text).replace(META_ANSWER_PREFIX, "").trim();
     const sents = splitIntoSentences(text);
-    const first = sents[0] ?? text;
-    if (!includesConcreteOutcome(first)) {
-      text = `${first} You get a concrete outcome: every inbound call answered and qualified.`.trim();
-    } else {
-      text = clampSentences(first, MAX_SENTENCES);
-    }
+    const first = (sents[0] ?? text).replace(META_ANSWER_PREFIX, "").trim();
+    // One tight sentence — no template suffix like "concrete outcome" (sounds scripted).
+    text = clampSentences(first, MAX_SENTENCES);
   }
 
   text = clampSentences(text, MAX_SENTENCES);

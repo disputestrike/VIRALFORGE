@@ -74,6 +74,16 @@ export const ENV = {
   /** After Deepgram speech_final, pause before LLM — target 200–300ms for natural turn-taking. */
   voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "275", 10) || 0),
   /**
+   * After assistant audio finishes, if the caller stays quiet, prompt one upbeat check-in (sales tempo).
+   * Set VOICE_USER_SILENCE_REENGAGE_ENABLED=false to disable.
+   */
+  voiceUserSilenceReengageEnabled: process.env.VOICE_USER_SILENCE_REENGAGE_ENABLED !== "false",
+  /** Ms of user silence after assistant playback ends before auto check-in (2s–20s). Default ~4.5s. */
+  voiceUserSilenceReengageMs: Math.max(
+    2000,
+    Math.min(20000, parseInt(process.env.VOICE_USER_SILENCE_REENGAGE_MS ?? "4500", 10) || 4500)
+  ),
+  /**
    * Mu-law barge-in threshold on the 0–127 scale used by estimateEnergy (avg distance from silence).
    * Lower = easier interrupt. Values above 127 are treated as legacy mis-scaled (e.g. 600) and mapped with /5 so they still work.
    */

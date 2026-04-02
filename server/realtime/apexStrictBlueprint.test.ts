@@ -17,6 +17,12 @@ describe("classifyDeterministicBucket", () => {
     expect(classifyDeterministicBucket("That sounds gimmicky")).toBe("skepticism");
     expect(classifyDeterministicBucket("Wait no wrong number")).toBe("chaos_input");
   });
+
+  it("matches silence complaint before generic recovery", () => {
+    expect(classifyDeterministicBucket("Why aren't you talking?")).toBe("silence_meta");
+    expect(classifyDeterministicBucket("You're not talking")).toBe("silence_meta");
+    expect(classifyIntent("Say something!")).toBe("re_engagement");
+  });
 });
 
 describe("routeBlueprintDeterministic", () => {
@@ -84,5 +90,9 @@ describe("PHRASE_PRESSURE", () => {
 describe("classifyIntent", () => {
   it("returns unknown for neutral text", () => {
     expect(classifyIntent("okay")).toBe("unknown");
+  });
+
+  it("maps silence_meta to re_engagement", () => {
+    expect(classifyIntent("why are you not talking")).toBe("re_engagement");
   });
 });

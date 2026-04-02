@@ -24,6 +24,7 @@ export type BlueprintIntent =
   | "pricing"
   | "booking"
   | "recovery"
+  | "re_engagement"
   | "skepticism"
   | "chaos_input"
   | "unknown";
@@ -97,6 +98,18 @@ export const PHRASE_OBJECTION_STAFF = [
   "my people handle that",
 ];
 
+/** Caller thinks the line went dead — answer with substance + momentum, not “I’m talking.” */
+export const PHRASE_SILENCE_COMPLAINT = [
+  "why aren't you talking",
+  "why are you not talking",
+  "you're not talking",
+  "youre not talking",
+  "you aren't saying anything",
+  "you arent saying anything",
+  "say something",
+  "you stopped talking",
+];
+
 export const PHRASE_RECOVERY = [
   "you're not listening",
   "youre not listening",
@@ -161,6 +174,7 @@ export const PHRASE_EXPLICIT_BOOKING = [
 export type DeterministicBucket =
   | "pressure"
   | "objection_staff"
+  | "silence_meta"
   | "recovery"
   | "skepticism"
   | "chaos_input"
@@ -174,6 +188,7 @@ export type DeterministicBucket =
 export function classifyDeterministicBucket(text: string): DeterministicBucket {
   const t = text.trim();
   if (!t) return "none";
+  if (contains(t, PHRASE_SILENCE_COMPLAINT)) return "silence_meta";
   if (contains(t, PHRASE_RECOVERY)) return "recovery";
   if (contains(t, PHRASE_SKEPTICISM)) return "skepticism";
   if (contains(t, PHRASE_CHAOS_INPUT)) return "chaos_input";
@@ -208,6 +223,8 @@ export function classifyIntent(text: string): BlueprintIntent {
       return "skepticism";
     case "chaos_input":
       return "chaos_input";
+    case "silence_meta":
+      return "re_engagement";
     default:
       if (contains(text, ["book", "demo", "schedule"])) return "booking";
       return "unknown";
@@ -236,6 +253,9 @@ export const COPY_BLOCKS = {
   recovery_controlled:
     "Yeah — that didn't land right. Let me reset.\n\nWhat's the main thing you want answered?",
   chaos: "No problem — take your time; say it again and I’ll capture it.",
+  /** After “why aren’t you talking” — bridge then LLM continues the real thread. */
+  silence_complaint_bridge:
+    "Hey — I'm right here with you. Let me pick back up on what we were talking about.",
   /** Continuation tone — assumptive, not a cold handoff. */
   booking:
     "Let's do this — I can show you exactly how this works for your business.\n\nI've got tomorrow at 10 or 2 — which works better?",
@@ -347,12 +367,14 @@ export const TONE_PROFILE = {
   objection: "confident_compressed — confident, compressed, no over-agreeing",
   pressure: "sharp_minimal — sharper, contrast-heavy, fewer words",
   recovery: "reset_controlled — short, controlled, reset energy",
+  re_engagement: "warm_upbeat_sales — friendly, energetic, professional; keep momentum; never defensive or one-word",
   booking: "smooth_assumptive — smooth, assumptive, forward-moving",
   default: "clear_direct",
 } as const;
 
 function toneProfileLine(intent: BlueprintIntent): string {
   if (intent === "pressure") return TONE_PROFILE.pressure;
+  if (intent === "re_engagement") return TONE_PROFILE.re_engagement;
   if (intent === "recovery" || intent === "chaos_input") return TONE_PROFILE.recovery;
   if (intent === "booking") return TONE_PROFILE.booking;
   if (
@@ -374,10 +396,13 @@ export function buildApexBlueprintPromptBlock(state: ApexControllerState, intent
     "USER ALWAYS WINS THE TURN: if they interrupt, abandon prior reply; answer their latest question first.",
     "",
     "VOICE: Sound like a confident operator — not a helpful chatbot. Decisive, direct, no padding.",
+    "SALES TEMPO: Keep energy up — friendly, upbeat, forward-moving like a strong sales professional. Never end on a dead acknowledgment alone (no solo “got it”, “okay”, or “I’m talking”). Always add a concrete next beat: value, proof, or one crisp question.",
     `TONE PROFILE (this turn): ${toneProfileLine(intent)}`,
     "",
     "RULE — No softening filler. Avoid: typically, generally, might, could help, tends to, usually.",
     "Instead: assertive, concrete phrasing (e.g. “captures every lead instantly” not “can help improve response time”).",
+    "",
+    "RULE — Never label the answer on voice. Do NOT say: “Here's the answer”, “Here's the direct/right answer”, “Here's what you need to know”, or similar meta lines — start with the substance immediately.",
     "",
     "FIRST SENTENCE PUNCH: The first sentence must deliver the core value in ≤12 words.",
     "",
@@ -405,6 +430,13 @@ export function buildApexBlueprintPromptBlock(state: ApexControllerState, intent
     lines.push(
       "",
       "SKEPTICISM: Ask ZERO questions this turn — only direct answers and proof. No discovery, no “would you like”."
+    );
+  }
+
+  if (intent === "re_engagement") {
+    lines.push(
+      "",
+      "RE-ENGAGEMENT: Caller went quiet or challenged silence. Be warm and upbeat. Tie back to the LAST topic or their business — one concrete point, then optionally ONE short forward question. Never defensive; never a tautology (“I’m talking”)."
     );
   }
 
@@ -472,6 +504,24 @@ export function routeBlueprintDeterministic(
     return {
       next,
       route: { kind: "speak", text: COPY_BLOCKS.chaos, markAnswered: false },
+    };
+  }
+
+  if (bucket === "silence_meta") {
+    next = {
+      ...next,
+      mode: "normal",
+      answered: false,
+      lastQuestion: t,
+      lastUserIntent: "re_engagement",
+    };
+    return {
+      next,
+      route: {
+        kind: "speak_then_llm",
+        prefix: COPY_BLOCKS.silence_complaint_bridge,
+        markAnswered: false,
+      },
     };
   }
 

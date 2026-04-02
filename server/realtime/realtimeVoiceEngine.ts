@@ -68,6 +68,7 @@ import {
   FINAL_SILENCE_DEBOUNCE_MS,
   splitIntoSentences,
   type ApexControllerState,
+  type BlueprintIntent,
 } from "./apexStrictBlueprint";
 import { postProcessAssistantResponse } from "./answerDirectGuard";
 import { computeInterruptAck } from "./interruptAck";
@@ -241,6 +242,12 @@ export function createCallEngine(opts: EngineOptions): void {
   let engineRegisteredCallSid: string | null = null;
   let lastOutboundAudioAt = 0;
   let silenceWatchTimer: NodeJS.Timeout | null = null;
+  /** User final timestamp — for silence-after-assistant re-engage (debounced STT). */
+  let lastUserFinalAt = 0;
+  let userSilenceReengageTimer: NodeJS.Timeout | null = null;
+  let callerHasSpokenOnce = false;
+  /** One automatic upbeat check-in per lull; cleared when the caller speaks again. */
+  let silenceReengageAlreadySent = false;
   /** Deepgram: wait for true end-of-utterance (debounce finals — ignore rapid partial finals). */
   let deepgramFinalDebounceTimer: NodeJS.Timeout | null = null;
   let pendingDeepgramFinalText = "";
@@ -265,6 +272,31 @@ export function createCallEngine(opts: EngineOptions): void {
       clearInterval(silenceWatchTimer);
       silenceWatchTimer = null;
     }
+  }
+
+  function clearUserSilenceReengageTimer(): void {
+    if (userSilenceReengageTimer) {
+      clearTimeout(userSilenceReengageTimer);
+      userSilenceReengageTimer = null;
+    }
+  }
+
+  /** Arm after outbound TTS completes — if the caller stays quiet, one friendly sales check-in. */
+  function scheduleUserSilenceReengageAfterPlayback(): void {
+    clearUserSilenceReengageTimer();
+    if (!ENV.voiceUserSilenceReengageEnabled || isEnded) return;
+    if (!greetingDone || !callerHasSpokenOnce) return;
+    if (silenceReengageAlreadySent) return;
+    const ms = ENV.voiceUserSilenceReengageMs;
+    if (ms <= 0) return;
+    const playbackDoneAt = Date.now();
+    userSilenceReengageTimer = setTimeout(() => {
+      userSilenceReengageTimer = null;
+      if (isEnded) return;
+      if (isSpeaking || assistantResponseInProgress || userTurnBusy) return;
+      if (lastUserFinalAt > playbackDoneAt) return;
+      void runSilenceReengageTurn();
+    }, ms);
   }
 
   function clearDeepgramFinalDebounce(reason: string): void {
@@ -554,6 +586,9 @@ export function createCallEngine(opts: EngineOptions): void {
           if (streamSid && sigWs.readyState === WebSocket.OPEN) {
             sigWs.send(JSON.stringify({ event: "mark", streamSid, mark: { name: "done" } }));
           }
+          if (!assistantResponseInProgress) {
+            scheduleUserSilenceReengageAfterPlayback();
+          }
         }
       } catch {}
     });
@@ -631,6 +666,7 @@ export function createCallEngine(opts: EngineOptions): void {
 
   function stopSpeaking() {
     resetAssistantPlaybackClock();
+    clearUserSilenceReengageTimer();
     assistantResponseInProgress = false;
     if (cartesiaWs && cartesiaWs.readyState === WebSocket.OPEN && cartesiaContextId) {
       cartesiaWs.send(JSON.stringify({ context_id: cartesiaContextId, cancel: true }));
@@ -778,6 +814,12 @@ export function createCallEngine(opts: EngineOptions): void {
 
   // ── LLM response ────────────────────────────────────────────────────────────
   async function enqueueUserTurn(transcript: string, sttConfidence?: number): Promise<void> {
+    if (transcript.trim()) {
+      callerHasSpokenOnce = true;
+      clearUserSilenceReengageTimer();
+      silenceReengageAlreadySent = false;
+      lastUserFinalAt = Date.now();
+    }
     if (userTurnBusy) {
       pendingUserTranscript = transcript;
       log(`[STT] Queued final while busy (${transcript.slice(0, 72)}…)`);
@@ -1055,21 +1097,84 @@ export function createCallEngine(opts: EngineOptions): void {
     return base;
   }
 
+  /** Caller went quiet after we spoke — one upbeat check-in with full conversation context (sales tempo). */
+  async function runSilenceReengageTurn(): Promise<void> {
+    if (isEnded || !greetingDone || !callerHasSpokenOnce) return;
+    if (isSpeaking || assistantResponseInProgress || userTurnBusy) return;
+
+    silenceReengageAlreadySent = true;
+    const epoch = ++generationEpoch;
+    turnStartedAt = Date.now();
+    traceEvent(callId, "user_silence_reengage");
+    log("[VOICE] User silence re-engage");
+
+    const synthetic = "(Still there — no reply yet.)";
+    appendHistory("user", synthetic);
+    turnCtl = onProcessing(turnCtl);
+
+    const classified = classifyTurn("(silent)");
+    const plan = planStrictLlmTurn({
+      policyState,
+      strictFacts,
+      transcript: synthetic,
+      lastAssistantQuestion,
+      now: new Date(),
+      classified,
+    });
+    policyState = plan.policyForPrompt;
+    syncPolicySnapshot(synthetic, plan.trace);
+
+    const anthropicKey = (process.env.ANTHROPIC_API_KEY ?? "").trim();
+    if (!anthropicKey) {
+      try {
+        await speak(
+          "You still with me? I want to make sure this is useful — what’s the biggest strain on your inbound calls, after hours or when you’re slammed?",
+          epoch
+        );
+      } catch {}
+      traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+      return;
+    }
+
+    try {
+      await respondAnthropicVoice(epoch, synthetic, plan.strictBlock, false, {
+        blueprintIntentOverride: "re_engagement",
+      });
+    } catch (e: any) {
+      log(`[Silence re-engage] ${e?.message ?? e}`);
+      try {
+        await speak(
+          "Hey — you still with me? Quick one: are missed calls mostly nights and weekends, or busy daytime?",
+          epoch
+        );
+      } catch {}
+    }
+    traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+  }
+
   async function respondAnthropicVoice(
     epoch: number,
     userTranscript: string,
     strictBlock: string,
-    recoveryPrefixDone: boolean
+    recoveryPrefixDone: boolean,
+    opts?: { blueprintIntentOverride?: BlueprintIntent }
   ): Promise<void> {
     const anthropicKey = (process.env.ANTHROPIC_API_KEY ?? "").trim();
     if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY not set");
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey: anthropicKey });
-    const blueprintIntent = classifyIntent(userTranscript);
+    const blueprintIntent = opts?.blueprintIntentOverride ?? classifyIntent(userTranscript);
     const blueprintBlock = buildApexBlueprintPromptBlock(apexState, blueprintIntent);
-    const recoveryHint = recoveryPrefixDone
-      ? "\n\n=== RECOVERY ===\nYou already delivered the reset lines. Now give ONE direct substantive answer to what they need — do not repeat the reset or ask what they want again."
-      : "";
+    let recoveryHint = "";
+    if (recoveryPrefixDone) {
+      if (blueprintIntent === "re_engagement") {
+        recoveryHint =
+          "\n\n=== BRIDGE DONE ===\nYou already delivered the short bridge line. Now continue in a warm, upbeat sales tone: 2 sentences max — tie back to what you were discussing before; add one concrete value beat or one crisp forward question. Do not repeat the bridge.";
+      } else {
+        recoveryHint =
+          "\n\n=== RECOVERY ===\nYou already delivered the reset lines. Now give ONE direct substantive answer to what they need — do not repeat the reset or ask what they want again.";
+      }
+    }
     const prompt = await buildSystemPromptWithTenant(
       userTranscript,
       `${strictBlock}\n\n${blueprintBlock}${recoveryHint}`
@@ -1101,6 +1206,7 @@ export function createCallEngine(opts: EngineOptions): void {
   ): Promise<{ clean: string; full: string }> {
     stopSpeaking();
     disarmOutboundSilenceWatch();
+    clearUserSilenceReengageTimer();
     lastOutboundAudioAt = Date.now();
     assistantResponseInProgress = true;
 
@@ -1109,7 +1215,7 @@ export function createCallEngine(opts: EngineOptions): void {
       if (epoch !== generationEpoch || isEnded) return;
       traceEvent(callId, "llm_slow_ack_800ms");
       log("[FAILSAFE] LLM >800ms to first token — brief ack");
-      void speak("Got it — give me a second.", epoch);
+      void speak("Hang tight — pulling that together for you.", epoch);
     }, 800);
     silenceWatchTimer = setInterval(() => {
       if (isEnded || epoch !== generationEpoch) {
@@ -1120,7 +1226,7 @@ export function createCallEngine(opts: EngineOptions): void {
       if (Date.now() - lastOutboundAudioAt < 2000) return;
       disarmOutboundSilenceWatch();
       traceEvent(callId, "failsafe_silence_2s_outbound");
-      void speak("Still here — just making sure I didn’t miss anything.", epoch);
+      void speak("Still with you — almost there.", epoch);
     }, 500);
 
     cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -1313,6 +1419,7 @@ export function createCallEngine(opts: EngineOptions): void {
     isEnded = true;
     clearStreamRecoveryTimer();
     disarmOutboundSilenceWatch();
+    clearUserSilenceReengageTimer();
     clearDeepgramFinalDebounce("finalize");
     unregisterEngineFromMap();
     log(`Call finalize: ${opts.reason}`);
