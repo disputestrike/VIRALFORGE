@@ -336,21 +336,21 @@ export default function MarketingNav() {
 
           {user ? (
             <Link href="/dashboard">
-              <Button size="sm" className="ml-1 font-bold shadow-sm" style={{ backgroundColor: C.blue, color: C.white }}>
+              <Button size="sm" className="ml-2 font-bold shadow-sm" style={{ backgroundColor: C.blue, color: C.white }}>
                 Dashboard
               </Button>
             </Link>
           ) : (
-            <>
-              <a href={getLoginUrl()} className="text-sm font-medium text-white/70 hover:text-white transition-colors mr-3">
+            <div className="flex items-center gap-4">
+              <a href={getLoginUrl()} className="text-sm font-medium text-white/70 hover:text-white transition-colors whitespace-nowrap">
                 Sign in
               </a>
               <a href={getLoginUrl()}>
-                <Button size="sm" className="ml-1 font-bold shadow-sm" style={{ backgroundColor: C.blue, color: C.white }}>
+                <Button size="sm" className="font-bold shadow-sm whitespace-nowrap" style={{ backgroundColor: C.blue, color: C.white }}>
                   Start free trial
                 </Button>
               </a>
-            </>
+            </div>
           )}
         </div>
 

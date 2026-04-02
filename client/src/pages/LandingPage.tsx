@@ -261,7 +261,7 @@ export default function LandingPage() {
           <div className="mx-auto mt-12 max-w-4xl">
             <div className="rounded-2xl border border-white/10 overflow-hidden shadow-2xl shadow-blue-500/10">
               <img
-                src="/marketing/hero-image.png"
+                src="/marketing/hero-image.jpg"
                 alt="AI agent qualifying leads and booking appointments"
                 className="w-full h-auto"
                 loading="eager"
