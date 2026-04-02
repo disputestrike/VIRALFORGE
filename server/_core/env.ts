@@ -101,6 +101,18 @@ export const ENV = {
     "claude-haiku-4-5-20251001"
   ).trim(),
 
+  /** Barge-in: spoken ack only when enabled and heuristics pass (see realtimeVoiceEngine). */
+  interruptAckEnabled: process.env.INTERRUPT_ACK_ENABLED !== "false",
+  interruptAckMinSpeechMs: Math.max(200, parseInt(process.env.INTERRUPT_ACK_MIN_SPEECH_MS ?? "1200", 10) || 1200),
+  /** When true, only STT low-confidence finals trigger a spoken interrupt ack (not duration-based). */
+  interruptAckOnLowConfidenceOnly: process.env.INTERRUPT_ACK_ON_LOW_CONFIDENCE_ONLY === "true",
+  /** Deepgram final transcript confidence below this = “low confidence” turn boundary. */
+  voiceSttConfidenceLowThreshold: Math.min(0.99, Math.max(0.5, parseFloat(process.env.VOICE_STT_CONFIDENCE_LOW ?? "0.82") || 0.82)),
+  /** Above this = “high confidence” — with short assistant playback, suppress interrupt ack (calm operator). */
+  voiceSttConfidenceHighThreshold: Math.min(0.99, Math.max(0.6, parseFloat(process.env.VOICE_STT_CONFIDENCE_HIGH ?? "0.92") || 0.92)),
+  /** Soft booking readiness gate for deterministic booking (0–1). */
+  bookingScoreThreshold: Math.min(0.99, Math.max(0.2, parseFloat(process.env.BOOKING_SCORE_THRESHOLD ?? "0.65") || 0.65)),
+
   // ── Stripe (subscriptions — Customer Portal + Checkout) ───
   stripeSecretKey: (process.env.STRIPE_SECRET_KEY ?? "").trim(),
   stripeWebhookSecret: (process.env.STRIPE_WEBHOOK_SECRET ?? "").trim(),

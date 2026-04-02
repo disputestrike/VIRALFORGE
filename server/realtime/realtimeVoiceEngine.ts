@@ -58,6 +58,20 @@ import {
   routeStrictBeforeLlm,
   strictFactsToSessionSnapshot,
 } from "./strictController";
+import {
+  createApexControllerState,
+  routeBlueprintDeterministic,
+  markBlueprintAnswered,
+  buildApexBlueprintPromptBlock,
+  classifyIntent,
+  classifyDeterministicBucket,
+  FINAL_SILENCE_DEBOUNCE_MS,
+  splitIntoSentences,
+  type ApexControllerState,
+} from "./apexStrictBlueprint";
+import { postProcessAssistantResponse } from "./answerDirectGuard";
+import { computeInterruptAck } from "./interruptAck";
+import { logVoiceControllerEvent } from "./voiceControllerLog";
 import { extractLastQuestion } from "./repeatGuard";
 import { emptyStrictFacts, HARD_RULES, type StrictFacts } from "./strictTypes";
 
@@ -103,35 +117,6 @@ export async function notifyVoiceCallTerminalFromHttp(
       notifyOwnerAfterVoiceCall(orphan.sessionId)
     );
   }
-}
-
-/**
- * Push LLM text to TTS sentence by sentence.
- * Only splits on sentence endings (.!?) to avoid choppy comma-fragments.
- * Waits for at least 40 chars before sending to avoid tiny fragments.
- */
-function drainSpeakableToTts(
-  assembled: string,
-  spokenUpTo: number,
-  sendClause: (s: string) => void
-): number {
-  let i = spokenUpTo;
-  while (i < assembled.length) {
-    const rest = assembled.slice(i);
-    if (!rest.trim()) break;
-
-    // Only split on sentence boundaries — no comma splits
-    const sent = rest.match(/^(.{20,}?[.!?]+)\s*/);
-    if (sent?.[1]?.trim()) {
-      sendClause(sent[1].trim());
-      i += sent[0].length;
-      continue;
-    }
-
-    // If we have a long chunk with no sentence end yet, wait for more tokens
-    break;
-  }
-  return i;
 }
 
 // ── Clients ───────────────────────────────────────────────────────────────────
@@ -256,6 +241,17 @@ export function createCallEngine(opts: EngineOptions): void {
   let engineRegisteredCallSid: string | null = null;
   let lastOutboundAudioAt = 0;
   let silenceWatchTimer: NodeJS.Timeout | null = null;
+  /** Deepgram: wait for true end-of-utterance (debounce finals — ignore rapid partial finals). */
+  let deepgramFinalDebounceTimer: NodeJS.Timeout | null = null;
+  let pendingDeepgramFinalText = "";
+  /** APEX strict blueprint state (intent lock, escalation, recovery). */
+  let apexState: ApexControllerState = createApexControllerState();
+  /** Last Deepgram final confidence (0–1) for interrupt-ack heuristics. */
+  let lastFinalSttConfidence = 0.92;
+  /** When assistant audio for this utterance started (first TTS chunk). */
+  let assistantPlaybackStartAt: number | null = null;
+  /** True from start of LLM/TTS response until all audio for this turn is sent. */
+  let assistantResponseInProgress = false;
 
   function clearStreamRecoveryTimer(): void {
     if (streamRecoveryTimer) {
@@ -269,6 +265,65 @@ export function createCallEngine(opts: EngineOptions): void {
       clearInterval(silenceWatchTimer);
       silenceWatchTimer = null;
     }
+  }
+
+  function clearDeepgramFinalDebounce(reason: string): void {
+    if (deepgramFinalDebounceTimer) {
+      clearTimeout(deepgramFinalDebounceTimer);
+      deepgramFinalDebounceTimer = null;
+      if (pendingDeepgramFinalText.trim() && reason !== "finalize") {
+        logVoiceControllerEvent(callId, "info", {
+          bucket: "stale_final_fired",
+          detail: `cleared:${reason}`,
+          transcriptSnippet: pendingDeepgramFinalText.slice(0, 80),
+        });
+      }
+    }
+    pendingDeepgramFinalText = "";
+  }
+
+  function resetAssistantPlaybackClock(): void {
+    assistantPlaybackStartAt = null;
+  }
+
+  function scheduleBlueprintInterruptAck(
+    sttConfidence: number,
+    speechMsOverride?: number,
+    responseInProgressOverride?: boolean
+  ): void {
+    const speechMs =
+      speechMsOverride !== undefined
+        ? speechMsOverride
+        : assistantPlaybackStartAt
+          ? Date.now() - assistantPlaybackStartAt
+          : 0;
+    const inProg = responseInProgressOverride ?? assistantResponseInProgress;
+    const play = computeInterruptAck({
+      speechMs,
+      sttConfidence,
+      assistantResponseInProgress: inProg,
+    });
+    if (!play) {
+      if (ENV.interruptAckOnLowConfidenceOnly) {
+        logVoiceControllerEvent(callId, "info", {
+          bucket: "tts_ack_too_talky",
+          detail: "low_confidence_only_mode",
+          extra: { speechMs },
+        });
+      } else if (speechMs < ENV.interruptAckMinSpeechMs && sttConfidence >= ENV.voiceSttConfidenceLowThreshold) {
+        logVoiceControllerEvent(callId, "info", {
+          bucket: "tts_ack_too_talky",
+          detail: "silent_stop_short_playback",
+          extra: { speechMs },
+        });
+      }
+      return;
+    }
+    const epochAfter = generationEpoch;
+    setTimeout(() => {
+      if (isEnded || epochAfter !== generationEpoch) return;
+      void speak("Got it — go ahead.", generationEpoch);
+    }, 180);
   }
 
   function registerEngineForCallSid(sid: string): void {
@@ -515,6 +570,7 @@ export function createCallEngine(opts: EngineOptions): void {
       log(`cartesiaSend SKIPPED: no ws or not open (state=${cartesiaWs?.readyState})`);
       return;
     }
+    if (!assistantPlaybackStartAt) assistantPlaybackStartAt = Date.now();
     const rawSpeed = Math.min(1.2, Math.max(0.55, voiceProfile.speed * ENV.voiceTtsSpeedScale));
     const ttsSpeed = Math.min(0.98, Math.max(0.94, rawSpeed));
     log(`cartesiaSend: "${text.slice(0,40)}" voiceId=${voiceProfile.cartesiaId} speed=${ttsSpeed}`);
@@ -574,6 +630,8 @@ export function createCallEngine(opts: EngineOptions): void {
   }
 
   function stopSpeaking() {
+    resetAssistantPlaybackClock();
+    assistantResponseInProgress = false;
     if (cartesiaWs && cartesiaWs.readyState === WebSocket.OPEN && cartesiaContextId) {
       cartesiaWs.send(JSON.stringify({ context_id: cartesiaContextId, cancel: true }));
     }
@@ -666,11 +724,18 @@ export function createCallEngine(opts: EngineOptions): void {
             isFinal &&
             transcript.trim().length >= 3 &&
             !turnCtl.interruptRequested;
+          const conf = Number(msg.channel?.alternatives?.[0]?.confidence ?? 0.92);
+          if (isFinal && speechFinal) lastFinalSttConfidence = conf;
+
           if (sttBackupBarge) {
             log(`[BARGE-IN] STT (final): "${transcript}"`);
+            clearDeepgramFinalDebounce("stt_barge_in");
+            const ackSpeechMs = assistantPlaybackStartAt ? Date.now() - assistantPlaybackStartAt : 0;
+            const ackInProgress = assistantResponseInProgress;
             turnCtl = onUserSpeechStart(turnCtl);
             generationEpoch++;
             stopSpeaking();
+            scheduleBlueprintInterruptAck(conf, ackSpeechMs, ackInProgress);
             if (activeSessionId) {
               const s = voiceSessionManager.getSession(activeSessionId);
               if (s)
@@ -684,9 +749,18 @@ export function createCallEngine(opts: EngineOptions): void {
             traceEvent(callId, "stt_final", { textLen: transcript.length });
             log(`[STT] Final: "${transcript}"`);
             markSttFinalForLatency(callId);
-            void enqueueUserTurn(transcript).catch((e) =>
-              log(`enqueueUserTurn failed: ${e instanceof Error ? e.message : String(e)}`)
-            );
+            pendingDeepgramFinalText = transcript;
+            if (deepgramFinalDebounceTimer) clearTimeout(deepgramFinalDebounceTimer);
+            deepgramFinalDebounceTimer = setTimeout(() => {
+              deepgramFinalDebounceTimer = null;
+              const text = pendingDeepgramFinalText.trim();
+              const finalConf = lastFinalSttConfidence;
+              pendingDeepgramFinalText = "";
+              if (!text) return;
+              void enqueueUserTurn(text, finalConf).catch((e) =>
+                log(`enqueueUserTurn failed: ${e instanceof Error ? e.message : String(e)}`)
+              );
+            }, FINAL_SILENCE_DEBOUNCE_MS);
           }
         }
       } catch {}
@@ -703,7 +777,7 @@ export function createCallEngine(opts: EngineOptions): void {
   }
 
   // ── LLM response ────────────────────────────────────────────────────────────
-  async function enqueueUserTurn(transcript: string): Promise<void> {
+  async function enqueueUserTurn(transcript: string, sttConfidence?: number): Promise<void> {
     if (userTurnBusy) {
       pendingUserTranscript = transcript;
       log(`[STT] Queued final while busy (${transcript.slice(0, 72)}…)`);
@@ -711,11 +785,16 @@ export function createCallEngine(opts: EngineOptions): void {
     }
     userTurnBusy = true;
     try {
+      const conf = sttConfidence ?? lastFinalSttConfidence;
+      logVoiceControllerEvent(callId, "turn", {
+        detail: "user_final",
+        extra: { sttConfidence: conf, textLen: transcript.length },
+      });
       let next: string | null = transcript;
       while (next) {
         const t = next;
         next = null;
-        await handleUserTurnImpl(t);
+        await handleUserTurnImpl(t, conf);
         if (pendingUserTranscript) {
           next = pendingUserTranscript;
           pendingUserTranscript = null;
@@ -726,7 +805,7 @@ export function createCallEngine(opts: EngineOptions): void {
     }
   }
 
-  async function handleUserTurnImpl(transcript: string): Promise<void> {
+  async function handleUserTurnImpl(transcript: string, _sttConfidence: number): Promise<void> {
     if (isEnded) return;
 
     const microPause = ENV.voiceResponseMicroPauseMs;
@@ -744,6 +823,50 @@ export function createCallEngine(opts: EngineOptions): void {
     const mergedStrict = mergeStrictTurnState(transcript, strictFacts, policyState);
     strictFacts = mergedStrict.strictFacts;
     policyState = mergedStrict.policyState;
+    if (strictFacts.industry) {
+      apexState = { ...apexState, industry: strictFacts.industry };
+    }
+
+    const nowBp = new Date();
+    const bpRoute = routeBlueprintDeterministic(apexState, transcript, nowBp, {
+      bookingScoreThreshold: ENV.bookingScoreThreshold,
+    });
+    apexState = bpRoute.next;
+    let recoveryPrefixForLlm = false;
+
+    if (bpRoute.route.kind === "none" && classifyDeterministicBucket(transcript) === "booking_signal") {
+      logVoiceControllerEvent(callId, "failure", {
+        bucket: "premature_booking",
+        transcriptSnippet: transcript.slice(0, 100),
+      });
+    }
+
+    if (bpRoute.route.kind === "speak_then_llm") {
+      appendHistory("user", transcript);
+      await speak(bpRoute.route.prefix, epoch);
+      recoveryPrefixForLlm = true;
+    } else if (bpRoute.route.kind === "speak") {
+      appendHistory("user", transcript);
+      if (bpRoute.route.markAnswered) {
+        apexState = markBlueprintAnswered(apexState, bpRoute.route.text);
+      }
+      await speak(bpRoute.route.text, epoch);
+      if (bpRoute.route.markAnswered) {
+        policyState = markQuestionAnswered(policyState);
+      }
+      syncPolicySnapshot(transcript, {
+        intent: classifyIntent(transcript),
+        mode: "answer",
+      });
+      if (bpRoute.route.endCall) {
+        setTimeout(
+          () => void finalizeHard({ reason: "apex_blueprint_pressure_end", outcome: "not_interested" }),
+          1500
+        );
+      }
+      traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+      return;
+    }
 
     const classified = classifyTurn(transcript);
     const strictPre = routeStrictBeforeLlm(transcript, new Date(), classified);
@@ -751,7 +874,9 @@ export function createCallEngine(opts: EngineOptions): void {
       if (strictPre.kind === "date_authority") {
         traceEvent(callId, "date_authority_short_circuit");
       }
+      appendHistory("user", transcript);
       await speak(strictPre.speakText, epoch);
+      apexState = markBlueprintAnswered(apexState, strictPre.speakText);
       policyState = markQuestionAnswered(policyState);
       syncPolicySnapshot(transcript, strictPre.trace);
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
@@ -763,7 +888,9 @@ export function createCallEngine(opts: EngineOptions): void {
     const tl = transcript.toLowerCase();
     if (zip && (tl.includes("zip") || tl.includes("serve") || tl.includes("area") || tl.includes("coverage"))) {
       const line = lookupServiceAreaSpoken(zip, clientConfig);
+      appendHistory("user", transcript);
       await speak(line, epoch);
+      apexState = markBlueprintAnswered(apexState, line);
       policyState = markQuestionAnswered(policyState);
       syncPolicySnapshot(transcript, { intent: classified.intent, mode: "answer" });
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
@@ -771,7 +898,9 @@ export function createCallEngine(opts: EngineOptions): void {
     }
     if (tl.includes("discount") || tl.includes("promo") || tl.includes("deal")) {
       const line = lookupDiscountsSpoken(clientConfig);
+      appendHistory("user", transcript);
       await speak(line, epoch);
+      apexState = markBlueprintAnswered(apexState, line);
       policyState = markQuestionAnswered(policyState);
       syncPolicySnapshot(transcript, { intent: classified.intent, mode: "answer" });
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
@@ -783,6 +912,7 @@ export function createCallEngine(opts: EngineOptions): void {
       log("[POLICY] End call detected");
       traceEvent(callId, "hangup_signal", { reason: "end_intent" });
       syncPolicySnapshot(transcript, { intent: classified.intent, mode: "close" });
+      appendHistory("user", transcript);
       await speak("No problem, thanks for calling, have a great day.", epoch);
       setTimeout(() => void finalizeHard({ reason: "end_intent", outcome: "not_interested" }), 1500);
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
@@ -818,7 +948,7 @@ export function createCallEngine(opts: EngineOptions): void {
       }
     }
 
-    appendHistory("user", transcript);
+    if (!recoveryPrefixForLlm) appendHistory("user", transcript);
 
     // Run sentiment in background — update for next turn
     setImmediate(async () => {
@@ -864,12 +994,12 @@ export function createCallEngine(opts: EngineOptions): void {
     });
 
     try {
-      await respondAnthropicVoice(epoch, transcript, plan.strictBlock);
+      await respondAnthropicVoice(epoch, transcript, plan.strictBlock, recoveryPrefixForLlm);
     } catch (e: any) {
       log(`[Claude] Failed: ${e?.message ?? e}`);
       try {
         await new Promise((r) => setTimeout(r, 350));
-        await respondAnthropicVoice(epoch, transcript, plan.strictBlock);
+        await respondAnthropicVoice(epoch, transcript, plan.strictBlock, recoveryPrefixForLlm);
       } catch (e2: any) {
         log(`[Claude] Retry failed: ${e2?.message ?? e2}`);
         if (activeSessionId) {
@@ -928,13 +1058,22 @@ export function createCallEngine(opts: EngineOptions): void {
   async function respondAnthropicVoice(
     epoch: number,
     userTranscript: string,
-    strictBlock: string
+    strictBlock: string,
+    recoveryPrefixDone: boolean
   ): Promise<void> {
     const anthropicKey = (process.env.ANTHROPIC_API_KEY ?? "").trim();
     if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY not set");
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey: anthropicKey });
-    const prompt = await buildSystemPromptWithTenant(userTranscript, strictBlock);
+    const blueprintIntent = classifyIntent(userTranscript);
+    const blueprintBlock = buildApexBlueprintPromptBlock(apexState, blueprintIntent);
+    const recoveryHint = recoveryPrefixDone
+      ? "\n\n=== RECOVERY ===\nYou already delivered the reset lines. Now give ONE direct substantive answer to what they need — do not repeat the reset or ask what they want again."
+      : "";
+    const prompt = await buildSystemPromptWithTenant(
+      userTranscript,
+      `${strictBlock}\n\n${blueprintBlock}${recoveryHint}`
+    );
     const messages = historyForLlm().map(m => ({
       role: m.role as "user" | "assistant",
       content: m.content,
@@ -950,17 +1089,21 @@ export function createCallEngine(opts: EngineOptions): void {
     });
 
     traceEvent(callId, "llm_stream_start", { provider: "anthropic", model: claudeModel });
-    const { clean, full } = await streamToCartesia(stream as any, epoch);
+    const { clean, full } = await streamToCartesia(stream as any, epoch, userTranscript);
     if (!clean.trim() && !full.trim()) throw new Error("Empty Claude response");
   }
 
-  // ── Stream LLM tokens → Cartesia clause by clause ────────────────────────
-  async function streamToCartesia(stream: any, epoch: number): Promise<{ clean: string; full: string }> {
-    // Cancel any in-flight Cartesia synthesis + clear telephony buffer before starting a new answer.
-    // Without this, the previous context keeps streaming audio while the new one speaks → double/scrambled.
+  // ── Stream LLM → buffer → direct-answer guard → Cartesia sentence-by-sentence ────────────────────────
+  async function streamToCartesia(
+    stream: any,
+    epoch: number,
+    userTranscript: string
+  ): Promise<{ clean: string; full: string }> {
     stopSpeaking();
     disarmOutboundSilenceWatch();
     lastOutboundAudioAt = Date.now();
+    assistantResponseInProgress = true;
+
     let llmAckTimer: NodeJS.Timeout | null = setTimeout(() => {
       llmAckTimer = null;
       if (epoch !== generationEpoch || isEnded) return;
@@ -979,14 +1122,10 @@ export function createCallEngine(opts: EngineOptions): void {
       traceEvent(callId, "failsafe_silence_2s_outbound");
       void speak("Still here — just making sure I didn’t miss anything.", epoch);
     }, 500);
-    // Fresh context for this entire response — all clauses share it via continue=true
+
     cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    let assembled = "";
-    let spokenUpTo = 0;
     let fullText = "";
-    /** Cartesia requires the first frame of a context to use continue=false; continuation uses continue=true. */
     let firstTtsClause = true;
-    /** If we ever sent continue:true, context stays open until flush; if only continue:false (one clause), never flush. */
     let cartesiaNeedsEndFlush = false;
 
     const sendClause = (text: string) => {
@@ -1003,9 +1142,6 @@ export function createCallEngine(opts: EngineOptions): void {
       if (!clean) return;
       const continueCtx = !firstTtsClause;
       if (continueCtx) cartesiaNeedsEndFlush = true;
-      // ONE context per full response — continue=true chains clauses together
-      // stopSpeaking() cancels this single context → stops ALL clauses instantly
-      // Fresh context set at start of streamToCartesia before first clause
       cartesiaSend(clean, continueCtx);
       firstTtsClause = false;
     };
@@ -1018,14 +1154,12 @@ export function createCallEngine(opts: EngineOptions): void {
             clearTimeout(llmAckTimer);
             llmAckTimer = null;
           }
-          const delta = event.delta.text || "";
-          assembled += delta;
-          fullText += delta;
-          spokenUpTo = drainSpeakableToTts(assembled, spokenUpTo, sendClause);
+          fullText += event.delta.text || "";
         }
       }
     } catch (e: any) {
       disarmOutboundSilenceWatch();
+      assistantResponseInProgress = false;
       log(`[STREAM] Error: ${e.message}`);
       throw e;
     } finally {
@@ -1035,29 +1169,52 @@ export function createCallEngine(opts: EngineOptions): void {
       }
     }
 
-    // Flush only if we continued the context (continue:true). Single-clause replies use continue:false only,
-    // which already closes the context — flushing would 400 "Context has closed" and break audio.
-    if (epoch === generationEpoch && !isEnded) {
-      spokenUpTo = drainSpeakableToTts(assembled, spokenUpTo, sendClause);
-      const remaining = fullText.slice(spokenUpTo);
-      if (remaining.trim()) sendClause(remaining);
-      if (cartesiaNeedsEndFlush && cartesiaContextId) {
-        cartesiaFlushExplicit(cartesiaContextId);
-      }
+    if (epoch !== generationEpoch || isEnded) {
+      assistantResponseInProgress = false;
+      disarmOutboundSilenceWatch();
+      return { clean: "", full: fullText };
     }
 
-    // Store assistant response
-    const cleanResponse = fullText.replace(/TOOL:\s*\w+\s*\{[^}]*\}/g, "").trim();
+    let cleanResponse = fullText.replace(/TOOL:\s*\w+\s*\{[^}]*\}/g, "").trim();
+    const guard = postProcessAssistantResponse(userTranscript, cleanResponse, classifyIntent(userTranscript));
+    if (guard.answerInsufficient) {
+      logVoiceControllerEvent(callId, "failure", {
+        bucket: "answer_quality_insufficient",
+        transcriptSnippet: userTranscript.slice(0, 80),
+      });
+    }
+    if (guard.askedFollowupBeforeAnswer) {
+      logVoiceControllerEvent(callId, "failure", {
+        bucket: "asked_followup_before_answer",
+        transcriptSnippet: userTranscript.slice(0, 120),
+      });
+    }
+    cleanResponse = guard.text;
+    const parts = splitIntoSentences(cleanResponse);
+    if (parts.length > 3) {
+      logVoiceControllerEvent(callId, "failure", { bucket: "spoke_too_long", detail: "sentence_count" });
+    }
+
+    const toSpeak = parts.length > 0 ? parts : [cleanResponse];
+    for (const sent of toSpeak) {
+      if (!sent.trim()) continue;
+      sendClause(sent);
+    }
+    if (cartesiaNeedsEndFlush && cartesiaContextId) {
+      cartesiaFlushExplicit(cartesiaContextId);
+    }
+
     if (cleanResponse) {
       appendHistory("assistant", cleanResponse);
+      apexState = markBlueprintAnswered(apexState, cleanResponse);
       policyState = markQuestionAnswered(policyState);
       const lq = extractLastQuestion(cleanResponse);
       if (lq) lastAssistantQuestion = lq;
     }
 
-    // Handle tool calls
     await handleToolCalls(fullText, epoch);
     disarmOutboundSilenceWatch();
+    assistantResponseInProgress = false;
     return { clean: cleanResponse, full: fullText };
   }
 
@@ -1156,6 +1313,7 @@ export function createCallEngine(opts: EngineOptions): void {
     isEnded = true;
     clearStreamRecoveryTimer();
     disarmOutboundSilenceWatch();
+    clearDeepgramFinalDebounce("finalize");
     unregisterEngineFromMap();
     log(`Call finalize: ${opts.reason}`);
 
@@ -1351,9 +1509,13 @@ export function createCallEngine(opts: EngineOptions): void {
         if (energy > th && !turnCtl.interruptRequested) {
           log(`[BARGE-IN] energy=${energy} (threshold=${th})`);
           traceEvent(callId, "barge_in_energy", { energy, threshold: th });
+          clearDeepgramFinalDebounce("energy_barge");
+          const ackSpeechMs = assistantPlaybackStartAt ? Date.now() - assistantPlaybackStartAt : 0;
+          const ackInProgress = assistantResponseInProgress;
           turnCtl = onUserSpeechStart(turnCtl);
           generationEpoch++;
           stopSpeaking();
+          scheduleBlueprintInterruptAck(lastFinalSttConfidence, ackSpeechMs, ackInProgress);
           if (activeSessionId) {
             const s = voiceSessionManager.getSession(activeSessionId);
             if (s)

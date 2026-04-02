@@ -13,6 +13,14 @@
 import * as voiceSessionManager from "./voiceSessionManager";
 import { resolveVoiceProfile } from "./voiceProfiles";
 import { ENV } from "../env";
+import {
+  FINAL_SILENCE_DEBOUNCE_MS,
+  splitIntoSentences,
+  classifyIntent,
+} from "../../realtime/apexStrictBlueprint";
+import { postProcessAssistantResponse } from "../../realtime/answerDirectGuard";
+import { computeInterruptAck } from "../../realtime/interruptAck";
+import { logVoiceControllerEvent } from "../../realtime/voiceControllerLog";
 
 type OutboundSocket = { send(data: string): void; close?(): void };
 type PipelineLogger = Pick<Console, "log" | "warn" | "error">;
@@ -79,6 +87,12 @@ export class VoiceRealtimePipeline {
   private keepaliveTimer: NodeJS.Timeout | null = null;
   /** Media stream stop/close is not call hangup — recover or timeout before DB finalize. */
   private streamStopRecoveryTimer: NodeJS.Timeout | null = null;
+  /** Deepgram finals debounced — same rule as realtimeVoiceEngine (true end-of-utterance). */
+  private deepgramFinalDebounceTimer: NodeJS.Timeout | null = null;
+  private pendingDeepgramFinalText = "";
+  private lastSttConfidence = 0.92;
+  private assistantPlaybackStartAt: number | null = null;
+  private assistantResponseInProgress = false;
 
   constructor(options: VoiceRealtimeOptions) {
     this.socket = options.socket;
@@ -232,12 +246,22 @@ export class VoiceRealtimePipeline {
             const transcript: string = msg.channel?.alternatives?.[0]?.transcript ?? "";
             const isFinal: boolean = msg.is_final;
             const speechFinal: boolean = msg.speech_final;
+            const conf = Number(msg.channel?.alternatives?.[0]?.confidence ?? 0.92);
+            if (isFinal && speechFinal) this.lastSttConfidence = conf;
 
             if (!transcript.trim()) return;
 
             if (isFinal && speechFinal) {
               this.logger.log(`[PIPE:DG] final: "${transcript}"`);
-              await this.onFinalTranscript(transcript);
+              this.pendingDeepgramFinalText = transcript;
+              if (this.deepgramFinalDebounceTimer) clearTimeout(this.deepgramFinalDebounceTimer);
+              this.deepgramFinalDebounceTimer = setTimeout(() => {
+                this.deepgramFinalDebounceTimer = null;
+                const text = this.pendingDeepgramFinalText.trim();
+                this.pendingDeepgramFinalText = "";
+                if (!text) return;
+                void this.onFinalTranscript(text);
+              }, FINAL_SILENCE_DEBOUNCE_MS);
             }
           }
         } catch {}
@@ -309,6 +333,7 @@ export class VoiceRealtimePipeline {
 
   private async cartesiaSendText(text: string): Promise<void> {
     if (!this.cartesiaWs || this.cartesiaWs.readyState !== 1 /* OPEN */) return;
+    if (!this.assistantPlaybackStartAt) this.assistantPlaybackStartAt = Date.now();
 
     const hadNoContext = !this.cartesiaContextId;
     if (!this.cartesiaContextId) {
@@ -372,6 +397,8 @@ export class VoiceRealtimePipeline {
     this.cartesiaWs.send(JSON.stringify({ context_id: this.cartesiaContextId, cancel: true }));
     this.cartesiaContextId = null;
     this.isSpeaking = false;
+    this.assistantPlaybackStartAt = null;
+    this.assistantResponseInProgress = false;
   }
 
   // ── GREETING ──────────────────────────────────────────────────────────────
@@ -457,11 +484,45 @@ export class VoiceRealtimePipeline {
   }
 
   private interruptSpeech(): void {
+    if (this.deepgramFinalDebounceTimer) {
+      clearTimeout(this.deepgramFinalDebounceTimer);
+      this.deepgramFinalDebounceTimer = null;
+    }
+    this.pendingDeepgramFinalText = "";
+    const ackSpeechMs = this.assistantPlaybackStartAt ? Date.now() - this.assistantPlaybackStartAt : 0;
+    const ackInProgress = this.assistantResponseInProgress;
+    const ackConf = this.lastSttConfidence;
     this.generationEpoch++; // abort any in-flight generation loops
     this.cartesiaCancel();
     this.sendClear();
     this.clearAudioBuffer();
     this.logger.log("[PIPE] speech interrupted, epoch=", this.generationEpoch);
+    const playAck = computeInterruptAck({
+      speechMs: ackSpeechMs,
+      sttConfidence: ackConf,
+      assistantResponseInProgress: ackInProgress,
+    });
+    if (!playAck) {
+      logVoiceControllerEvent(this.sessionId ?? "voice_pipe", "info", {
+        bucket: "tts_ack_too_talky",
+        detail: "silent_stop",
+        extra: { speechMs: ackSpeechMs },
+      });
+      return;
+    }
+    const epoch = this.generationEpoch;
+    setTimeout(() => {
+      if (epoch !== this.generationEpoch) return;
+      void this.speakInterruptAck();
+    }, 180);
+  }
+
+  /** Blueprint §9 — brief line after canceling assistant audio. */
+  private async speakInterruptAck(): Promise<void> {
+    if (!this.streamSid) return;
+    try {
+      await this.speakBatch("Got it — go ahead.");
+    } catch {}
   }
 
   // ── MARK ─────────────────────────────────────────────────────────────────
@@ -700,6 +761,7 @@ export class VoiceRealtimePipeline {
     this.sendClear();
     this.cartesiaNeedsNewContext = true;
     this.lastCartesiaContinueWasTrue = false;
+    this.assistantResponseInProgress = true;
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
@@ -717,42 +779,54 @@ export class VoiceRealtimePipeline {
     });
 
     let assembled = "";
-    let spokenUpTo = 0;
 
     for await (const event of stream) {
-      if (epoch !== this.generationEpoch) { stream.abort(); return; }
+      if (epoch !== this.generationEpoch) {
+        stream.abort();
+        this.assistantResponseInProgress = false;
+        return;
+      }
 
       if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
         assembled += event.delta.text;
-
-        const clauses = this.splitClauses(assembled);
-        const ready = clauses.slice(0, -1).join(" ");
-        if (ready.length > spokenUpTo) {
-          const fresh = sanitizeForSpeech(ready.slice(spokenUpTo));
-          if (fresh.trim()) {
-            await this.cartesiaSendText(fresh);
-            spokenUpTo = ready.length;
-            this.setSpeakingTimeout(8000);
-          }
-        }
       }
     }
 
-    if (epoch !== this.generationEpoch) return;
+    if (epoch !== this.generationEpoch) {
+      this.assistantResponseInProgress = false;
+      return;
+    }
 
-    const remaining = sanitizeForSpeech(assembled.slice(spokenUpTo));
-    if (remaining.trim()) await this.cartesiaSendText(remaining);
+    const rawText = assembled.trim();
+    let fullText = sanitizeForSpeech(rawText.replace(/TOOL:\s*[\s\S]*$/g, "").trim());
+    const guard = postProcessAssistantResponse(transcript, fullText, classifyIntent(transcript));
+    if (guard.askedFollowupBeforeAnswer) {
+      logVoiceControllerEvent(this.sessionId ?? "voice_pipe", "failure", {
+        bucket: "asked_followup_before_answer",
+        transcriptSnippet: transcript.slice(0, 120),
+      });
+    }
+    fullText = sanitizeForSpeech(guard.text);
+
+    const parts = splitIntoSentences(fullText);
+    const toSpeak = parts.length > 0 ? parts : [fullText];
+    for (const sent of toSpeak) {
+      if (!sent.trim()) continue;
+      const fresh = sanitizeForSpeech(sent);
+      if (fresh.trim()) {
+        await this.cartesiaSendText(fresh);
+        this.setSpeakingTimeout(8000);
+      }
+    }
     if (this.lastCartesiaContinueWasTrue && this.cartesiaContextId) {
       this.cartesiaFlushExplicit(this.cartesiaContextId);
     }
 
-    const rawText = assembled.trim();
-    const fullText = sanitizeForSpeech(rawText);
-    if (this.sessionId && fullText) {
-      voiceSessionManager.addMessage(this.sessionId, "assistant", fullText);
-      // Run tools on RAW text (before TOOL: is stripped by sanitize)
+    if (this.sessionId) {
+      if (fullText) voiceSessionManager.addMessage(this.sessionId, "assistant", fullText);
       await this.runToolIfNeeded(rawText, epoch);
     }
+    this.assistantResponseInProgress = false;
   }
 
   // ── BATCH TTS FALLBACK (when Cartesia WS not available) ──────────────────
@@ -1102,6 +1176,11 @@ TOOL: end_call {}`;
     if (this.speakingTimeout) clearTimeout(this.speakingTimeout);
     if (this.replyStartTimer) clearTimeout(this.replyStartTimer);
     if (this.keepaliveTimer) { clearInterval(this.keepaliveTimer); this.keepaliveTimer = null; }
+    if (this.deepgramFinalDebounceTimer) {
+      clearTimeout(this.deepgramFinalDebounceTimer);
+      this.deepgramFinalDebounceTimer = null;
+    }
+    this.pendingDeepgramFinalText = "";
     try { this.deepgramWs?.close(); } catch {}
     try { this.cartesiaWs?.close(); } catch {}
     this.audioChunks = [];
