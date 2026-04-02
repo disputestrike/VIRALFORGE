@@ -39,10 +39,7 @@ function RootPage() {
       <div style={{color:"rgba(255,255,255,0.5)",fontSize:14}}>Loading...</div>
     </div>
   );
-  if (user) {
-    window.location.replace("/dashboard");
-    return null;
-  }
+  if (user) return <Redirect to="/dashboard" />;
   return <LandingPage />;
 }
 
