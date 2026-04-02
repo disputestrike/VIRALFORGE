@@ -242,8 +242,14 @@ export class VoiceRealtimePipeline {
         try {
           const msg = JSON.parse(raw.toString());
 
-          // Streaming audio chunk — send immediately to telephony
+          // Streaming audio chunk — send immediately to telephony (ignore stale contexts)
           if (msg.type === "chunk" && msg.data) {
+            const cid = msg.context_id;
+            if (typeof cid === "string" && cid.length > 0) {
+              if (!this.cartesiaContextId || cid !== this.cartesiaContextId) return;
+            } else if (!this.cartesiaContextId) {
+              return;
+            }
             this.sendMedia(msg.data);
             this.isSpeaking = true;
             if (this.replyStartTimer) { clearTimeout(this.replyStartTimer); this.replyStartTimer = null; }
@@ -352,6 +358,8 @@ export class VoiceRealtimePipeline {
     const greeting = "Hi, thanks for calling. How can I help you today?";
 
     if (this.cartesiaWs?.readyState === 1) {
+      this.cartesiaCancel();
+      this.sendClear();
       this.cartesiaNeedsNewContext = true;
       // Stream greeting through Cartesia WS
       await this.cartesiaSendText(greeting);
@@ -639,6 +647,8 @@ export class VoiceRealtimePipeline {
     transcript: string,
     epoch: number
   ): Promise<void> {
+    this.cartesiaCancel();
+    this.sendClear();
     this.cartesiaNeedsNewContext = true;
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });

@@ -271,6 +271,16 @@ export function createCallEngine(opts: EngineOptions): void {
     ) {
       return;
     }
+    // CLOSING/CLOSED socket still had listeners and could keep forwarding chunks — close before replacing.
+    if (cartesiaWs) {
+      try {
+        cartesiaWs.removeAllListeners();
+        cartesiaWs.close();
+      } catch {
+        /* ignore */
+      }
+      cartesiaWs = null;
+    }
     const ws = new WebSocket(
       `wss://api.cartesia.ai/tts/websocket?api_key=${process.env.CARTESIA_API_KEY}&cartesia_version=2024-11-13`
     );
@@ -292,6 +302,14 @@ export function createCallEngine(opts: EngineOptions): void {
       try {
         const msg = JSON.parse(text);
         if (msg.type === "chunk" && msg.data) {
+          // Drop chunks from a stale Cartesia context (previous utterance still synthesizing, or orphan WS).
+          if (typeof msg.context_id === "string" && msg.context_id.length > 0) {
+            if (!cartesiaContextId || msg.context_id !== cartesiaContextId) {
+              return;
+            }
+          } else if (!cartesiaContextId) {
+            return;
+          }
           // Cartesia returns pcm_s16le — convert to mulaw for SignalWire
           if (streamSid && sigWs.readyState === WebSocket.OPEN) {
             if (greetingDone) logSttFinalToTtsLatencyIfPending(callId);
@@ -400,12 +418,12 @@ export function createCallEngine(opts: EngineOptions): void {
   }
 
   function stopSpeaking() {
-    if (!cartesiaWs || cartesiaWs.readyState !== WebSocket.OPEN) return;
-    if (cartesiaContextId) {
+    if (cartesiaWs && cartesiaWs.readyState === WebSocket.OPEN && cartesiaContextId) {
       cartesiaWs.send(JSON.stringify({ context_id: cartesiaContextId, cancel: true }));
     }
     isSpeaking = false;
-    cartesiaContextId = `ctx_${Date.now()}`;
+    // Empty = reject stray chunks until a new utterance sets a fresh context_id
+    cartesiaContextId = "";
     // Clear SignalWire audio buffer
     if (streamSid && sigWs.readyState === WebSocket.OPEN) {
       sigWs.send(JSON.stringify({ event: "clear", streamSid }));
@@ -715,9 +733,11 @@ export function createCallEngine(opts: EngineOptions): void {
 
   // ── Stream LLM tokens → Cartesia clause by clause ────────────────────────
   async function streamToCartesia(stream: any, epoch: number): Promise<{ clean: string; full: string }> {
+    // Cancel any in-flight Cartesia synthesis + clear telephony buffer before starting a new answer.
+    // Without this, the previous context keeps streaming audio while the new one speaks → double/scrambled.
+    stopSpeaking();
     // Fresh context for this entire response — all clauses share it via continue=true
-    // stopSpeaking() cancels this one context ID to stop all audio instantly
-    cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+    cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     let assembled = "";
     let spokenUpTo = 0;
     let fullText = "";
@@ -782,6 +802,8 @@ export function createCallEngine(opts: EngineOptions): void {
   async function speak(text: string, epoch: number): Promise<void> {
     if (epoch !== generationEpoch || isEnded) return;
     log(`speak() called: "${text.slice(0,50)}" cartesiaWs=${cartesiaWs?.readyState}`);
+    // Cancel prior synthesis + clear SW buffer so short replies (greeting, reprompt) never overlap.
+    stopSpeaking();
     // Always start a new Cartesia context — reusing ctx after greeting without a timely
     // `done` causes 400 "unable to infer voice mode" and loops the sorry line.
     cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
