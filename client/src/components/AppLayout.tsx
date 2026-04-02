@@ -20,6 +20,9 @@ import {
   FileText,
   Settings2,
   Building2,
+  BookOpen,
+  GitBranch,
+  Plug,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "./ui/button";
@@ -44,8 +47,10 @@ const navItems = [
   { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/templates", label: "Templates", icon: FileText },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/testimonials", label: "Testimonials", icon: Star },
-  { href: "/onboarding", label: "Onboarding", icon: Zap },
+  { href: "/knowledge-base", label: "Knowledge Base", icon: BookOpen },
+  { href: "/workflows", label: "Workflows", icon: GitBranch },
+  { href: "/integrations", label: "Integrations", icon: Plug },
+  { href: "/settings", label: "Settings", icon: Settings2 },
 ];
 
 const adminItems = [

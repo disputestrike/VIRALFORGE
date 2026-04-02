@@ -31,6 +31,9 @@ import Security from "./pages/Security";
 import Platform from "@/pages/Platform";
 import Solutions from "@/pages/Solutions";
 import Resources from "@/pages/Resources";
+import KnowledgeBasePage from "@/pages/KnowledgeBasePage";
+import WorkflowsPage from "@/pages/WorkflowsPage";
+import IntegrationsPage from "@/pages/IntegrationsPage";
 
 function RootPage() {
   const { user, loading } = useAuth();
@@ -105,6 +108,15 @@ function Router() {
       </Route>
       <Route path="/agency">
         <AppLayout><Agency /></AppLayout>
+      </Route>
+      <Route path="/knowledge-base">
+        <AppLayout><KnowledgeBasePage /></AppLayout>
+      </Route>
+      <Route path="/workflows">
+        <AppLayout><WorkflowsPage /></AppLayout>
+      </Route>
+      <Route path="/integrations">
+        <AppLayout><IntegrationsPage /></AppLayout>
       </Route>
 
       <Route path="/404" component={NotFound} />

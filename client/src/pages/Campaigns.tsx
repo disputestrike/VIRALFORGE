@@ -67,7 +67,7 @@ AI Opening Script: "${data.campaignScript}"`.trim()
   const [statusFilter, setStatusFilter] = useState("all");
   const [form, setForm] = useState({
     name: "", description: "", goal: "appointments" as typeof GOALS[number],
-    industry: "", dailyLimit: "50", startDate: "", endDate: "",
+    industry: "", dailyLimit: "50", startDate: "", endDate: "", language: "en",
   });
 
   const utils = trpc.useUtils();
@@ -81,7 +81,7 @@ AI Opening Script: "${data.campaignScript}"`.trim()
       utils.campaigns.list.invalidate();
       setShowCreate(false);
       setSelectedChannels([]);
-      setForm({ name: "", description: "", goal: "appointments", industry: "", dailyLimit: "50", startDate: "", endDate: "" });
+      setForm({ name: "", description: "", goal: "appointments", industry: "", dailyLimit: "50", startDate: "", endDate: "", language: "en" });
       toast.success("Campaign created successfully");
     },
     onError: (e) => toast.error(e.message),
@@ -210,6 +210,7 @@ AI Opening Script: "${data.campaignScript}"`.trim()
                             </span>
                             {c.industry && <Badge variant="outline" className="text-xs border-border">{c.industry}</Badge>}
                             {c.goal && <Badge variant="outline" className="text-xs border-border capitalize">{c.goal.replace("_", " ")}</Badge>}
+                            {(c as any).language && (c as any).language !== "en" && <Badge variant="outline" className="text-xs border-blue-400/30 text-blue-400">{(c as any).language.toUpperCase()}</Badge>}
                           </div>
                           {c.description && (
                             <p className="text-xs text-muted-foreground mb-3 line-clamp-1">{c.description}</p>
@@ -359,6 +360,24 @@ AI Opening Script: "${data.campaignScript}"`.trim()
                   </SelectTrigger>
                   <SelectContent>
                     {INDUSTRIES.map((i) => <SelectItem key={i} value={i}>{i}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Language</Label>
+                <Select value={form.language} onValueChange={(v) => setForm((f) => ({ ...f, language: v }))}>
+                  <SelectTrigger className="bg-secondary border-border">
+                    <SelectValue placeholder="Select language" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[
+                      { code: "en", name: "English" }, { code: "es", name: "Spanish (Español)" },
+                      { code: "fr", name: "French (Français)" }, { code: "de", name: "German (Deutsch)" },
+                      { code: "pt", name: "Portuguese" }, { code: "it", name: "Italian" },
+                      { code: "nl", name: "Dutch" }, { code: "pl", name: "Polish" },
+                      { code: "ru", name: "Russian" }, { code: "zh", name: "Chinese (中文)" },
+                      { code: "ja", name: "Japanese (日本語)" }, { code: "ko", name: "Korean (한국어)" },
+                    ].map((l) => <SelectItem key={l.code} value={l.code}>{l.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
