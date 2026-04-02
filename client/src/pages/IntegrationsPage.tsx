@@ -112,28 +112,79 @@ export default function IntegrationsPage() {
       <div>
         <h2 className="text-lg font-semibold mb-3 flex items-center gap-2"><Plug className="size-5" /> Communication Channels</h2>
         <div className="grid gap-4 md:grid-cols-3">
+          {/* Webchat */}
           <Card>
-            <CardContent className="pt-6 text-center">
-              <MessageCircle className="size-8 mx-auto mb-2 text-blue-500" />
-              <p className="font-medium">Webchat Widget</p>
-              <p className="text-xs text-muted-foreground mt-1">Embed AI chat on your website</p>
-              <p className="text-xs text-muted-foreground">Configure in Settings → Webchat</p>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3 mb-3">
+                <MessageCircle className="size-6 text-blue-500" />
+                <div>
+                  <p className="font-medium">Webchat Widget</p>
+                  <p className="text-xs text-muted-foreground">Embed AI chat on your website</p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">Add this script to your website to let visitors chat with your AI agent directly.</p>
+              <div className="rounded-lg bg-muted/50 p-2 text-[10px] font-mono break-all select-all">
+                {`<script src="${typeof window !== 'undefined' ? window.location.origin : ''}/widget.js" data-apex="true"></script>`}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-2">Paste before {"</body>"} on any page. The AI will use your knowledge base to answer questions.</p>
             </CardContent>
           </Card>
+
+          {/* Social */}
           <Card>
-            <CardContent className="pt-6 text-center">
-              <Share2 className="size-8 mx-auto mb-2 text-purple-500" />
-              <p className="font-medium">Social Channels</p>
-              <p className="text-xs text-muted-foreground mt-1">WhatsApp, Instagram, Facebook</p>
-              <p className="text-xs text-muted-foreground">Configure in Settings → Social</p>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3 mb-3">
+                <Share2 className="size-6 text-purple-500" />
+                <div>
+                  <p className="font-medium">Social Channels</p>
+                  <p className="text-xs text-muted-foreground">Connect messaging platforms</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {[
+                  { name: "WhatsApp Business", status: "Available", color: "#25D366" },
+                  { name: "Instagram DM", status: "Available", color: "#E4405F" },
+                  { name: "Facebook Messenger", status: "Available", color: "#0084FF" },
+                ].map((ch) => (
+                  <div key={ch.name} className="flex items-center justify-between rounded-lg border border-border p-2">
+                    <div className="flex items-center gap-2">
+                      <div className="size-2 rounded-full" style={{ backgroundColor: ch.color }} />
+                      <span className="text-xs font-medium">{ch.name}</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">{ch.status}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-2">Contact support to connect social channels to your account.</p>
             </CardContent>
           </Card>
+
+          {/* Email */}
           <Card>
-            <CardContent className="pt-6 text-center">
-              <Mail className="size-8 mx-auto mb-2 text-orange-500" />
-              <p className="font-medium">Email Sequences</p>
-              <p className="text-xs text-muted-foreground mt-1">Automated drip campaigns</p>
-              <p className="text-xs text-muted-foreground">Configure in Settings → Email</p>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3 mb-3">
+                <Mail className="size-6 text-orange-500" />
+                <div>
+                  <p className="font-medium">Email Sequences</p>
+                  <p className="text-xs text-muted-foreground">Automated drip campaigns</p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">Set up automated follow-up emails that send when leads come in or appointments are booked.</p>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Email provider</span>
+                  <span className="font-medium text-green-500">Resend (connected)</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Triggers</span>
+                  <span>New lead, Appointment booked, Call ended</span>
+                </div>
+              </div>
+              <a href="/settings" className="block mt-3">
+                <Button size="sm" variant="outline" className="w-full text-xs">
+                  Configure email sequences →
+                </Button>
+              </a>
             </CardContent>
           </Card>
         </div>
