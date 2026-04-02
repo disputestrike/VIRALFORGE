@@ -28,6 +28,14 @@ export interface VoiceSession {
   callerPhone?: string | null;
   transcript: string;
   trace: Array<{ ts: number; event: string; data?: Record<string, unknown> }>;
+  /** Last snapshot from realtime callPolicy (compliance / debugging). */
+  voiceCallPolicy?: {
+    mode: string;
+    activeQuestion: string | null;
+    conversationStage: string;
+    lastIntent: string;
+    extractedFacts: Record<string, string>;
+  };
 }
 
 // In-memory session store (keyed by sessionId OR callSid)

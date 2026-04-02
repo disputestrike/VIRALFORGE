@@ -14,6 +14,7 @@ export type VoiceTracePhase =
   | "response_pause"
   | "llm_route"
   | "llm_stream_start"
+  | "turn_policy"
   | "tts_first_chunk"
   | "hangup_signal"
   | "cleanup"

@@ -1,24 +1,24 @@
 /**
  * realtimeVoiceEngine.ts — THE CORE ORCHESTRATOR
- * 
- * Pipeline: SignalWire → Deepgram STT → Cerebras → Cartesia TTS → SignalWire
- * Claude when ANTHROPIC_API_KEY is set on failure (voiceRealtimePipeline still uses LLM_ALLOW_ANTHROPIC_FALLBACK).
- * 
+ *
+ * Pipeline: SignalWire → Deepgram STT → Anthropic Claude (Haiku) → Cartesia TTS → SignalWire
+ *
  * Key principles:
- * 1. Telephony: mulaw 8kHz to/from SignalWire; Cartesia outputs pcm_mulaw for outbound TTS
- * 2. Streaming everything — never wait for full response
- * 3. Instant barge-in — user speech kills AI speech immediately
- * 4. Epoch system — stale generations are discarded
- * 5. Clean hangup — one goodbye, then terminate
+ * 1. Telephony: mulaw 8kHz to/from SignalWire; Cartesia pcm_s16le → convert to mulaw outbound
+ * 2. Streaming — first spoken clause ASAP after micro-pause
+ * 3. Barge-in — user wins; TTS cancelled immediately
+ * 4. Epoch — stale LLM/TTS generations discarded
+ * 5. Close — one goodbye, then hang up
  */
 
 import WebSocket from "ws";
-import OpenAI from "openai";
 import {
   createCallState,
   updateCallState,
   markQuestionAnswered,
   canOfferBooking,
+  inferUtteranceIntent,
+  detectLiveTransferIntent,
   type CallState,
 } from "./callPolicy";
 import { getVoiceProfile, type VoiceProfile } from "./voiceProfiles";
@@ -50,8 +50,8 @@ import {
   lookupDiscountsSpoken,
   lookupServiceAreaSpoken,
 } from "./toolLayer";
-import { cerebrasModelCandidates, cerebrasPool } from "../_core/services/llmRouter";
 import { buildVoiceSystemPrompt } from "./dynamicPrompt";
+import { normalizeToE164US } from "../_core/phoneE164";
 
 /**
  * Push LLM text to TTS sentence by sentence.
@@ -196,6 +196,36 @@ export function createCallEngine(opts: EngineOptions): void {
   let userTurnBusy = false;
   let pendingUserTranscript: string | null = null;
   let turnStartedAt = 0;
+  let extractedFacts: Record<string, string> = {};
+
+  function mergeExtractedFactsFromTurn(transcript: string): void {
+    const zip = extractZipFromTranscript(transcript);
+    if (zip) extractedFacts = { ...extractedFacts, serviceZip: zip };
+    const m = transcript.match(/\b(?:my name is|i'?m|i am)\s+([A-Za-z][A-Za-z'\-]{1,24})\b/i);
+    if (m) extractedFacts = { ...extractedFacts, firstName: m[1]! };
+  }
+
+  function syncPolicySnapshot(userText: string): void {
+    traceEvent(callId, "turn_policy", {
+      mode: callState.mode,
+      activeQuestion: callState.activeQuestion,
+      conversationStage: callState.mode,
+      lastIntent: inferUtteranceIntent(userText),
+      extractedFacts: { ...extractedFacts },
+    });
+    if (!activeSessionId) return;
+    try {
+      voiceSessionManager.updateSession(activeSessionId, {
+        voiceCallPolicy: {
+          mode: callState.mode,
+          activeQuestion: callState.activeQuestion,
+          conversationStage: callState.mode,
+          lastIntent: inferUtteranceIntent(userText),
+          extractedFacts: { ...extractedFacts },
+        },
+      });
+    } catch {}
+  }
 
   function appendHistory(role: "user" | "assistant", content: string): void {
     const trimmed = content.trim();
@@ -512,6 +542,7 @@ export function createCallEngine(opts: EngineOptions): void {
     const epoch = ++generationEpoch;
     turnStartedAt = Date.now();
     callState = updateCallState(callState, transcript);
+    mergeExtractedFactsFromTurn(transcript);
 
     // Deterministic ZIP / discount snippets when user asks (before LLM)
     const zip = extractZipFromTranscript(transcript);
@@ -520,6 +551,7 @@ export function createCallEngine(opts: EngineOptions): void {
       const line = lookupServiceAreaSpoken(zip, clientConfig);
       await speak(line, epoch);
       callState = markQuestionAnswered(callState);
+      syncPolicySnapshot(transcript);
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
       return;
     }
@@ -527,6 +559,7 @@ export function createCallEngine(opts: EngineOptions): void {
       const line = lookupDiscountsSpoken(clientConfig);
       await speak(line, epoch);
       callState = markQuestionAnswered(callState);
+      syncPolicySnapshot(transcript);
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
       return;
     }
@@ -535,12 +568,44 @@ export function createCallEngine(opts: EngineOptions): void {
     if (callState.endCallRequested) {
       log("[POLICY] End call detected");
       traceEvent(callId, "hangup_signal", { reason: "end_intent" });
+      syncPolicySnapshot(transcript);
       await speak("No problem, thanks for calling, have a great day.", epoch);
       setTimeout(() => cleanup(), 1500);
+      traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
       return;
     }
 
+    // Live transfer (SignalWire) when enabled and owner has transferNumber
+    if (
+      ENV.liveTransferEnabled &&
+      detectLiveTransferIntent(transcript) &&
+      callSid &&
+      activeUserId
+    ) {
+      try {
+        const { getUserById } = await import("../db");
+        const owner = await getUserById(activeUserId);
+        const raw = owner?.transferNumber?.trim();
+        const target = raw ? normalizeToE164US(raw) || raw : null;
+        if (target) {
+          appendHistory("user", transcript);
+          syncPolicySnapshot(transcript);
+          log(`[POLICY] Live transfer → ${target.slice(0, 6)}…`);
+          traceEvent(callId, "hangup_signal", { reason: "live_transfer" });
+          await speak("Sure — connecting you to someone now.", epoch);
+          const { transferCallToHuman } = await import("../_core/services/signalwireService");
+          await transferCallToHuman(callSid, target);
+          setTimeout(() => cleanup(), 800);
+          traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+          return;
+        }
+      } catch (e) {
+        log(`[POLICY] Transfer failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
     appendHistory("user", transcript);
+    syncPolicySnapshot(transcript);
 
     // Run sentiment in background — update for next turn
     setImmediate(async () => {
@@ -551,52 +616,36 @@ export function createCallEngine(opts: EngineOptions): void {
       } catch {}
     });
 
-    // PRIMARY: Cerebras (multi-key + model rotation in respondCerebras)
-    // FALLBACK: Claude when ANTHROPIC_API_KEY is set (live calls; stricter opt-in remains in voiceRealtimePipeline)
     const reprompt =
       "I didn't quite catch that—could you say that again in a few words?";
-    const allowAnthropic = !!(process.env.ANTHROPIC_API_KEY ?? "").trim();
-    traceEvent(callId, "llm_route", {
-      path: "cerebras",
-      anthropicFallback: allowAnthropic,
-    });
-    log(
-      `[ROUTE] Cerebras primary${allowAnthropic ? " → Claude if Cerebras fails" : ""}`
-    );
+    const anthropicKey = (process.env.ANTHROPIC_API_KEY ?? "").trim();
+    traceEvent(callId, "llm_route", { path: "anthropic-claude-haiku" });
+    log("[ROUTE] Anthropic Claude (voice LLM — Cerebras not used on live path)");
 
-    async function tryCerebras(): Promise<void> {
-      await respondCerebras(epoch, transcript);
+    if (!anthropicKey) {
+      log("[Voice] Missing ANTHROPIC_API_KEY — configure for live voice");
+      try {
+        await speak(
+          "I'm sorry, this line isn't fully configured right now. Please try again later.",
+          epoch
+        );
+      } catch {}
+      traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+      return;
     }
 
     try {
-      await tryCerebras();
+      await respondAnthropicVoice(epoch, transcript);
     } catch (e: any) {
-      log(`[Cerebras] Failed: ${e?.message ?? e}`);
-      if (allowAnthropic) {
+      log(`[Claude] Failed: ${e?.message ?? e}`);
+      try {
+        await new Promise((r) => setTimeout(r, 350));
+        await respondAnthropicVoice(epoch, transcript);
+      } catch (e2: any) {
+        log(`[Claude] Retry failed: ${e2?.message ?? e2}`);
         try {
-          await respondAnthropicFallback(epoch, transcript);
-        } catch (e2: any) {
-          log(`[Claude] Failed: ${e2?.message ?? e2}`);
-          try {
-            await new Promise((r) => setTimeout(r, 400));
-            await tryCerebras();
-          } catch (e3: any) {
-            log(`[Cerebras] Retry after Claude fail: ${e3?.message ?? e3}`);
-            try {
-              await speak(reprompt, epoch);
-            } catch {}
-          }
-        }
-      } else {
-        try {
-          await new Promise((r) => setTimeout(r, 400));
-          await tryCerebras();
-        } catch (e2: any) {
-          log(`[Cerebras] Retry: ${e2?.message ?? e2}`);
-          try {
-            await speak(reprompt, epoch);
-          } catch {}
-        }
+          await speak(reprompt, epoch);
+        } catch {}
       }
     }
     traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
@@ -622,84 +671,7 @@ export function createCallEngine(opts: EngineOptions): void {
     return base;
   }
 
-  function httpStatusFromUnknown(e: unknown): number | undefined {
-    if (e && typeof e === "object") {
-      const o = e as { status?: number; response?: { status?: number } };
-      if (typeof o.status === "number") return o.status;
-      if (typeof o.response?.status === "number") return o.response.status;
-    }
-    return undefined;
-  }
-
-  async function respondCerebras(epoch: number, userTranscript: string): Promise<void> {
-    const prompt = await buildSystemPromptWithTenant(userTranscript);
-    const messages = [
-      { role: "system" as const, content: prompt },
-      ...historyForLlm(),
-    ];
-
-    const models = cerebrasModelCandidates();
-    const nSlots = cerebrasPool.keySlotCount();
-    const maxKeyPasses = Math.max(1, Math.min(5, nSlots || 1));
-
-    let lastErr: unknown;
-
-    for (let pass = 0; pass < maxKeyPasses; pass++) {
-      const keySlot = cerebrasPool.getKey();
-      if (!keySlot) throw new Error("No Cerebras keys available");
-
-      for (let i = 0; i < models.length; i++) {
-        const model = models[i]!;
-        try {
-          log(
-            `[Cerebras] streaming model=${model} pass=${pass + 1}/${maxKeyPasses} maxTok=${ENV.voiceLlmMaxTokens} temp=${ENV.voiceLlmTemperature}`
-          );
-          const cerebrasClient = new OpenAI({
-            apiKey: keySlot.key,
-            baseURL: "https://api.cerebras.ai/v1",
-          });
-          const body: Record<string, unknown> = {
-            model,
-            messages,
-            stream: true,
-            max_tokens: ENV.voiceLlmMaxTokens,
-            temperature: ENV.voiceLlmTemperature,
-          };
-          const stream = await cerebrasClient.chat.completions.create(
-            body as unknown as OpenAI.Chat.ChatCompletionCreateParamsStreaming
-          );
-          log(`[Cerebras] Key #${keySlot.index + 1} model=${model}`);
-          traceEvent(callId, "llm_stream_start", { provider: "cerebras", model });
-          const { clean, full } = await streamToCartesia(stream as any, epoch, "cerebras");
-          if (!clean.trim() && !full.trim()) throw new Error("Empty Cerebras response");
-          return;
-        } catch (e: unknown) {
-          lastErr = e;
-          const msg = e instanceof Error ? e.message : String(e);
-          const status = httpStatusFromUnknown(e);
-          log(
-            `[Cerebras] model ${model} pass ${pass + 1} failed: ${msg}${status != null ? ` status=${status}` : ""}`
-          );
-          if (status === 429) {
-            cerebrasPool.markRateLimited(keySlot.index, 60_000);
-            break;
-          }
-          if (status === 401 || status === 403) {
-            cerebrasPool.markRateLimited(keySlot.index, 600_000);
-            break;
-          }
-          const is404 = status === 404 || /\b404\b/.test(msg);
-          if (is404 && i < models.length - 1) continue;
-          if (i < models.length - 1) continue;
-          break;
-        }
-      }
-    }
-
-    throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
-  }
-
-  async function respondAnthropicFallback(epoch: number, userTranscript: string): Promise<void> {
+  async function respondAnthropicVoice(epoch: number, userTranscript: string): Promise<void> {
     const anthropicKey = (process.env.ANTHROPIC_API_KEY ?? "").trim();
     if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY not set");
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
@@ -710,7 +682,8 @@ export function createCallEngine(opts: EngineOptions): void {
       content: m.content,
     }));
 
-    const claudeModel = process.env.CLAUDE_MODEL || "claude-3-5-haiku-20241022";
+    const claudeModel =
+      (process.env.VOICE_CLAUDE_MODEL || process.env.CLAUDE_MODEL || "claude-3-5-haiku-20241022").trim();
     const stream = await client.messages.stream({
       model: claudeModel,
       max_tokens: ENV.voiceLlmMaxTokens,
@@ -720,16 +693,12 @@ export function createCallEngine(opts: EngineOptions): void {
     });
 
     traceEvent(callId, "llm_stream_start", { provider: "anthropic", model: claudeModel });
-    const { clean, full } = await streamToCartesia(stream as any, epoch, "claude");
+    const { clean, full } = await streamToCartesia(stream as any, epoch);
     if (!clean.trim() && !full.trim()) throw new Error("Empty Claude response");
   }
 
   // ── Stream LLM tokens → Cartesia clause by clause ────────────────────────
-  async function streamToCartesia(
-    stream: any,
-    epoch: number,
-    source: "cerebras" | "claude"
-  ): Promise<{ clean: string; full: string }> {
+  async function streamToCartesia(stream: any, epoch: number): Promise<{ clean: string; full: string }> {
     // Fresh context for this entire response — all clauses share it via continue=true
     // stopSpeaking() cancels this one context ID to stop all audio instantly
     cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
@@ -759,25 +728,13 @@ export function createCallEngine(opts: EngineOptions): void {
     };
 
     try {
-      if (source === "cerebras") {
-        for await (const chunk of stream) {
-          if (epoch !== generationEpoch || isEnded) break;
-          const delta = chunk.choices?.[0]?.delta?.content || "";
-          if (!delta) continue;
+      for await (const event of stream) {
+        if (epoch !== generationEpoch || isEnded) break;
+        if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
+          const delta = event.delta.text || "";
           assembled += delta;
           fullText += delta;
           spokenUpTo = drainSpeakableToTts(assembled, spokenUpTo, sendClause);
-        }
-      } else {
-        // Claude streaming
-        for await (const event of stream) {
-          if (epoch !== generationEpoch || isEnded) break;
-          if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
-            const delta = event.delta.text || "";
-            assembled += delta;
-            fullText += delta;
-            spokenUpTo = drainSpeakableToTts(assembled, spokenUpTo, sendClause);
-          }
         }
       }
     } catch (e: any) {

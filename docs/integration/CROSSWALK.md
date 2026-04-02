@@ -14,6 +14,8 @@
 
 **Compliance (quick):** TCPA/consent for outbound; minimize PII in logs; retention policy for transcripts/KB — review each feature row before release.
 
+**Live voice compliance (locked stack, evidence tiers):** [`VOICE_COMPLIANCE_MATRIX.md`](./VOICE_COMPLIANCE_MATRIX.md) — maps requirements → code → tests → logs → manual recordings.
+
 ---
 
 ## Where this file lives (your “20 features” crosswalk)
@@ -29,7 +31,7 @@ The **Part 1 table below** (rows **1–20**) is the same numbering as your **“
 
 - **You do not need magic words.** Say **“continue from CROSSWALK Part 1 row N”** (or “next open row”) so each session picks up without re-explaining.
 - **One session cannot run forever** (context and tooling limits). For maximum throughput: **prioritize 2–3 rows**, accept the diff, then **“continue”** with the next rows.
-- **For “live / real / integrated”:** apply **SQL migrations** on Railway (`0011`, `0012`, …), set **env vars** (Cartesia, Cerebras, SignalWire, Deepgram), and treat **🔗 rows** as merge work until they show **✅** here.
+- **For “live / real / integrated”:** apply **SQL migrations** on Railway (`0011`, `0012`, …), set **env vars** (Cartesia, **Anthropic**, SignalWire, Deepgram — live voice does **not** use Cerebras on the SignalWire streaming path), and treat **🔗 rows** as merge work until they show **✅** here.
 - **Optional but powerful:** paste **Railway `DATABASE_URL`** only if you want migration verification from this environment (security: rotate after).
 
 ---
@@ -44,7 +46,7 @@ The **Part 1 table below** (rows **1–20**) is the same numbering as your **“
 | ✅ | Zapier **emit** — `call.completed` (after recording persist), `lead.created` (after lead create); respects Settings filter |
 | ✅ | Call summary UI — `aiSummary` on Voice AI → Call Recordings + Summary dialog |
 
-**Stack focus (product):** Cartesia (TTS) + Cerebras (LLM) + SignalWire + Deepgram (live STT in realtime pipeline).
+**Stack focus (product — live calls):** Cartesia (TTS) + **Anthropic Claude Haiku** (LLM) + SignalWire + Deepgram (STT). See [`VOICE_COMPLIANCE_MATRIX.md`](./VOICE_COMPLIANCE_MATRIX.md). (Cerebras may still exist for non-voice helpers; not used in `realtimeVoiceEngine.ts`.)
 
 ---
 

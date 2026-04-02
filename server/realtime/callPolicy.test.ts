@@ -6,6 +6,8 @@ import {
   detectUserQuestion,
   canOfferBooking,
   detectEndCallIntent,
+  detectLiveTransferIntent,
+  inferUtteranceIntent,
 } from "./callPolicy";
 
 describe("callPolicy", () => {
@@ -25,6 +27,17 @@ describe("callPolicy", () => {
     expect(s.questionAnswered).toBe(false);
     expect(detectUserQuestion("Do you serve zip code 20008?")).toBe(true);
     expect(canOfferBooking(s)).toBe(false);
+  });
+
+  it("detects live transfer intent", () => {
+    expect(detectLiveTransferIntent("can I talk to a human")).toBe(true);
+    expect(detectLiveTransferIntent("what is your pricing")).toBe(false);
+  });
+
+  it("infers utterance intent", () => {
+    expect(inferUtteranceIntent("I'm done")).toBe("end_call");
+    expect(inferUtteranceIntent("talk to someone")).toBe("live_transfer");
+    expect(inferUtteranceIntent("how much does it cost")).toBe("question");
   });
 
   it("allows booking only after question answered and interest confirmed", () => {

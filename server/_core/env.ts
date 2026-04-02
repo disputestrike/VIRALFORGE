@@ -82,8 +82,8 @@ export const ENV = {
   voicePlayRingBeforeStream: process.env.VOICE_PLAY_RING_BEFORE_STREAM !== "false",
   /** Multiply Cartesia voice profile speed (~0.91 default; override with VOICE_TTS_SPEED_SCALE). */
   voiceTtsSpeedScale: Math.min(1.25, Math.max(0.55, parseFloat(process.env.VOICE_TTS_SPEED_SCALE ?? "1.0") || 1.0)),
-  /** After Deepgram speech_final, brief pause before LLM (lower = snappier; 0 = none). */
-  voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "120", 10) || 0),
+  /** After Deepgram speech_final, pause before LLM — target 200–300ms for natural turn-taking. */
+  voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "250", 10) || 0),
   /**
    * Mu-law barge-in threshold on the 0–127 scale used by estimateEnergy (avg distance from silence).
    * Lower = easier interrupt. Values above 127 are treated as legacy mis-scaled (e.g. 600) and mapped with /5 so they still work.
@@ -98,9 +98,9 @@ export const ENV = {
   voiceDeepgramEndpointingMs: Math.max(100, Math.min(2000, parseInt(process.env.VOICE_DEEPGRAM_ENDPOINTING_MS ?? "250", 10) || 250)),
   /** Deepgram utterance_end_ms — cap wait for utterance boundary. */
   voiceDeepgramUtteranceEndMs: Math.max(300, Math.min(3000, parseInt(process.env.VOICE_DEEPGRAM_UTTERANCE_END_MS ?? "800", 10) || 800)),
-  /** Cerebras / voice LLM: max completion tokens per turn (phone). Default 800; cap 1200. */
+  /** Voice LLM (Anthropic Claude streaming): max tokens per turn. Default 800; cap 1200. */
   voiceLlmMaxTokens: Math.min(1200, Math.max(400, parseInt(process.env.VOICE_LLM_MAX_TOKENS ?? "800", 10) || 800)),
-  /** Cerebras streaming temperature — lower = more consistent; higher = more varied. */
+  /** Voice LLM temperature — lower = more consistent; higher = more varied. */
   voiceLlmTemperature: Math.min(0.85, Math.max(0.2, parseFloat(process.env.VOICE_LLM_TEMPERATURE ?? "0.40") || 0.4)),
   /**
    * Cerebras `gpt-oss-120b` only: reasoning_effort none|low|medium|high.
@@ -131,16 +131,20 @@ export const ENV = {
   get emailEnabled()  { return this.resendApiKey !== ""; },
   get ttsEnabled()    { return (process.env.CARTESIA_API_KEY ?? "").trim() !== ""; },
   get sttEnabled()    { return this.openAiApiKey !== "" || this.deepgramApiKey !== ""; },
-  /** Streaming phone pipeline: Deepgram + Cartesia + LLM (Cerebras primary; Anthropic optional via LLM_ALLOW_ANTHROPIC_FALLBACK) */
+  /** Non-voice / legacy routes may still use Cerebras pool when keys are set. Live voice engine uses Anthropic only. */
   get cerebrasConfigured() {
     return hasAnyCerebrasKey();
   },
+  /** Live SignalWire streaming voice: Deepgram + Cartesia + Anthropic (Claude). Cerebras is not used on this path. */
   get voiceRealtimeReady() {
-    const llm =
-      this.cerebrasConfigured ||
-      (this.llmAllowAnthropicFallback && this.anthropicApiKey !== "");
-    return this.deepgramApiKey !== "" && this.cartesiaApiKey !== "" && llm;
+    return (
+      this.deepgramApiKey !== "" &&
+      this.cartesiaApiKey !== "" &&
+      this.anthropicApiKey !== ""
+    );
   },
+  /** When true and `users.transferNumber` is set, live voice may transfer via SignalWire. */
+  liveTransferEnabled: process.env.LIVE_TRANSFER_ENABLED === "true",
   get queueEnabled()  { return this.redisUrl !== ""; },
   get stripeEnabled() { return this.stripeSecretKey !== ""; },
 

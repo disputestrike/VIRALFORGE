@@ -13,7 +13,7 @@ import * as voiceSessionManager from "./services/voiceSessionManager";
 import { apiRateLimiter, aiRateLimiter, authRateLimiter, webhookRateLimiter } from "./middleware/rateLimiter";
 import * as voiceProcessingService from "./services/voiceProcessingService";
 import { startSessionPersistenceInterval } from "./services/voiceSessionManager";
-// Live calls: realtimeVoiceEngine — Deepgram STT → Cerebras (fast) / Claude (smart) → Cartesia TTS (NOT Deepgram for TTS).
+// Live calls: realtimeVoiceEngine — Deepgram STT → Anthropic Claude (Haiku) → Cartesia TTS.
 import { createCallEngine } from "../realtime/realtimeVoiceEngine";
 import { getUsRingtoneWav } from "./telephony/usRingtoneWav";
 import { registerWebchatPublicRoutes } from "./webchatPublicApi";
@@ -483,8 +483,8 @@ async function startServer() {
         redis:    ENV.redisUrl    ? "configured" : "missing — using in-memory fallback",
         voice:    ENV.voiceEnabled  ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         voiceRealtime: ENV.voiceRealtimeReady
-          ? "ready (deepgram+cartesia+llm)"
-          : "incomplete — set DEEPGRAM_API_KEY, CARTESIA_API_KEY, and CEREBRAS_API_KEY_* (or LLM_ALLOW_ANTHROPIC_FALLBACK=true + ANTHROPIC_API_KEY)",
+          ? "ready (deepgram+cartesia+anthropic)"
+          : "incomplete — set DEEPGRAM_API_KEY, CARTESIA_API_KEY, and ANTHROPIC_API_KEY (live voice uses Claude only)",
         sms:      ENV.smsEnabled    ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         email:    ENV.emailEnabled  ? "ready"  : "disabled — add RESEND_API_KEY",
         stripe:   ENV.stripeEnabled ? "ready — webhook POST /api/stripe/webhook" : "disabled — add STRIPE_SECRET_KEY + price ids",
@@ -1281,7 +1281,7 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
         console.log("[VOICE-WS] connected", { sessionId, leadId, isInbound });
 
         // Live path: SignalWire audio ↔ createCallEngine (realtimeVoiceEngine.ts)
-        // Deepgram = streaming STT only. Cartesia = TTS. Cerebras/Claude = LLM.
+        // Deepgram = streaming STT only. Cartesia = TTS. Anthropic Claude = LLM.
         // (deepgramVoiceAgent.ts = alternate Deepgram Voice Agent API — not wired here.)
         let resolvedUserId: number | undefined;
         let resolvedLeadId: number | undefined;
@@ -1325,7 +1325,7 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
         }
 
         // ── NEW: Real-time voice engine ─────────────────────────────────
-        // Deepgram STT → Cerebras (fast) / Claude (smart) → Cartesia TTS
+        // Deepgram STT → Claude Haiku → Cartesia TTS
         // Streaming end-to-end, instant barge-in, clean hangup
         createCallEngine({
           sigWs: ws as unknown as import("ws").WebSocket,
