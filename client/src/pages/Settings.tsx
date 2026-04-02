@@ -94,6 +94,7 @@ export default function Settings() {
     onSuccess: () => { utils.settings.get.invalidate(); toast.success('Voice saved'); setSavingVoice(false); },
     onError: (e: any) => { toast.error(e.message); setSavingVoice(false); },
   });
+  const voicePreviewMutation = trpc.settings.voicePreview.useMutation();
 
   const { data: kbList, isLoading: kbLoading } = trpc.knowledgeBase.list.useQuery();
   const kbCreate = trpc.knowledgeBase.create.useMutation({
@@ -1532,39 +1533,43 @@ export default function Settings() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Mail className="w-4 h-4 text-primary" />
-            Email automation
+            Email Automation
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Use trigger <span className="font-mono">lead.created</span> (exact match) to queue an email when a new lead has an address. Body supports{" "}
-            <span className="font-mono">{"{{firstName}}"}</span>, <span className="font-mono">{"{{lastName}}"}</span>,{" "}
-            <span className="font-mono">{"{{company}}"}</span>, <span className="font-mono">{"{{email}}"}</span>, <span className="font-mono">{"{{phone}}"}</span>. Subject line is the sequence name. Requires{" "}
-            <span className="font-mono">REDIS_URL</span> + email worker + Resend on the server.
+            Set up automatic follow-up emails. When a new lead comes in or an appointment is booked, ApexAI sends the email for you. Use placeholders like <span className="font-semibold text-foreground">{"{{firstName}}"}</span> and <span className="font-semibold text-foreground">{"{{company}}"}</span> to personalize.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div className="space-y-1.5">
-              <Label className="text-xs">Sequence name</Label>
+              <Label className="text-xs">Email subject line</Label>
               <Input
                 value={seqName}
                 onChange={(e) => setSeqName(e.target.value)}
                 className="bg-secondary border-border"
+                placeholder="e.g. Thanks for your interest, {{firstName}}!"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Trigger event</Label>
-              <Input
+              <Label className="text-xs">Send when</Label>
+              <select
                 value={seqTrigger}
                 onChange={(e) => setSeqTrigger(e.target.value)}
-                className="bg-secondary border-border font-mono text-xs"
-              />
+                className="w-full h-9 px-3 rounded-lg text-sm bg-secondary border border-border"
+              >
+                <option value="lead.created">New lead comes in</option>
+                <option value="appointment.booked">Appointment is booked</option>
+                <option value="call.completed">After a call ends</option>
+                <option value="manual">Manual send only</option>
+              </select>
             </div>
             <div className="space-y-1.5 sm:col-span-2">
-              <Label className="text-xs">Body template</Label>
+              <Label className="text-xs">Email body</Label>
               <textarea
-                className="w-full min-h-[80px] px-3 py-2 rounded-lg text-sm bg-secondary border border-border font-mono"
+                className="w-full min-h-[80px] px-3 py-2 rounded-lg text-sm bg-secondary border border-border"
                 value={seqBody}
                 onChange={(e) => setSeqBody(e.target.value)}
+                placeholder={"Hi {{firstName}},\n\nThanks for reaching out! We'd love to help you with your project.\n\nBest regards,\nYour Team"}
               />
             </div>
           </div>
@@ -1992,16 +1997,37 @@ export default function Settings() {
               const isSelected = selectedVoice === v.id;
               const styleColor = STYLE_COLORS[v.style] || "#94a3b8";
               return (
-                <button key={v.id}
+                <div key={v.id}
+                  className="p-3 rounded-xl text-left transition-all border cursor-pointer"
                   onClick={() => setSelectedVoice(v.id)}
-                  className="p-3 rounded-xl text-left transition-all border"
                   style={{
                     backgroundColor: isSelected ? "rgba(29,111,244,0.1)" : "hsl(var(--secondary))",
                     borderColor: isSelected ? "#1d6ff4" : "hsl(var(--border))",
                   }}>
                   <div className="flex items-start justify-between gap-2 mb-1">
-                    <span className="font-semibold text-sm text-white">{v.label}</span>
-                    {isSelected && <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />}
+                    <span className="font-semibold text-sm">{v.label}</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const btn = e.currentTarget;
+                          btn.textContent = "⏳";
+                          voicePreviewMutation.mutate({ voiceId: v.id }, {
+                            onSuccess: (data: any) => {
+                              const audio = new Audio(`data:audio/mp3;base64,${data.audio}`);
+                              audio.play();
+                              btn.textContent = "▶ Preview";
+                            },
+                            onError: () => { btn.textContent = "▶ Preview"; toast.error("Preview failed"); },
+                          });
+                        }}
+                        className="text-[10px] px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 font-medium"
+                      >
+                        ▶ Preview
+                      </button>
+                      {isSelected && <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs px-1.5 py-0.5 rounded capitalize"
@@ -2016,7 +2042,7 @@ export default function Settings() {
                       {v.telephonyOptimized ? "⚡ Phone-optimized" : "✦ Studio"}
                     </span>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>

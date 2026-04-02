@@ -256,6 +256,52 @@ export default function LandingPage() {
             <span className="text-zinc-500"> — </span>
             {SUPPORTED_LANGUAGES_MARKETING_LIST}.
           </p>
+
+          {/* Dashboard preview */}
+          <div className="mx-auto mt-12 max-w-4xl rounded-xl border border-white/15 bg-white/[0.03] p-1 shadow-2xl shadow-blue-500/10">
+            <div className="rounded-lg bg-gradient-to-br from-zinc-900 to-zinc-950 p-4 md:p-6">
+              {/* Fake top bar */}
+              <div className="flex items-center gap-2 mb-4">
+                <div className="flex gap-1.5">
+                  <div className="size-2.5 rounded-full bg-red-400/60" />
+                  <div className="size-2.5 rounded-full bg-yellow-400/60" />
+                  <div className="size-2.5 rounded-full bg-green-400/60" />
+                </div>
+                <div className="ml-3 h-5 w-48 rounded bg-white/5" />
+              </div>
+              {/* Stat cards row */}
+              <div className="grid grid-cols-4 gap-3 mb-4">
+                {[
+                  { label: "Calls Today", val: "47", color: "#1d6ff4" },
+                  { label: "Appointments", val: "12", color: "#22c55e" },
+                  { label: "Show Rate", val: "87%", color: "#f59e0b" },
+                  { label: "Revenue", val: "$24.8K", color: "#a78bfa" },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-lg bg-white/[0.04] border border-white/10 p-3">
+                    <p className="text-[10px] text-zinc-500">{s.label}</p>
+                    <p className="text-lg font-bold mt-0.5" style={{ color: s.color }}>{s.val}</p>
+                  </div>
+                ))}
+              </div>
+              {/* Fake chart area */}
+              <div className="flex gap-3">
+                <div className="flex-1 rounded-lg bg-white/[0.03] border border-white/10 p-3 h-32 flex items-end gap-1">
+                  {[35, 52, 41, 68, 55, 72, 64, 78, 60, 85, 71, 90].map((h, i) => (
+                    <div key={i} className="flex-1 rounded-t" style={{ height: `${h}%`, backgroundColor: i >= 10 ? "#22c55e" : "#1d6ff4", opacity: 0.7 + (i * 0.025) }} />
+                  ))}
+                </div>
+                <div className="w-48 rounded-lg bg-white/[0.03] border border-white/10 p-3 hidden md:block">
+                  <p className="text-[10px] text-zinc-500 mb-2">Recent Calls</p>
+                  {["Sarah M. — Booked", "Mike R. — Qualified", "Lisa K. — Follow-up", "Tom B. — Booked"].map((c, i) => (
+                    <div key={i} className="flex items-center gap-2 py-1">
+                      <div className="size-1.5 rounded-full" style={{ backgroundColor: i % 2 === 0 ? "#22c55e" : "#f59e0b" }} />
+                      <p className="text-[9px] text-zinc-400 truncate">{c}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 

@@ -1,4 +1,5 @@
 import AIAgent from "@/components/AIAgent";
+import TrialBanner from "@/components/TrialBanner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import {
@@ -69,6 +70,18 @@ export default function AppLayout({ children }: AppLayoutProps) {
     return localStorage.getItem("sidebar-collapsed") === "true";
   });
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // ── Session timeout: auto-logout after 30 min of inactivity ──
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const TIMEOUT = 30 * 60 * 1000; // 30 minutes
+    let timer: ReturnType<typeof setTimeout>;
+    const reset = () => { clearTimeout(timer); timer = setTimeout(() => { logout(); }, TIMEOUT); };
+    const events = ["mousedown", "keydown", "scroll", "touchstart"];
+    events.forEach(e => window.addEventListener(e, reset));
+    reset();
+    return () => { clearTimeout(timer); events.forEach(e => window.removeEventListener(e, reset)); };
+  }, [isAuthenticated, logout]);
 
   useEffect(() => {
     localStorage.setItem("sidebar-collapsed", String(collapsed));
@@ -287,6 +300,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             </svg>
           </div>
         </div>
+        <TrialBanner />
         {children}
       </main>
       <AIAgent />

@@ -1196,6 +1196,36 @@ const settingsRouter = router({
     return listVoiceProfiles();
   }),
 
+  /** Generate a short TTS audio sample for a voice profile */
+  voicePreview: protectedProcedure
+    .input(z.object({ voiceId: z.string() }))
+    .mutation(async ({ input }) => {
+      const { getVoiceProfileById } = await import("./_core/services/voiceProfiles");
+      const profile = getVoiceProfileById(input.voiceId);
+      if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Voice not found" });
+
+      const cartesiaKey = process.env.CARTESIA_API_KEY;
+      if (!cartesiaKey) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "TTS not configured" });
+
+      try {
+        const resp = await fetch("https://api.cartesia.ai/tts/bytes", {
+          method: "POST",
+          headers: { "X-API-Key": cartesiaKey, "Cartesia-Version": "2024-06-10", "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model_id: "sonic-english",
+            transcript: `Hi there! I'm ${profile.label.split("—")[0].trim()}. I'll be your AI sales assistant, handling calls 24/7 and booking appointments for your business.`,
+            voice: { mode: "id", id: profile.externalVoiceId },
+            output_format: { container: "mp3", encoding: "mp3", sample_rate: 24000 },
+          }),
+        });
+        if (!resp.ok) throw new Error(`Cartesia ${resp.status}`);
+        const buf = Buffer.from(await resp.arrayBuffer());
+        return { audio: buf.toString("base64"), format: "mp3" };
+      } catch (e: any) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `TTS preview failed: ${e.message}` });
+      }
+    }),
+
   update: protectedProcedure
     .input(z.object({
       transferNumber: z.string().optional(),
