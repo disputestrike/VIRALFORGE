@@ -106,6 +106,8 @@ async function runMigrations() {
           "CREATE TABLE IF NOT EXISTS `lead_scoring_rules` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `rules` json, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
           "CREATE TABLE IF NOT EXISTS `blocked_phone_numbers` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `phone` varchar(20) NOT NULL, `reason` varchar(255), `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP)",
           "CREATE TABLE IF NOT EXISTS `escalation_rules` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `name` varchar(255), `conditions` json, `targetNumber` varchar(20), `isActive` tinyint(1) DEFAULT 1, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
+          "CREATE TABLE IF NOT EXISTS `onboardings` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `clientName` varchar(200) NOT NULL, `industry` varchar(100), `status` enum('not_started','in_progress','completed') DEFAULT 'not_started', `setupDay` timestamp NULL, `supportEndDate` timestamp NULL, `completedSteps` text, `notes` text, `specialistName` varchar(200), `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
+          "CREATE TABLE IF NOT EXISTS `user_industry_packs` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `industry` varchar(100) NOT NULL, `isActive` tinyint(1) DEFAULT 1, `isPrimary` tinyint(1) DEFAULT 0, `planTier` varchar(50) DEFAULT 'base', `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
         ];
         for (const sql of alterStatements) {
           try {
@@ -1378,6 +1380,16 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
           } catch {}
         }
 
+        // Resolve user language preference
+        let callLanguage: string | undefined;
+        if (resolvedUserId) {
+          try {
+            const db = await import("../db");
+            const user = await db.getUserById(resolvedUserId);
+            callLanguage = (user as any)?.language || "en";
+          } catch {}
+        }
+
         // ── NEW: Real-time voice engine ─────────────────────────────────
         // Deepgram STT → Claude Haiku → Cartesia TTS
         // Streaming end-to-end, instant barge-in, clean hangup
@@ -1389,6 +1401,7 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
           businessName,
           industry,
           voiceProfileId,
+          language: callLanguage,
         });
 
       });

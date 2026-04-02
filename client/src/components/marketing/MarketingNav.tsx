@@ -195,7 +195,7 @@ export default function MarketingNav() {
       `}</style>
       <div className="mx-auto flex h-[60px] max-w-[1280px] items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link href="/" className="flex items-center gap-2.5 no-underline" aria-label="ApexAI home">
-          <ApexLogo variant="wordmark" size="md" />
+          <ApexLogo variant="full" size="sm" />
         </Link>
 
         <div className="hide-mobile flex items-center gap-0">

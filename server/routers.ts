@@ -1520,6 +1520,18 @@ const extractorRouter = router({
 });
 
 // ─── Demo Call Router (PUBLIC — for landing page "call me now") ───────────────
+// Demo call rate limiting: max 3 per phone per hour
+const demoCallRateMap = new Map<string, number[]>();
+function checkDemoRate(phone: string): boolean {
+  const now = Date.now();
+  const hourAgo = now - 3600_000;
+  const timestamps = (demoCallRateMap.get(phone) || []).filter(t => t > hourAgo);
+  if (timestamps.length >= 3) return false;
+  timestamps.push(now);
+  demoCallRateMap.set(phone, timestamps);
+  return true;
+}
+
 const demoCallRouter = router({
   // Trigger an outbound AI demo call from the landing page — captures lead data
   request: publicProcedure
@@ -1530,6 +1542,11 @@ const demoCallRouter = router({
       industry: z.string().optional().default("general"),
     }))
     .mutation(async ({ input }) => {
+      // Rate limit check
+      const cleanPhone = input.phone.replace(/\D/g, "");
+      if (!checkDemoRate(cleanPhone)) {
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many demo requests. Please try again later." });
+      }
       try {
         // Save as a lead first
         const leadResult = await db.createLead({

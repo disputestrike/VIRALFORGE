@@ -1088,10 +1088,14 @@ export function createCallEngine(opts: EngineOptions): void {
     const sentimentNote = currentSentiment !== "neutral"
       ? `\n\nCALLER SENTIMENT: ${currentSentiment.toUpperCase()} — adjust tone. Frustrated: direct/factual. Confused: simplify. Positive: maintain momentum.`
       : "";
+    const languageNote = callLanguage && callLanguage !== "en"
+      ? `\n\nLANGUAGE: Conduct this ENTIRE conversation in ${callLanguage === "es" ? "Spanish" : callLanguage === "fr" ? "French" : callLanguage === "de" ? "German" : callLanguage === "pt" ? "Portuguese" : callLanguage === "it" ? "Italian" : callLanguage === "nl" ? "Dutch" : callLanguage === "pl" ? "Polish" : callLanguage === "ru" ? "Russian" : callLanguage === "zh" ? "Chinese" : callLanguage === "ja" ? "Japanese" : callLanguage === "ko" ? "Korean" : callLanguage}. Respond ONLY in that language.`
+      : "";
     const base =
       (strictPrefix ? strictPrefix + "\n\n" : "") +
       buildVoiceSystemPrompt(policyState, businessName, industry, clientConfig) +
-      sentimentNote;
+      sentimentNote +
+      languageNote;
     if (!activeUserId) return base;
     try {
       const { buildVoiceTenantContextBlock } = await import("../_core/services/tenantContextForVoice");
