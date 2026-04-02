@@ -65,6 +65,8 @@ export class VoiceRealtimePipeline {
   private cartesiaNeedsNewContext = true;
   /** Last voice id sent on WS — flush frames must repeat voice (API rejects bare flush). */
   private lastCartesiaVoiceId = "694f9389-aac1-45b6-b726-9d9369183238";
+  /** True if the last Cartesia send used continue:true (context still open — needs flush at end). */
+  private lastCartesiaContinueWasTrue = false;
 
   // Customer state
   private customer: CustomerState = { objectionHistory: [], qualification: {} };
@@ -261,7 +263,8 @@ export class VoiceRealtimePipeline {
               /context has closed|no longer accepting|invalid context id/i.test(errStr) ||
               (msg.status_code === 400 && /closed|context/i.test(errStr))
             ) {
-              this.cartesiaContextId = null;
+              // Do not null cartesiaContextId here — same race as realtimeVoiceEngine (silence).
+              void errStr;
             }
           }
 
@@ -308,6 +311,8 @@ export class VoiceRealtimePipeline {
     let continueCtx = !this.cartesiaNeedsNewContext;
     this.cartesiaNeedsNewContext = false;
     if (hadNoContext && continueCtx) continueCtx = false;
+
+    this.lastCartesiaContinueWasTrue = continueCtx;
 
     this.cartesiaWs.send(JSON.stringify({
       context_id: this.cartesiaContextId,
@@ -361,10 +366,8 @@ export class VoiceRealtimePipeline {
       this.cartesiaCancel();
       this.sendClear();
       this.cartesiaNeedsNewContext = true;
-      // Stream greeting through Cartesia WS
+      // Single utterance with continue:false closes the context — do not flush after (400 context closed).
       await this.cartesiaSendText(greeting);
-      const flushId = this.cartesiaContextId;
-      this.cartesiaFlushExplicit(flushId);
       this.setSpeakingTimeout(3000);
     } else {
       // Fallback: batch TTS
@@ -650,6 +653,7 @@ export class VoiceRealtimePipeline {
     this.cartesiaCancel();
     this.sendClear();
     this.cartesiaNeedsNewContext = true;
+    this.lastCartesiaContinueWasTrue = false;
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
@@ -692,8 +696,9 @@ export class VoiceRealtimePipeline {
 
     const remaining = sanitizeForSpeech(assembled.slice(spokenUpTo));
     if (remaining.trim()) await this.cartesiaSendText(remaining);
-    const flushClaudeId = this.cartesiaContextId;
-    this.cartesiaFlushExplicit(flushClaudeId);
+    if (this.lastCartesiaContinueWasTrue && this.cartesiaContextId) {
+      this.cartesiaFlushExplicit(this.cartesiaContextId);
+    }
 
     const rawText = assembled.trim();
     const fullText = sanitizeForSpeech(rawText);

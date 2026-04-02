@@ -329,13 +329,8 @@ export function createCallEngine(opts: EngineOptions): void {
           }
         } else if (msg.type === "error") {
           log(`Cartesia error: ${JSON.stringify(msg)}`);
-          const errStr = typeof msg.error === "string" ? msg.error : JSON.stringify(msg.error ?? "");
-          if (
-            /context has closed|no longer accepting|invalid context id/i.test(errStr) ||
-            (msg.status_code === 400 && /closed|context/i.test(errStr))
-          ) {
-            cartesiaContextId = "";
-          }
+          // Do not clear cartesiaContextId on "context closed" — that often follows a bad flush after
+          // continue:false already closed the context; clearing here races with in-flight audio chunks → silence.
         } else if (msg.type === "done") {
           isSpeaking = false;
           // Cartesia closes the WS context when a segment finishes; further sends with the same
@@ -743,6 +738,8 @@ export function createCallEngine(opts: EngineOptions): void {
     let fullText = "";
     /** Cartesia requires the first frame of a context to use continue=false; continuation uses continue=true. */
     let firstTtsClause = true;
+    /** If we ever sent continue:true, context stays open until flush; if only continue:false (one clause), never flush. */
+    let cartesiaNeedsEndFlush = false;
 
     const sendClause = (text: string) => {
       if (!text.trim() || epoch !== generationEpoch || isEnded) return;
@@ -756,10 +753,12 @@ export function createCallEngine(opts: EngineOptions): void {
         .replace(/\s+/g, " ")
         .trim();
       if (!clean) return;
+      const continueCtx = !firstTtsClause;
+      if (continueCtx) cartesiaNeedsEndFlush = true;
       // ONE context per full response — continue=true chains clauses together
       // stopSpeaking() cancels this single context → stops ALL clauses instantly
       // Fresh context set at start of streamToCartesia before first clause
-      cartesiaSend(clean, !firstTtsClause);
+      cartesiaSend(clean, continueCtx);
       firstTtsClause = false;
     };
 
@@ -778,13 +777,15 @@ export function createCallEngine(opts: EngineOptions): void {
       throw e;
     }
 
-    // Flush anything left (stream ended mid-phrase). Capture id so async `done` cannot clear before flush.
+    // Flush only if we continued the context (continue:true). Single-clause replies use continue:false only,
+    // which already closes the context — flushing would 400 "Context has closed" and break audio.
     if (epoch === generationEpoch && !isEnded) {
       spokenUpTo = drainSpeakableToTts(assembled, spokenUpTo, sendClause);
       const remaining = fullText.slice(spokenUpTo);
       if (remaining.trim()) sendClause(remaining);
-      const flushId = cartesiaContextId;
-      cartesiaFlushExplicit(flushId);
+      if (cartesiaNeedsEndFlush && cartesiaContextId) {
+        cartesiaFlushExplicit(cartesiaContextId);
+      }
     }
 
     // Store assistant response
@@ -807,9 +808,9 @@ export function createCallEngine(opts: EngineOptions): void {
     // Always start a new Cartesia context — reusing ctx after greeting without a timely
     // `done` causes 400 "unable to infer voice mode" and loops the sorry line.
     cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-    const flushId = cartesiaContextId;
+    // Single utterance with continue:false completes and closes the Cartesia context — do NOT flush.
+    // Flushing immediately hits "Context has closed" and can prevent any audio from playing.
     cartesiaSend(text, false);
-    cartesiaFlushExplicit(flushId);
     appendHistory("assistant", text);
   }
 
