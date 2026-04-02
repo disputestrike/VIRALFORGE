@@ -1,5 +1,5 @@
 /**
- * Voice agent system prompt — locked stack: Anthropic Claude (Haiku) + policy state + tenant facts.
+ * Voice agent system prompt — OpenAI or Anthropic LLM + policy state + tenant facts.
  * Paired with `callPolicy.ts` + `realtimeVoiceEngine.ts`.
  */
 import { canOfferBooking, type ConversationPolicyState, type ConversationMode } from "./callPolicy";

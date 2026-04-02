@@ -110,6 +110,19 @@ export const ENV = {
     process.env.CLAUDE_MODEL ||
     "claude-haiku-4-5-20251001"
   ).trim(),
+  /**
+   * Live voice LLM: `openai` (default) or `anthropic`. OpenAI is tried first when primary is openai;
+   * Anthropic is used as fallback if OpenAI fails or is unavailable.
+   */
+  voiceLlmPrimary:
+    (process.env.VOICE_LLM_PRIMARY ?? "openai").trim().toLowerCase() === "anthropic"
+      ? ("anthropic" as const)
+      : ("openai" as const),
+  /**
+   * OpenAI Chat model for voice (streaming). Default gpt-4o-mini ≈ Haiku-class: fast, cost-efficient.
+   * Upgrade: gpt-4o for higher quality (higher cost). Override with VOICE_OPENAI_MODEL.
+   */
+  voiceOpenAiModel: (process.env.VOICE_OPENAI_MODEL ?? "gpt-4o-mini").trim(),
 
   /** Barge-in: spoken ack only when enabled and heuristics pass (see realtimeVoiceEngine). */
   interruptAckEnabled: process.env.INTERRUPT_ACK_ENABLED !== "false",
@@ -142,12 +155,12 @@ export const ENV = {
   get emailEnabled()  { return this.resendApiKey !== ""; },
   get ttsEnabled()    { return (process.env.CARTESIA_API_KEY ?? "").trim() !== ""; },
   get sttEnabled()    { return this.openAiApiKey !== "" || this.deepgramApiKey !== ""; },
-  /** Live SignalWire streaming voice: Deepgram + Cartesia + Anthropic (Claude). */
+  /** Live SignalWire streaming voice: Deepgram + Cartesia + OpenAI and/or Anthropic (LLM). */
   get voiceRealtimeReady() {
     return (
       this.deepgramApiKey !== "" &&
       this.cartesiaApiKey !== "" &&
-      this.anthropicApiKey !== ""
+      (this.openAiApiKey !== "" || this.anthropicApiKey !== "")
     );
   },
   /** When true and a transfer target exists (user profile or env), live voice may transfer via SignalWire. */

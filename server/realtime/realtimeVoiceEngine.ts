@@ -1,7 +1,7 @@
 /**
  * realtimeVoiceEngine.ts — THE CORE ORCHESTRATOR
  *
- * Pipeline: SignalWire → Deepgram STT → Anthropic Claude (Haiku) → Cartesia TTS → SignalWire
+ * Pipeline: SignalWire → Deepgram STT → OpenAI or Anthropic (LLM) → Cartesia TTS → SignalWire
  *
  * Key principles:
  * 1. Telephony: mulaw 8kHz to/from SignalWire; Cartesia pcm_s16le → convert to mulaw outbound
@@ -1003,12 +1003,19 @@ export function createCallEngine(opts: EngineOptions): void {
 
     const reprompt =
       "I didn't quite catch that—could you say that again in a few words?";
-    const anthropicKey = (process.env.ANTHROPIC_API_KEY ?? "").trim();
-    traceEvent(callId, "llm_route", { path: "anthropic-claude-haiku" });
-    log("[ROUTE] Anthropic Claude (voice LLM)");
+    const openAiKey = ENV.openAiApiKey.trim();
+    const anthropicKey = ENV.anthropicApiKey.trim();
+    traceEvent(callId, "llm_route", {
+      path: ENV.voiceLlmPrimary === "openai" ? "openai-primary" : "anthropic-primary",
+      model:
+        ENV.voiceLlmPrimary === "openai" ? ENV.voiceOpenAiModel : ENV.voiceClaudeModel,
+    });
+    log(
+      `[ROUTE] Voice LLM primary=${ENV.voiceLlmPrimary} openai=${Boolean(openAiKey)} anthropic=${Boolean(anthropicKey)}`
+    );
 
-    if (!anthropicKey) {
-      log("[Voice] Missing ANTHROPIC_API_KEY — configure for live voice");
+    if (!openAiKey && !anthropicKey) {
+      log("[Voice] Missing OPENAI_API_KEY and ANTHROPIC_API_KEY — configure at least one for live voice");
       try {
         await speak(
           "I'm sorry, this line isn't fully configured right now. Please try again later.",
@@ -1036,14 +1043,14 @@ export function createCallEngine(opts: EngineOptions): void {
     });
 
     try {
-      await respondAnthropicVoice(epoch, transcript, plan.strictBlock, recoveryPrefixForLlm);
+      await respondVoiceLlm(epoch, transcript, plan.strictBlock, recoveryPrefixForLlm);
     } catch (e: any) {
-      log(`[Claude] Failed: ${e?.message ?? e}`);
+      log(`[Voice LLM] Failed: ${e?.message ?? e}`);
       try {
         await new Promise((r) => setTimeout(r, 350));
-        await respondAnthropicVoice(epoch, transcript, plan.strictBlock, recoveryPrefixForLlm);
+        await respondVoiceLlm(epoch, transcript, plan.strictBlock, recoveryPrefixForLlm);
       } catch (e2: any) {
-        log(`[Claude] Retry failed: ${e2?.message ?? e2}`);
+        log(`[Voice LLM] Retry failed: ${e2?.message ?? e2}`);
         if (activeSessionId) {
           const s = voiceSessionManager.getSession(activeSessionId);
           const fc = (s?.fallbackCount ?? 0) + 1;
@@ -1124,8 +1131,7 @@ export function createCallEngine(opts: EngineOptions): void {
     policyState = plan.policyForPrompt;
     syncPolicySnapshot(synthetic, plan.trace);
 
-    const anthropicKey = (process.env.ANTHROPIC_API_KEY ?? "").trim();
-    if (!anthropicKey) {
+    if (!ENV.openAiApiKey.trim() && !ENV.anthropicApiKey.trim()) {
       try {
         await speak(
           "You still with me? I want to make sure this is useful — what’s the biggest strain on your inbound calls, after hours or when you’re slammed?",
@@ -1137,7 +1143,7 @@ export function createCallEngine(opts: EngineOptions): void {
     }
 
     try {
-      await respondAnthropicVoice(epoch, synthetic, plan.strictBlock, false, {
+      await respondVoiceLlm(epoch, synthetic, plan.strictBlock, false, {
         blueprintIntentOverride: "re_engagement",
       });
     } catch (e: any) {
@@ -1152,17 +1158,35 @@ export function createCallEngine(opts: EngineOptions): void {
     traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
   }
 
-  async function respondAnthropicVoice(
+  async function* anthropicTextDeltas(stream: AsyncIterable<unknown>): AsyncGenerator<string, void, void> {
+    for await (const event of stream as AsyncIterable<{ type?: string; delta?: { type?: string; text?: string } }>) {
+      if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
+        const t = event.delta.text;
+        if (typeof t === "string" && t) yield t;
+      }
+    }
+  }
+
+  async function* openAiTextDeltas(stream: AsyncIterable<unknown>): AsyncGenerator<string, void, void> {
+    for await (const chunk of stream as AsyncIterable<{
+      choices?: { delta?: { content?: string | null } }[];
+    }>) {
+      const t = chunk.choices?.[0]?.delta?.content;
+      if (typeof t === "string" && t) yield t;
+    }
+  }
+
+  async function respondVoiceLlm(
     epoch: number,
     userTranscript: string,
     strictBlock: string,
     recoveryPrefixDone: boolean,
     opts?: { blueprintIntentOverride?: BlueprintIntent }
   ): Promise<void> {
-    const anthropicKey = (process.env.ANTHROPIC_API_KEY ?? "").trim();
-    if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY not set");
-    const { default: Anthropic } = await import("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey: anthropicKey });
+    const openAiKey = ENV.openAiApiKey.trim();
+    const anthropicKey = ENV.anthropicApiKey.trim();
+    const primary = ENV.voiceLlmPrimary;
+
     const blueprintIntent = opts?.blueprintIntentOverride ?? classifyIntent(userTranscript);
     const blueprintBlock = buildApexBlueprintPromptBlock(apexState, blueprintIntent);
     let recoveryHint = "";
@@ -1179,28 +1203,95 @@ export function createCallEngine(opts: EngineOptions): void {
       userTranscript,
       `${strictBlock}\n\n${blueprintBlock}${recoveryHint}`
     );
-    const messages = historyForLlm().map(m => ({
+    const messages = historyForLlm().map((m) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
     }));
 
-    const claudeModel = ENV.voiceClaudeModel;
-    const stream = await client.messages.stream({
-      model: claudeModel,
-      max_tokens: ENV.voiceLlmMaxTokens,
-      temperature: ENV.voiceLlmTemperature,
-      system: prompt,
-      messages,
-    });
+    const runOpenAi = async () => {
+      if (!openAiKey) throw new Error("OPENAI_API_KEY not set");
+      const { default: OpenAI } = await import("openai");
+      const client = new OpenAI({ apiKey: openAiKey });
+      const stream = await client.chat.completions.create({
+        model: ENV.voiceOpenAiModel,
+        messages: [{ role: "system", content: prompt }, ...messages],
+        max_tokens: ENV.voiceLlmMaxTokens,
+        temperature: ENV.voiceLlmTemperature,
+        stream: true,
+      });
+      traceEvent(callId, "llm_stream_start", {
+        provider: "openai",
+        model: ENV.voiceOpenAiModel,
+      });
+      const { clean, full } = await streamToCartesia(openAiTextDeltas(stream), epoch, userTranscript);
+      if (!clean.trim() && !full.trim()) throw new Error("Empty OpenAI response");
+    };
 
-    traceEvent(callId, "llm_stream_start", { provider: "anthropic", model: claudeModel });
-    const { clean, full } = await streamToCartesia(stream as any, epoch, userTranscript);
-    if (!clean.trim() && !full.trim()) throw new Error("Empty Claude response");
+    const runAnthropic = async () => {
+      if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY not set");
+      const { default: Anthropic } = await import("@anthropic-ai/sdk");
+      const client = new Anthropic({ apiKey: anthropicKey });
+      const stream = await client.messages.stream({
+        model: ENV.voiceClaudeModel,
+        max_tokens: ENV.voiceLlmMaxTokens,
+        temperature: ENV.voiceLlmTemperature,
+        system: prompt,
+        messages,
+      });
+      traceEvent(callId, "llm_stream_start", {
+        provider: "anthropic",
+        model: ENV.voiceClaudeModel,
+      });
+      const { clean, full } = await streamToCartesia(anthropicTextDeltas(stream), epoch, userTranscript);
+      if (!clean.trim() && !full.trim()) throw new Error("Empty Claude response");
+    };
+
+    if (primary === "openai") {
+      if (openAiKey) {
+        try {
+          await runOpenAi();
+          return;
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : String(e);
+          log(`[Voice LLM] OpenAI failed, trying Anthropic fallback: ${msg}`);
+          if (anthropicKey) {
+            await runAnthropic();
+            return;
+          }
+          throw e;
+        }
+      }
+      if (anthropicKey) {
+        await runAnthropic();
+        return;
+      }
+      throw new Error("No voice LLM API key configured (OPENAI_API_KEY or ANTHROPIC_API_KEY)");
+    }
+
+    if (anthropicKey) {
+      try {
+        await runAnthropic();
+        return;
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        log(`[Voice LLM] Anthropic failed, trying OpenAI fallback: ${msg}`);
+        if (openAiKey) {
+          await runOpenAi();
+          return;
+        }
+        throw e;
+      }
+    }
+    if (openAiKey) {
+      await runOpenAi();
+      return;
+    }
+    throw new Error("No voice LLM API key configured (OPENAI_API_KEY or ANTHROPIC_API_KEY)");
   }
 
   // ── Stream LLM → buffer → direct-answer guard → Cartesia sentence-by-sentence ────────────────────────
   async function streamToCartesia(
-    stream: any,
+    textDeltas: AsyncIterable<string>,
     epoch: number,
     userTranscript: string
   ): Promise<{ clean: string; full: string }> {
@@ -1253,14 +1344,14 @@ export function createCallEngine(opts: EngineOptions): void {
     };
 
     try {
-      for await (const event of stream) {
+      for await (const delta of textDeltas) {
         if (epoch !== generationEpoch || isEnded) break;
-        if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
+        if (delta) {
           if (llmAckTimer) {
             clearTimeout(llmAckTimer);
             llmAckTimer = null;
           }
-          fullText += event.delta.text || "";
+          fullText += delta;
         }
       }
     } catch (e: any) {
