@@ -90,13 +90,29 @@ async function runMigrations() {
           "ALTER TABLE `users` ADD COLUMN `gcalRefreshToken` text NULL",
           "ALTER TABLE `users` ADD COLUMN `gcalBookingUrl` varchar(500) NULL",
           "ALTER TABLE `users` ADD COLUMN `businessName` varchar(200) NULL",
+          // ── Create missing feature tables ──
+          "CREATE TABLE IF NOT EXISTS `crm_connections` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `provider` varchar(50) NOT NULL, `status` varchar(50) DEFAULT 'pending', `displayName` varchar(255), `externalAccountId` varchar(255), `lastSyncAt` timestamp NULL, `meta` text, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, UNIQUE KEY `uniq_user_provider` (`userId`, `provider`))",
+          "CREATE TABLE IF NOT EXISTS `knowledge_bases` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `name` varchar(255) NOT NULL, `description` text, `status` varchar(50) DEFAULT 'training', `trainingProgress` int DEFAULT 0, `brandProfile` text, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
+          "CREATE TABLE IF NOT EXISTS `knowledge_base_sources` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `knowledgeBaseId` int NOT NULL, `sourceType` varchar(50) NOT NULL, `sourceUrl` varchar(2048), `status` varchar(50) DEFAULT 'pending', `errorMessage` text, `chunkCount` int DEFAULT 0, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
+          "CREATE TABLE IF NOT EXISTS `knowledge_base_chunks` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `knowledgeBaseId` int NOT NULL, `sourceId` int, `content` text NOT NULL, `embedding` text, `metadata` text, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP)",
+          "CREATE TABLE IF NOT EXISTS `workflows` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `name` varchar(200) NOT NULL, `trigger` varchar(100) DEFAULT 'manual', `description` text, `definition` json, `isActive` tinyint(1) DEFAULT 1, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
+          "CREATE TABLE IF NOT EXISTS `customer_memories` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `leadId` int, `key` varchar(255) NOT NULL, `value` text, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
+          "CREATE TABLE IF NOT EXISTS `support_tickets` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `leadId` int, `subject` varchar(500), `body` text, `status` varchar(50) DEFAULT 'open', `priority` varchar(20) DEFAULT 'medium', `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
+          "CREATE TABLE IF NOT EXISTS `email_sequences` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `name` varchar(255) NOT NULL, `trigger` varchar(100) DEFAULT 'manual', `steps` json, `isActive` tinyint(1) DEFAULT 1, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
+          "CREATE TABLE IF NOT EXISTS `mobile_devices` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `deviceToken` varchar(512), `platform` varchar(20), `isActive` tinyint(1) DEFAULT 1, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP)",
+          "CREATE TABLE IF NOT EXISTS `social_connections` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `platform` varchar(50) NOT NULL, `accountId` varchar(255), `status` varchar(50) DEFAULT 'pending', `meta` text, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
+          "CREATE TABLE IF NOT EXISTS `webchat_widgets` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `name` varchar(255), `config` json, `isActive` tinyint(1) DEFAULT 1, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
+          "CREATE TABLE IF NOT EXISTS `rcs_registrations` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `agentId` varchar(255), `brandName` varchar(255), `status` varchar(50) DEFAULT 'pending', `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
+          "CREATE TABLE IF NOT EXISTS `lead_scoring_rules` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `rules` json, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
+          "CREATE TABLE IF NOT EXISTS `blocked_phone_numbers` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `phone` varchar(20) NOT NULL, `reason` varchar(255), `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP)",
+          "CREATE TABLE IF NOT EXISTS `escalation_rules` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `name` varchar(255), `conditions` json, `targetNumber` varchar(20), `isActive` tinyint(1) DEFAULT 1, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
         ];
         for (const sql of alterStatements) {
           try {
             await conn2.execute(sql);
           } catch (e: any) {
-            // Error 1060 = Duplicate column (already exists) — safe to ignore
-            if (e.errno !== 1060 && !e.message?.includes("Duplicate column name")) {
+            // Error 1060 = Duplicate column, 1050 = Table already exists — safe to ignore
+            if (e.errno !== 1060 && e.errno !== 1050 && !e.message?.includes("Duplicate column name") && !e.message?.includes("already exists")) {
               console.log(`[Migration] ALTER note: ${e.message?.slice(0, 80)}`);
             }
           }
