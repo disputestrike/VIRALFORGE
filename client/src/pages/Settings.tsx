@@ -497,74 +497,76 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      {/* ── BILLING (Stripe Checkout + Customer Portal) ───────────────────── */}
-      <Card className="bg-card border-border">
+      {/* ── BILLING & PLAN ───────────────────── */}
+      <Card id="billing" className="bg-card border-border">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <CreditCard className="w-4 h-4 text-primary" />
-            Billing & subscription
+            Billing & Subscription
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Subscriptions are billed through Stripe. Set <code className="text-xs">STRIPE_SECRET_KEY</code>,{" "}
-            <code className="text-xs">STRIPE_PRICE_STARTER|GROWTH|ENTERPRISE</code>, and{" "}
-            <code className="text-xs">STRIPE_WEBHOOK_SECRET</code> in your deployment environment; webhook URL:{" "}
-            <code className="text-xs break-all">{typeof window !== "undefined" ? `${window.location.origin}/api/stripe/webhook` : "/api/stripe/webhook"}</code>
+            Choose a plan to unlock AI voice calls, campaigns, and all features. 7-day free trial on all plans.
           </p>
-          {billingStatus && typeof billingStatus === "object" && "stripeConfigured" in billingStatus ? (
-            <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2 text-xs space-y-1">
-              <p>
-                <span className="text-muted-foreground">Stripe:</span>{" "}
-                {billingStatus.stripeConfigured ? "configured" : "not configured"}
-              </p>
-              <p>
-                <span className="text-muted-foreground">Plan:</span> {String(billingStatus.plan ?? "—")}
-              </p>
-              <p>
-                <span className="text-muted-foreground">Subscription:</span>{" "}
-                {billingStatus.subscriptionStatus ?? "none"}{" "}
-                {billingStatus.subscriptionId ? <span className="font-mono opacity-70">({billingStatus.subscriptionId})</span> : null}
-              </p>
+
+          {/* Current plan status */}
+          {billingStatus && typeof billingStatus === "object" && "stripeConfigured" in billingStatus && (
+            <div className="rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm space-y-1">
+              <p><span className="text-muted-foreground">Current plan:</span> <span className="font-semibold capitalize">{String(billingStatus.plan ?? "Free Trial")}</span></p>
+              {billingStatus.subscriptionStatus && billingStatus.subscriptionStatus !== "none" && (
+                <p><span className="text-muted-foreground">Status:</span> <span className="capitalize">{billingStatus.subscriptionStatus}</span></p>
+              )}
             </div>
-          ) : null}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              disabled={checkoutMut.isPending || !billingStatus?.pricesConfigured?.starter}
-              onClick={() => checkoutMut.mutate({ tier: "starter" })}
-            >
-              Subscribe — Starter
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              disabled={checkoutMut.isPending || !billingStatus?.pricesConfigured?.growth}
-              onClick={() => checkoutMut.mutate({ tier: "growth" })}
-            >
-              Subscribe — Growth
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              disabled={checkoutMut.isPending || !billingStatus?.pricesConfigured?.enterprise}
-              onClick={() => checkoutMut.mutate({ tier: "enterprise" })}
-            >
-              Subscribe — Enterprise
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              style={{ backgroundColor: "#1d6ff4" }}
-              disabled={portalMut.isPending || !billingStatus?.stripeCustomerId}
+          )}
+
+          {/* Plan cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              { tier: "starter" as const, name: "Starter", price: "$149", desc: "500 min/mo · 1 number · 1 industry", color: "#60a5fa" },
+              { tier: "growth" as const, name: "Growth", price: "$299", desc: "1,500 min/mo · 1 number · 1 industry", color: "#22c55e" },
+              { tier: "enterprise" as const, name: "Pro", price: "$599", desc: "4,000 min/mo · 3 numbers · All industries", color: "#f59e0b" },
+            ].map((p) => (
+              <div key={p.tier} className="rounded-xl border border-border p-4 text-center">
+                <p className="font-bold" style={{ color: p.color }}>{p.name}</p>
+                <p className="text-2xl font-black mt-1">{p.price}<span className="text-xs text-muted-foreground font-normal">/mo</span></p>
+                <p className="text-xs text-muted-foreground mt-1">{p.desc}</p>
+                <Button
+                  type="button" size="sm" className="w-full mt-3"
+                  style={{ backgroundColor: p.color }}
+                  disabled={checkoutMut.isPending}
+                  onClick={() => checkoutMut.mutate({ tier: p.tier })}
+                >
+                  {checkoutMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Subscribe"}
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          {billingStatus?.stripeCustomerId && (
+            <Button type="button" size="sm" variant="outline"
+              disabled={portalMut.isPending}
               onClick={() => portalMut.mutate()}
             >
-              Manage billing (portal)
+              Manage billing & invoices
             </Button>
+          )}
+
+          {/* Industry Packs Add-on */}
+          <div className="border-t border-border pt-4 mt-4">
+            <p className="text-sm font-semibold mb-2">Industry Packs — $49/mo each</p>
+            <p className="text-xs text-muted-foreground mb-3">
+              Your plan includes 1 industry. Add more to let your AI handle calls for multiple business types.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {["Solar", "HVAC", "Roofing", "Insurance", "Real Estate", "General"].map((ind) => (
+                <div key={ind} className="flex items-center justify-between rounded-lg border border-border p-2.5 text-xs">
+                  <span className="font-medium">{ind}</span>
+                  <span className="text-emerald-400 text-[10px]">+$49/mo</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-2">Contact support to add industry packs to your subscription.</p>
           </div>
         </CardContent>
       </Card>
