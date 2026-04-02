@@ -7,7 +7,7 @@
  *
  * Deepgram Voice Agent (wss://agent.deepgram.com/v1/agent/converse) handles:
  *   - STT (nova-3 streaming)
- *   - LLM (we configure: Cerebras fast / Claude escalation via custom endpoint)
+ *   - LLM (configure Claude / custom endpoint in Deepgram agent settings)
  *   - TTS (Deepgram Aura / Cartesia)
  *   - Turn-taking + barge-in (built into Deepgram)
  *   - Interruption handling (built into Deepgram)

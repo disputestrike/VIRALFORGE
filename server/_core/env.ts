@@ -5,14 +5,6 @@
 
 import { normalizeToE164US } from "./phoneE164";
 
-function hasAnyCerebrasKey(): boolean {
-  if ((process.env.CEREBRAS_API_KEY ?? "").trim()) return true;
-  for (let i = 1; i <= 10; i++) {
-    if ((process.env[`CEREBRAS_API_KEY_${i}`] ?? "").trim()) return true;
-  }
-  return false;
-}
-
 export const ENV = {
   // ── Core ──────────────────────────────────────────────────
   nodeEnv:      process.env.NODE_ENV ?? "development",
@@ -61,9 +53,6 @@ export const ENV = {
   // ── Live voice stack (realtime engine) ────────────────────
   deepgramApiKey:  process.env.DEEPGRAM_API_KEY ?? "",
   cartesiaApiKey:  process.env.CARTESIA_API_KEY ?? "",
-  cerebrasApiKey:  process.env.CEREBRAS_API_KEY ?? "",
-  /** A/B test: default is Cerebras-only. Set to "true" to allow Claude when Cerebras fails or is unset. */
-  llmAllowAnthropicFallback: process.env.LLM_ALLOW_ANTHROPIC_FALLBACK === "true",
 
   // ── Public URL (SignalWire webhook callbacks) ─────────────
   publicDomain: process.env.RAILWAY_PUBLIC_DOMAIN ?? "",
@@ -111,15 +100,6 @@ export const ENV = {
     process.env.CLAUDE_MODEL ||
     "claude-haiku-4-5-20251001"
   ).trim(),
-  /**
-   * Cerebras `gpt-oss-120b` only: reasoning_effort none|low|medium|high.
-   * `low` or `none` = faster time-to-first-token for voice (default low).
-   */
-  voiceGptOssReasoningEffort: (() => {
-    const v = (process.env.VOICE_GPT_OSS_REASONING_EFFORT ?? "low").toLowerCase();
-    if (v === "none" || v === "low" || v === "medium" || v === "high") return v;
-    return "low";
-  })(),
 
   // ── Stripe (subscriptions — Customer Portal + Checkout) ───
   stripeSecretKey: (process.env.STRIPE_SECRET_KEY ?? "").trim(),
@@ -140,11 +120,7 @@ export const ENV = {
   get emailEnabled()  { return this.resendApiKey !== ""; },
   get ttsEnabled()    { return (process.env.CARTESIA_API_KEY ?? "").trim() !== ""; },
   get sttEnabled()    { return this.openAiApiKey !== "" || this.deepgramApiKey !== ""; },
-  /** Non-voice / legacy routes may still use Cerebras pool when keys are set. Live voice engine uses Anthropic only. */
-  get cerebrasConfigured() {
-    return hasAnyCerebrasKey();
-  },
-  /** Live SignalWire streaming voice: Deepgram + Cartesia + Anthropic (Claude). Cerebras is not used on this path. */
+  /** Live SignalWire streaming voice: Deepgram + Cartesia + Anthropic (Claude). */
   get voiceRealtimeReady() {
     return (
       this.deepgramApiKey !== "" &&
@@ -163,11 +139,8 @@ export const ENV = {
     const name = (this.resendFromName || "ApexAI").trim() || "ApexAI";
     return `${name} <${email}>`;
   },
-  /** TRPC / templates / SMS-email AI text — Cerebras when keys exist; else Anthropic if set (or fallback flag). */
+  /** TRPC / templates / SMS-email AI — Claude (Anthropic). */
   get aiEnabled() {
-    return (
-      this.cerebrasConfigured ||
-      this.anthropicApiKey !== ""
-    );
+    return this.anthropicApiKey !== "";
   },
 };

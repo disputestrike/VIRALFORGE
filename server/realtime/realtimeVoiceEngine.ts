@@ -83,7 +83,6 @@ function drainSpeakableToTts(
 }
 
 // ── Clients ───────────────────────────────────────────────────────────────────
-// Use the shared cerebrasPool from llmRouter (has cooldown + rate-limit handling)
 
 /** Map dashboard / DB voice IDs (_core) to Cartesia ids the streaming engine uses; keep realtime-only IDs working. */
 function mapCoreCartesiaToRt(core: CoreVoiceProfile): VoiceProfile {
@@ -638,7 +637,7 @@ export function createCallEngine(opts: EngineOptions): void {
       "I didn't quite catch that—could you say that again in a few words?";
     const anthropicKey = (process.env.ANTHROPIC_API_KEY ?? "").trim();
     traceEvent(callId, "llm_route", { path: "anthropic-claude-haiku" });
-    log("[ROUTE] Anthropic Claude (voice LLM — Cerebras not used on live path)");
+    log("[ROUTE] Anthropic Claude (voice LLM)");
 
     if (!anthropicKey) {
       log("[Voice] Missing ANTHROPIC_API_KEY — configure for live voice");

@@ -1,9 +1,8 @@
 /**
  * VoiceRealtimePipeline — Full scaffold implementation
- * 
+ *
  * Deepgram live WebSocket STT with VAD
- * Cerebras streaming tokens → Cartesia streaming TTS (clause by clause)
- * Claude only if LLM_ALLOW_ANTHROPIC_FALLBACK=true (A/B revert path)
+ * Anthropic Claude streaming → Cartesia streaming TTS (clause by clause)
  * Energy-based barge-in detection (PCM energy, not mulaw heuristics)
  * generationEpoch: stale generation loops abort immediately on barge-in
  * Silence fallback line: "one moment" if no reply starts within 700ms
@@ -13,7 +12,6 @@
 
 import * as voiceSessionManager from "./voiceSessionManager";
 import { resolveVoiceProfile } from "./voiceProfiles";
-import { routedLLMCall } from "./llmRouter";
 import { ENV } from "../env";
 
 type OutboundSocket = { send(data: string): void; close?(): void };
@@ -560,7 +558,6 @@ export class VoiceRealtimePipeline {
     }
 
     // NO SILENCE FALLBACK — filler words ("one moment") are banned.
-    // Cerebras responds in ~30ms so there should be no dead air.
     // If there is silence, it's a pipeline issue, not a UX issue.
     this.silenceFallbackFired = false;
 
@@ -609,7 +606,7 @@ export class VoiceRealtimePipeline {
     }
   }
 
-  // ── STREAMING RESPONSE: Cerebras tokens → Cartesia clauses ───────────────
+  // ── STREAMING RESPONSE: Claude → Cartesia clauses ───────────────────────
 
   private async streamResponse(transcript: string, epoch: number): Promise<void> {
     if (!this.sessionId) return;
@@ -617,7 +614,6 @@ export class VoiceRealtimePipeline {
     const session = voiceSessionManager.getSession(this.sessionId);
     const history = session?.conversationHistory ?? [];
 
-    // Enough turns to hold product / objection context (was 8 — too short for real calls)
     const recentHistory = history.slice(-16);
     const systemPrompt = await this.buildSystemPromptAsync(session, transcript);
     const messages = [
@@ -625,108 +621,15 @@ export class VoiceRealtimePipeline {
       ...recentHistory.map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
     ];
 
-    const { cerebrasPool } = await import("./llmRouter");
-    const allowAnthropic =
-      process.env.LLM_ALLOW_ANTHROPIC_FALLBACK === "true" &&
-      !!(process.env.ANTHROPIC_API_KEY ?? "").trim();
     const semantic = this.chooseRoute(transcript, this.customer.objectionHistory.length);
+    this.logger.log(`[PIPE] llm=anthropic semantic=${semantic} epoch=${epoch}`);
 
-    this.logger.log(`[PIPE] llm=cerebras semantic=${semantic} epoch=${epoch}`);
-
-    if (!cerebrasPool.hasKeys()) {
-      if (allowAnthropic) {
-        await this.streamClaude(messages, transcript, epoch);
-      } else {
-        this.logger.error("[PIPE] No Cerebras keys and Anthropic fallback disabled");
-      }
+    if (!(process.env.ANTHROPIC_API_KEY ?? "").trim()) {
+      this.logger.error("[PIPE] ANTHROPIC_API_KEY missing — cannot run LLM");
       return;
     }
 
-    try {
-      await this.streamCerebras(messages, transcript, epoch);
-    } catch (e) {
-      this.logger.warn("[PIPE:Cerebras] stream failed:", e);
-      if (allowAnthropic) {
-        await this.streamClaude(messages, transcript, epoch);
-      }
-    }
-  }
-
-  // ── CEREBRAS STREAMING → CARTESIA ────────────────────────────────────────
-
-  private async streamCerebras(
-    messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
-    transcript: string,
-    epoch: number
-  ): Promise<void> {
-    this.cartesiaNeedsNewContext = true;
-    const { cerebrasPool } = await import("./llmRouter");
-    let response: Response;
-    try {
-      // Was hardcoded 120 — truncates answers to one-liners. Use env + floor for substantive replies.
-      const streamMaxTokens = Math.min(512, Math.max(240, ENV.voiceLlmMaxTokens));
-      response = await cerebrasPool.stream(messages, streamMaxTokens);
-    } catch (poolErr) {
-      this.logger.warn("[PIPE:Cerebras] pool exhausted:", poolErr);
-      throw poolErr;
-    }
-
-    if (!response.ok || !response.body) {
-      const errText = await response.text().catch(() => "");
-      throw new Error(`Cerebras stream HTTP ${response.status}: ${errText.slice(0, 200)}`);
-    }
-
-    let assembled = "";
-    let spokenUpTo = 0;
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-
-    while (true) {
-      if (epoch !== this.generationEpoch) { reader.cancel(); return; }
-
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const lines = decoder.decode(value).split("\n");
-      for (const line of lines) {
-        if (!line.startsWith("data: ") || line.includes("[DONE]")) continue;
-        try {
-          const delta = JSON.parse(line.slice(6))?.choices?.[0]?.delta?.content ?? "";
-          assembled += delta;
-
-          // Send to Cartesia clause by clause
-          const clauses = this.splitClauses(assembled);
-          const ready = clauses.slice(0, -1).join(" "); // all complete clauses
-          if (ready.length > spokenUpTo) {
-            const fresh = sanitizeForSpeech(ready.slice(spokenUpTo));
-            if (fresh.trim()) {
-              if (epoch !== this.generationEpoch) return;
-              await this.cartesiaSendText(fresh);
-              spokenUpTo = ready.length;
-              this.setSpeakingTimeout(8000);
-              // 50ms natural pause between clauses (Nextiva-quality pacing)
-              await new Promise(r => setTimeout(r, 50));
-            }
-          }
-        } catch {}
-      }
-    }
-
-    if (epoch !== this.generationEpoch) return;
-
-    // Send any remaining text
-    const remaining = sanitizeForSpeech(assembled.slice(spokenUpTo));
-    if (remaining.trim()) await this.cartesiaSendText(remaining);
-    const flushCerebrasId = this.cartesiaContextId;
-    this.cartesiaFlushExplicit(flushCerebrasId);
-
-    const rawText = assembled.trim();
-    const fullText = sanitizeForSpeech(rawText);
-    if (this.sessionId && fullText) {
-      voiceSessionManager.addMessage(this.sessionId, "assistant", fullText);
-      // Run tools on RAW text (before TOOL: is stripped by sanitize)
-      await this.runToolIfNeeded(rawText, epoch);
-    }
+    await this.streamClaude(messages, transcript, epoch);
   }
 
   // ── CLAUDE STREAMING → CARTESIA ──────────────────────────────────────────
@@ -746,7 +649,7 @@ export class VoiceRealtimePipeline {
       .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
 
     const stream = await client.messages.stream({
-      model: process.env.CLAUDE_MODEL || "claude-opus-4-5",
+      model: ENV.voiceClaudeModel,
       max_tokens: Math.min(1024, Math.max(400, ENV.voiceLlmMaxTokens * 2)),
       temperature: Math.min(0.75, Math.max(0.35, ENV.voiceLlmTemperature)),
       system: systemMsg,

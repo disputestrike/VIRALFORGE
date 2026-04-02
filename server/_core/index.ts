@@ -164,7 +164,7 @@ async function startServer() {
   console.log(`  Email:       ${ENV.emailEnabled ? "✅ Resend ready" : "⚠️  disabled (set RESEND_API_KEY)"}`);
   console.log(`  STT:         ${ENV.sttEnabled ? "✅ Whisper ready" : "⚠️  disabled (set OPENAI_API_KEY)"}`);
   console.log(`  TTS:         ${ENV.ttsEnabled ? "✅ Cartesia ready" : "⚠️  disabled (set CARTESIA_API_KEY)"}`);
-  console.log(`  AI/LLM:      ${ENV.aiEnabled ? "✅ ready (Cerebras and/or Anthropic)" : "⚠️  disabled (CEREBRAS_API_KEY_* or ANTHROPIC_API_KEY)"}`);
+  console.log(`  AI/LLM:      ${ENV.aiEnabled ? "✅ Claude (ANTHROPIC_API_KEY)" : "⚠️  disabled — set ANTHROPIC_API_KEY"}`);
   console.log("");
 
   // INTEGRATION: Initialize job queue and workers
@@ -490,7 +490,7 @@ async function startServer() {
         stripe:   ENV.stripeEnabled ? "ready — webhook POST /api/stripe/webhook" : "disabled — add STRIPE_SECRET_KEY + price ids",
         stt:      ENV.sttEnabled    ? "ready"  : "disabled — add OPENAI_API_KEY or DEEPGRAM_API_KEY",
         tts:      ENV.ttsEnabled    ? "ready"  : "disabled — add CARTESIA_API_KEY",
-        ai:       ENV.aiEnabled     ? "ready"  : "disabled — add CEREBRAS_API_KEY_* or ANTHROPIC_API_KEY",
+        ai:       ENV.aiEnabled     ? "ready (Anthropic Claude)"  : "disabled — add ANTHROPIC_API_KEY",
       },
     });
   });
@@ -1235,16 +1235,6 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
       res.json({ ok: true, tableCount: tables.length, tables });
     } catch (e: any) {
       res.status(500).json({ ok: false, error: e.message });
-    }
-  });
-
-  // ── Cerebras Pool Status ──────────────────────────────────────────────────
-  app.get("/api/cerebras/pool-status", async (_req, res) => {
-    try {
-      const { getCerebrasPoolStatus } = await import("./services/llmRouter");
-      res.json({ ok: true, pool: getCerebrasPoolStatus() });
-    } catch (e: any) {
-      res.json({ ok: false, pool: [], error: e.message });
     }
   });
 

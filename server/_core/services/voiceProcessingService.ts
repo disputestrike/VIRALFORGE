@@ -1,6 +1,6 @@
 /**
  * Voice Processing Service — Full pipeline per turn
- * Audio → STT → LLM Router (Cerebras fast / Claude smart) → TTS → Audio
+ * Audio → STT → LLM Router (Claude) → TTS → Audio
  * 
  * Context fix: conversation history is loaded from voiceSessionManager
  * and passed fully to the LLM on every turn.
@@ -23,7 +23,7 @@ CRITICAL VOICE RULES:
 - If caller gives objection, handle it calmly with enough substance, then ask one question.
 - If caller wants to book, confirm the appointment clearly.
 - If caller is angry or frustrated, slow down and acknowledge first.
-- Never say "as an AI" or mention Claude or Cerebras.
+- Never say "as an AI" or mention the underlying model vendor.
 - Sound warm, human, and direct.
 
 GOAL: Qualify the lead, handle objections, book appointments.`;
@@ -82,7 +82,7 @@ export async function processAudioMessage(
     })),
   ];
 
-  // ── Step 4: LLM (Cerebras fast or Claude smart) ───────────────────────────
+  // ── Step 4: LLM (Claude) ──────────────────────────────────────────────────
   let aiResponse = "How can I help you today?";
   let action = "follow_up";
   const t1 = Date.now();
