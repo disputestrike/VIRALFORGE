@@ -44,6 +44,7 @@ export default function Dashboard() {
   const { data: activityLogs } = trpc.admin.activityLogs.useQuery({ limit: 8 });
   const { data: apptStats } = trpc.appointments.stats.useQuery();
   const { data: upcomingAppts } = trpc.appointments.list.useQuery({ upcoming: true });
+  const { data: onboardingData } = trpc.onboarding.list.useQuery();
 
   const metricCards = [
     {
@@ -86,6 +87,26 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Onboarding setup prompt for new users */}
+      {!onboardingData?.length && (
+        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-500/20">
+              <Zap className="size-5 text-emerald-400" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-sm">Welcome! Complete your setup to go live</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Set up your AI voice, choose your industry, and import your first leads.</p>
+            </div>
+            <Link href="/onboarding">
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs">
+                Start Setup →
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* 24/7 AI Assistant activation prompt */}
       <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-primary/20 bg-primary/5 text-sm">
         <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />

@@ -182,6 +182,7 @@ interface EngineOptions {
   businessName?: string;
   industry?: string;
   voiceProfileId?: string;
+  language?: string;
 }
 
 export function createCallEngine(opts: EngineOptions): void {
@@ -193,6 +194,7 @@ export function createCallEngine(opts: EngineOptions): void {
     businessName: optBusinessName = "ApexAI",
     industry: optIndustry = "business services",
     voiceProfileId,
+    language: optLanguage = "en",
   } = opts;
 
   const callId = `call_${Date.now()}`;
@@ -202,6 +204,7 @@ export function createCallEngine(opts: EngineOptions): void {
 
   let businessName = optBusinessName;
   let industry = optIndustry;
+  const callLanguage = optLanguage;
   let clientConfig: ClientConfig = mergeClientConfig({
     businessName,
     industry,
@@ -705,7 +708,7 @@ export function createCallEngine(opts: EngineOptions): void {
       punctuate: "true",
       interim_results: "true",
       endpointing: String(ENV.voiceDeepgramEndpointingMs),
-      language: "en",
+      language: callLanguage || "en",
     });
     // Optional — was part of 400 responses on some accounts; enable explicitly if needed.
     if (process.env.VOICE_DEEPGRAM_USE_UTTERANCE_END === "true") {
