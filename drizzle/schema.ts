@@ -32,6 +32,10 @@ export const users = mysqlTable("users", {
   isAgency: boolean("isAgency").default(false),
   agencyName: varchar("agencyName", { length: 200 }),
   whiteLabel: boolean("whiteLabel").default(false),
+  // Google Calendar integration
+  gcalRefreshToken: text("gcalRefreshToken"),
+  gcalBookingUrl: varchar("gcalBookingUrl", { length: 500 }),
+  businessName: varchar("businessName", { length: 200 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

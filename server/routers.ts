@@ -1102,6 +1102,43 @@ const appointmentsRouter = router({
         notes: input.notes,
         timezone: input.timezone,
       });
+
+      // Auto-create Google Calendar event if user has connected their calendar
+      let calendarLink: string | null = null;
+      try {
+        const user = await db.getUserById(ctx.user.id);
+        const lead = await db.getLeadById(input.leadId);
+        const refreshToken = (user as any)?.gcalRefreshToken;
+        const leadName = lead ? `${(lead as any).firstName ?? ""} ${(lead as any).lastName ?? ""}`.trim() : "Lead";
+        const businessName = (user as any)?.businessName || "ApexAI";
+
+        if (refreshToken) {
+          const { createCalendarEvent } = await import("./_core/services/googleCalendar");
+          const event = await createCalendarEvent({
+            refreshToken,
+            summary: `${businessName} — ${leadName}`,
+            description: input.notes || `Appointment with ${leadName}`,
+            startTime: new Date(input.scheduledTime),
+            durationMinutes: input.duration || 30,
+            attendeeEmail: (lead as any)?.email || undefined,
+            attendeePhone: (lead as any)?.phone || undefined,
+            timezone: input.timezone || "America/Chicago",
+          });
+          if (event) calendarLink = event.htmlLink;
+        } else {
+          // Generate a "Add to Calendar" link as fallback
+          const { generateGcalAddLink } = await import("./_core/services/googleCalendar");
+          calendarLink = generateGcalAddLink({
+            title: `${businessName} — ${leadName}`,
+            startTime: new Date(input.scheduledTime),
+            durationMinutes: input.duration || 30,
+            description: input.notes || `Appointment with ${leadName}`,
+          });
+        }
+      } catch (e: any) {
+        console.warn("[Appointments] Calendar event creation failed:", e.message);
+      }
+
       await db.logActivity({
         userId: ctx.user.id,
         entityType: "appointment",
@@ -1109,7 +1146,7 @@ const appointmentsRouter = router({
         action: "created",
         description: `Manual appointment created for lead ${input.leadId}`,
       });
-      return { success: true, insertId: result.insertId };
+      return { success: true, insertId: result.insertId, calendarLink };
     }),
 
   update: protectedProcedure
@@ -1166,6 +1203,8 @@ const settingsRouter = router({
       plan: z.string().optional(),
       agencyName: z.string().optional(),
       voiceProfileId: z.string().optional(),
+      gcalBookingUrl: z.string().optional(),
+      businessName: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db_mod = await import("./db");
@@ -1209,6 +1248,41 @@ const settingsRouter = router({
       });
       return { success: true };
     }),
+
+  // ── Google Calendar ──────────────────────────────────────────────────────
+  calendarStatus: protectedProcedure.query(async ({ ctx }) => {
+    const { isCalendarConfigured } = await import("./_core/services/googleCalendar");
+    const db_mod = await import("./db");
+    const user = await db_mod.getUserById(ctx.user.id);
+    return {
+      configured: isCalendarConfigured(),
+      connected: !!(user as any)?.gcalRefreshToken,
+      bookingUrl: (user as any)?.gcalBookingUrl ?? null,
+    };
+  }),
+
+  calendarConnectUrl: protectedProcedure.mutation(async ({ ctx }) => {
+    const { getCalendarAuthUrl, isCalendarConfigured } = await import("./_core/services/googleCalendar");
+    if (!isCalendarConfigured()) {
+      throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Google Calendar OAuth not configured. Set GCAL_CLIENT_ID and GCAL_CLIENT_SECRET (or reuse GOOGLE_CLIENT_ID/SECRET) in Railway." });
+    }
+    const redirectUri = `${ENV.publicUrl}/api/auth/gcal/callback`;
+    const url = getCalendarAuthUrl(redirectUri, String(ctx.user.id));
+    return { url };
+  }),
+
+  calendarDisconnect: protectedProcedure.mutation(async ({ ctx }) => {
+    const db_mod = await import("./db");
+    const drizzle_orm = await import("drizzle-orm");
+    const schema = await import("../drizzle/schema");
+    const db_inst = await db_mod.getDb();
+    if (db_inst) {
+      await (db_inst as any).update(schema.users)
+        .set({ gcalRefreshToken: null })
+        .where(drizzle_orm.eq(schema.users.id, ctx.user.id));
+    }
+    return { success: true };
+  }),
 });
 
 

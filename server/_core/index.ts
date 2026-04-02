@@ -87,6 +87,9 @@ async function runMigrations() {
           "ALTER TABLE `users` ADD COLUMN `stripeSubscriptionId` varchar(255) NULL",
           "ALTER TABLE `users` ADD COLUMN `stripeSubscriptionStatus` varchar(64) NULL",
           "ALTER TABLE `knowledge_bases` ADD COLUMN `brandProfile` text NULL",
+          "ALTER TABLE `users` ADD COLUMN `gcalRefreshToken` text NULL",
+          "ALTER TABLE `users` ADD COLUMN `gcalBookingUrl` varchar(500) NULL",
+          "ALTER TABLE `users` ADD COLUMN `businessName` varchar(200) NULL",
         ];
         for (const sql of alterStatements) {
           try {
@@ -492,6 +495,7 @@ async function startServer() {
         sms:      ENV.smsEnabled    ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         email:    ENV.emailEnabled  ? "ready"  : "disabled — add RESEND_API_KEY",
         stripe:   ENV.stripeEnabled ? "ready — webhook POST /api/stripe/webhook" : "disabled — add STRIPE_SECRET_KEY + price ids",
+        calendar: (process.env.GCAL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID) ? "ready (Google Calendar)" : "ready (add-to-calendar links)",
         stt:      ENV.sttEnabled    ? "ready"  : "disabled — add OPENAI_API_KEY or DEEPGRAM_API_KEY",
         tts:      ENV.ttsEnabled    ? "ready"  : "disabled — add CARTESIA_API_KEY",
         ai:       ENV.aiEnabled     ? "ready (Anthropic Claude)"  : "disabled — add ANTHROPIC_API_KEY",
@@ -1101,6 +1105,40 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
 
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+
+  // ── Google Calendar OAuth callback ─────────────────────────────────────────
+  app.get("/api/auth/gcal/callback", async (req, res) => {
+    try {
+      const code = req.query.code as string;
+      const state = req.query.state as string; // userId
+      if (!code || !state) { res.redirect("/settings?gcal=error"); return; }
+
+      const { exchangeCalendarCode } = await import("./services/googleCalendar");
+      const redirectUri = `${ENV.publicUrl}/api/auth/gcal/callback`;
+      const tokens = await exchangeCalendarCode(code, redirectUri);
+
+      if (tokens.refreshToken) {
+        const userId = parseInt(state, 10);
+        const dbMod = await import("../db");
+        const drizzle_orm = await import("drizzle-orm");
+        const schema = await import("../../drizzle/schema");
+        const dbInst = await dbMod.getDb();
+        if (dbInst) {
+          await (dbInst as any).update(schema.users)
+            .set({ gcalRefreshToken: tokens.refreshToken })
+            .where(drizzle_orm.eq(schema.users.id, userId));
+        }
+        console.log(`[GoogleCalendar] Connected for userId=${userId}`);
+        res.redirect("/settings?gcal=connected");
+      } else {
+        console.warn("[GoogleCalendar] No refresh token returned — user may need to re-auth with prompt=consent");
+        res.redirect("/settings?gcal=no_token");
+      }
+    } catch (err: any) {
+      console.error("[GoogleCalendar] Callback error:", err.message);
+      res.redirect("/settings?gcal=error");
+    }
+  });
 
   // tRPC API
   app.use(

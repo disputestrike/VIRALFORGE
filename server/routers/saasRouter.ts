@@ -24,27 +24,43 @@ const customerRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      return {
-        customerId: `cust_${Date.now()}`,
-        apiKey: `key_${Date.now()}`,
-        plan: input.plan,
-        monthlyLimit: 5000,
-      };
+      // Create as a lead for follow-up, real customer onboards via Google OAuth + Stripe
+      const { createLead } = await import("../../db");
+      const { insertId } = await createLead({
+        firstName: input.companyName,
+        lastName: "Signup",
+        email: input.email,
+        phone: input.phone,
+        industry: input.industry,
+        source: `signup_${input.plan}`,
+        status: "new",
+        score: 80,
+        segment: "hot",
+        createdBy: 1,
+      });
+      return { customerId: `cust_${insertId}`, leadId: insertId, plan: input.plan };
     }),
 
-  get: protectedProcedure.query(async () => {
+  get: protectedProcedure.query(async ({ ctx }) => {
+    const { getUserById } = await import("../../db");
+    const user = await getUserById(ctx.user.id);
+    if (!user) throw new TRPCError({ code: "NOT_FOUND" });
     return {
-      id: "cust_example",
-      companyName: "Example Company",
-      plan: "growth",
+      id: `cust_${user.id}`,
+      companyName: (user as any).name ?? "My Company",
+      plan: (user as any).plan ?? "starter",
+      email: (user as any).email ?? "",
     };
   }),
 
-  getUsage: protectedProcedure.query(async () => {
+  getUsage: protectedProcedure.query(async ({ ctx }) => {
+    const { getGlobalMetrics } = await import("../../db");
+    const m = await getGlobalMetrics(ctx.user.id);
+    const limit = 50000; // default plan limit
     return {
-      leadsUsed: 0,
-      leadsLimit: 50000,
-      percentage: 0,
+      leadsUsed: m.totalLeads ?? 0,
+      leadsLimit: limit,
+      percentage: limit > 0 ? Math.round(((m.totalLeads ?? 0) / limit) * 100) : 0,
     };
   }),
 });
@@ -64,16 +80,19 @@ const leadSourceRouter = router({
 const dashboardRouter = router({
   stats: protectedProcedure
     .input(z.object({ dateRange: z.enum(["today", "week", "month", "year"]).default("month") }))
-    .query(async () => {
+    .query(async ({ ctx }) => {
+      const { getGlobalMetrics, getDashboardBreakdown } = await import("../../db");
+      const m = await getGlobalMetrics(ctx.user.id);
+      const bd = await getDashboardBreakdown(ctx.user.id);
       return {
-        leads: 0,
-        callsMade: 0,
-        appointmentsBooked: 0,
-        appointmentsShowed: 0,
-        revenueGenerated: 0,
-        showRate: 0,
-        bookingRate: 0,
-        callSuccessRate: 0,
+        leads: m.totalLeads ?? 0,
+        callsMade: bd.totalCalls ?? 0,
+        appointmentsBooked: m.totalAppointments ?? 0,
+        appointmentsShowed: 0, // tracked when appointment status updates
+        revenueGenerated: m.totalRevenue ?? 0,
+        showRate: (m.totalAppointments ?? 0) > 0 ? Math.round((0 / (m.totalAppointments ?? 1)) * 100) : 0,
+        bookingRate: bd.totalCalls > 0 ? Math.round(((m.totalAppointments ?? 0) / bd.totalCalls) * 100) : 0,
+        callSuccessRate: bd.totalCalls > 0 ? Math.round(((bd.callsByOutcome.find(o => o.outcome === "scheduled")?.count ?? 0) / bd.totalCalls) * 100) : 0,
       };
     }),
 });
@@ -155,12 +174,14 @@ const leadsRouter = router({
         offset: z.number().default(0),
       })
     )
-    .query(async () => {
-      return [];
+    .query(async ({ ctx, input }) => {
+      const { getLeads } = await import("../../db");
+      return getLeads({ limit: input.limit, offset: input.offset, userId: ctx.user.id });
     }),
 
-  get: protectedProcedure.input(z.object({ id: z.number() })).query(async () => {
-    return null;
+  get: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
+    const { getLeadById } = await import("../../db");
+    return getLeadById(input.id) ?? null;
   }),
 });
 
