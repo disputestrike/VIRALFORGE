@@ -65,6 +65,8 @@ export class VoiceRealtimePipeline {
   private cartesiaContextId: string | null = null;
   /** Cartesia: first clause in an assistant utterance must use continue=false. */
   private cartesiaNeedsNewContext = true;
+  /** Last voice id sent on WS — flush frames must repeat voice (API rejects bare flush). */
+  private lastCartesiaVoiceId = "694f9389-aac1-45b6-b726-9d9369183238";
 
   // Customer state
   private customer: CustomerState = { objectionHistory: [], qualification: {} };
@@ -297,6 +299,8 @@ export class VoiceRealtimePipeline {
       }
     } catch {}
 
+    this.lastCartesiaVoiceId = voiceId;
+
     let continueCtx = !this.cartesiaNeedsNewContext;
     this.cartesiaNeedsNewContext = false;
     if (hadNoContext && continueCtx) continueCtx = false;
@@ -313,7 +317,18 @@ export class VoiceRealtimePipeline {
 
   private cartesiaFlushExplicit(contextId: string | null | undefined): void {
     if (!this.cartesiaWs || this.cartesiaWs.readyState !== 1 || !contextId) return;
-    this.cartesiaWs.send(JSON.stringify({ context_id: contextId, flush: true }));
+    const voiceId = this.lastCartesiaVoiceId;
+    this.cartesiaWs.send(
+      JSON.stringify({
+        context_id: contextId,
+        model_id: "sonic-english",
+        voice: { mode: "id", id: voiceId },
+        transcript: "",
+        output_format: { container: "raw", encoding: "pcm_mulaw", sample_rate: 8000 },
+        continue: true,
+        flush: true,
+      })
+    );
   }
 
   private cartesiaFlush(): void {

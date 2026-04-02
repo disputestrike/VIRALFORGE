@@ -379,7 +379,25 @@ export function createCallEngine(opts: EngineOptions): void {
 
   function cartesiaFlushExplicit(contextId: string | undefined) {
     if (!cartesiaWs || cartesiaWs.readyState !== WebSocket.OPEN || !contextId) return;
-    cartesiaWs.send(JSON.stringify({ context_id: contextId, flush: true }));
+    const voiceId = voiceProfile.cartesiaId?.trim() || "694f9389-aac1-45b6-b726-9d9369183238";
+    const ttsSpeed = Math.min(1.2, Math.max(0.55, voiceProfile.speed * ENV.voiceTtsSpeedScale));
+    // Cartesia rejects bare `{ flush: true }` (no voice). Per WS docs: empty transcript + continue + flush.
+    cartesiaWs.send(
+      JSON.stringify({
+        context_id: contextId,
+        model_id: "sonic-english",
+        voice: { mode: "id", id: voiceId },
+        transcript: "",
+        speed: ttsSpeed,
+        output_format: {
+          container: "raw",
+          encoding: "pcm_s16le",
+          sample_rate: 8000,
+        },
+        continue: true,
+        flush: true,
+      })
+    );
   }
 
   function stopSpeaking() {
@@ -682,8 +700,7 @@ export function createCallEngine(opts: EngineOptions): void {
       content: m.content,
     }));
 
-    const claudeModel =
-      (process.env.VOICE_CLAUDE_MODEL || process.env.CLAUDE_MODEL || "claude-3-5-haiku-20241022").trim();
+    const claudeModel = ENV.voiceClaudeModel;
     const stream = await client.messages.stream({
       model: claudeModel,
       max_tokens: ENV.voiceLlmMaxTokens,

@@ -103,6 +103,15 @@ export const ENV = {
   /** Voice LLM temperature — lower = more consistent; higher = more varied. */
   voiceLlmTemperature: Math.min(0.85, Math.max(0.2, parseFloat(process.env.VOICE_LLM_TEMPERATURE ?? "0.40") || 0.4)),
   /**
+   * Anthropic model for live voice streaming. claude-3-5-haiku-20241022 was retired 2026-02-19.
+   * Override with VOICE_CLAUDE_MODEL or CLAUDE_MODEL.
+   */
+  voiceClaudeModel: (
+    process.env.VOICE_CLAUDE_MODEL ||
+    process.env.CLAUDE_MODEL ||
+    "claude-haiku-4-5-20251001"
+  ).trim(),
+  /**
    * Cerebras `gpt-oss-120b` only: reasoning_effort none|low|medium|high.
    * `low` or `none` = faster time-to-first-token for voice (default low).
    */

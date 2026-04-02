@@ -1,6 +1,6 @@
 /**
- * LLM — default: Cerebras (key pool, same as voice / llmRouter).
- * Emergency revert: set LLM_ALLOW_ANTHROPIC_FALLBACK=true and ANTHROPIC_API_KEY.
+ * LLM — prefers Cerebras when keys exist; otherwise uses Anthropic if ANTHROPIC_API_KEY is set.
+ * When Cerebras keys exist but a call fails, set LLM_ALLOW_ANTHROPIC_FALLBACK=true to use Claude.
  */
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -108,22 +108,22 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       };
     } catch (e) {
       console.error("[LLM] Cerebras invoke failed:", (e as Error).message);
-      if (process.env.LLM_ALLOW_ANTHROPIC_FALLBACK === "true") {
-        console.warn("[LLM] LLM_ALLOW_ANTHROPIC_FALLBACK — using Anthropic");
+      if (process.env.LLM_ALLOW_ANTHROPIC_FALLBACK === "true" && process.env.ANTHROPIC_API_KEY) {
+        console.warn("[LLM] LLM_ALLOW_ANTHROPIC_FALLBACK — using Anthropic after Cerebras failure");
         return invokeAnthropicFallback(params);
       }
       throw e;
     }
   }
 
-  if (process.env.LLM_ALLOW_ANTHROPIC_FALLBACK === "true" && process.env.ANTHROPIC_API_KEY) {
-    console.warn("[LLM] No Cerebras keys — Anthropic fallback");
+  if (process.env.ANTHROPIC_API_KEY) {
+    console.warn("[LLM] No Cerebras keys — using Anthropic");
     return invokeAnthropicFallback(params);
   }
 
   throw new Error(
-    "No Cerebras keys configured (CEREBRAS_API_KEY_1.. or CEREBRAS_API_KEY). " +
-      "Set LLM_ALLOW_ANTHROPIC_FALLBACK=true with ANTHROPIC_API_KEY to use Claude temporarily."
+    "No LLM configured. Set CEREBRAS_API_KEY (or CEREBRAS_API_KEY_1..), or ANTHROPIC_API_KEY for Claude-only mode. " +
+      "Optional: LLM_ALLOW_ANTHROPIC_FALLBACK=true to use Claude when Cerebras fails but keys exist."
   );
 }
 
