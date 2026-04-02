@@ -220,11 +220,11 @@ export default function LandingPage() {
             <ApexLogo variant="mark" size="lg" imgClassName="rounded-md border border-white/10 px-3 py-1.5" />
           </div>
           <h1 className="text-balance text-4xl font-black leading-[1.08] tracking-tight md:text-6xl md:leading-[1.05]">
-            Inbound and outbound AI voice.
-            <span className="block text-blue-400">Unified communications — voice, SMS, email, one ApexAI stack.</span>
+            Turn every call into revenue.
+            <span className="block text-blue-400">On autopilot. 24/7. Zero effort.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-pretty text-lg leading-relaxed text-zinc-400">
-            {platformOverview.subtitle}
+            Your AI answers every inbound call, runs outbound campaigns, qualifies leads, and books appointments — so your team only talks to buyers ready to close.
           </p>
           <div className="mt-10 flex flex-wrap justify-center gap-3">
             <a href="#demo">
@@ -240,10 +240,10 @@ export default function LandingPage() {
           </div>
           <div className="mx-auto mt-16 grid max-w-2xl grid-cols-2 gap-8 border-t border-white/10 pt-12 sm:grid-cols-4">
             {[
-              { value: "< 1s", label: "Typical pickup" },
-              { value: "24/7", label: "Inbound coverage" },
-              { value: "1 brain", label: "Voice + SMS + email" },
-              { value: "8+", label: "Unique voices" },
+              { value: "4x", label: "More booked appointments" },
+              { value: "< 1s", label: "Response time" },
+              { value: "90%", label: "Cheaper than hiring" },
+              { value: "24/7", label: "Always closing" },
             ].map((s) => (
               <div key={s.label}>
                 <div className="text-2xl font-black text-blue-300">{s.value}</div>
@@ -512,34 +512,29 @@ export default function LandingPage() {
       <section id="different" className="scroll-mt-24 border-b border-white/20 bg-black px-6 py-20 md:py-24">
         <div className="mx-auto max-w-5xl">
           <div className="mb-12 text-center">
-            <div className="mb-4 flex justify-center">
-              <ApexLogo variant="mark" size="md" imgClassName="rounded-md border border-white/10 px-3 py-2" />
-            </div>
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-400">Why ApexAI</p>
-            <h2 className="mt-3 text-3xl font-extrabold text-white md:text-4xl">Legacy IVR vs ApexAI</h2>
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-400">Why ApexAI wins</p>
+            <h2 className="mt-3 text-3xl font-extrabold text-white md:text-4xl">Stop wasting time. Start closing deals.</h2>
             <p className="mx-auto mt-4 max-w-xl text-zinc-300">
-              Menus and voicemail leak revenue. ApexAI holds a real conversation, qualifies intent, and books — on every ring.
+              Your best salespeople should focus on closing — not qualifying. ApexAI handles every inbound and outbound conversation so your team only talks to buyers.
             </p>
           </div>
-          <div className="grid gap-5 md:grid-cols-2">
-            <div className="rounded-2xl border border-white/25 bg-black p-8">
-              <p className="text-xs font-bold uppercase tracking-wider text-zinc-500">Legacy phone tree</p>
-              <ul className="mt-4 list-disc space-y-2 pl-5 text-zinc-300">
-                <li>Press 1… press 2… callers hang up</li>
-                <li>Voicemail when you are busy</li>
-                <li>No qualification or follow-up</li>
-                <li>Static scripts, no learning loop</li>
-              </ul>
-            </div>
-            <div className="rounded-2xl border border-blue-500/40 bg-blue-500/10 p-8">
-              <p className="text-xs font-bold uppercase tracking-wider text-blue-400">ApexAI</p>
-              <ul className="mt-4 list-disc space-y-2 pl-5 text-zinc-200">
-                <li>Natural dialogue — sub-second pickup</li>
-                <li>24/7 answers with barge-in and handoff</li>
-                <li>Qualifies, books, SMS confirms</li>
-                <li>Transcripts, analytics, campaign scale</li>
-              </ul>
-            </div>
+          <div className="grid gap-5 md:grid-cols-3">
+            {[
+              { num: "1", title: "Engage instantly", desc: "Every call answered in under a second. Every lead contacted before your competitors even see the notification. SMS, email, and voice — all automatic.", color: C.blue },
+              { num: "2", title: "Qualify automatically", desc: "AI-driven qualification separates money-makers from time-wasters. Budget, timeline, decision-maker status — scored and segmented in real time.", color: C.green },
+              { num: "3", title: "Book & close", desc: "Qualified leads get booked directly to your calendar. Confirmation SMS sent. Reminder scheduled. Your team shows up and closes. That's it.", color: "#f59e0b" },
+            ].map((s) => (
+              <div key={s.title} className="rounded-2xl border border-white/20 bg-white/[0.03] p-8 text-center">
+                <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full text-xl font-black" style={{ backgroundColor: `${s.color}20`, color: s.color }}>{s.num}</div>
+                <h3 className="text-lg font-bold text-white">{s.title}</h3>
+                <p className="mt-3 text-sm leading-relaxed text-zinc-400">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-10 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-6 text-center">
+            <p className="text-sm text-zinc-300">
+              <span className="font-bold text-white">90% cheaper than hiring.</span> Delivering human-like, hyper-personalized responses in milliseconds. Works across voice, SMS, email, and 12 languages — 24/7/365.
+            </p>
           </div>
         </div>
       </section>
@@ -549,18 +544,18 @@ export default function LandingPage() {
         <div className="mx-auto max-w-6xl">
           <div className="mb-12 text-center">
             <p className="text-xs font-bold uppercase tracking-wider text-blue-400">How it works</p>
-            <h2 className="mt-3 text-3xl font-extrabold text-white md:text-4xl">Real-time phone conversation — not a chatbot</h2>
+            <h2 className="mt-3 text-3xl font-extrabold text-white md:text-4xl">From missed call to booked appointment in seconds</h2>
             <p className="mx-auto mt-4 max-w-xl text-zinc-300">
-              Your caller talks naturally. The system listens, decides when they are done speaking, generates a reply, and speaks with a natural voice — while optional actions like calendar and SMS run in the background.
+              No setup hassle. No IT skills needed. ApexAI handles the entire journey from first ring to confirmed appointment — automatically.
             </p>
           </div>
           <div className="how-works-grid grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {[
-              { icon: "📞", label: "Caller speaks", sub: "Audio from the phone line is processed continuously.", color: C.blue },
-              { icon: "🎤", label: "Speech timing", sub: "Detects when the caller finishes so replies do not talk over them.", color: C.blue2 },
-              { icon: "🧠", label: "Intelligent reply", sub: "Tuned for natural sales and support conversations on the phone.", color: "#a78bfa" },
-              { icon: "🔊", label: "Natural voice", sub: "Speaks as the answer is ready — minimal awkward silence.", color: C.green },
-              { icon: "✅", label: "Actions", sub: "Bookings, CRM updates, and text confirmations when you enable them.", color: "#f59e0b" },
+              { icon: "📞", label: "1. Answer instantly", sub: "Every call picked up in under a second. No voicemail, no missed leads, no competitors getting there first.", color: C.blue },
+              { icon: "🎯", label: "2. Qualify automatically", sub: "AI separates buyers from tire-kickers. Budget, timeline, intent — qualified in real time.", color: C.blue2 },
+              { icon: "📅", label: "3. Book the appointment", sub: "Qualified leads get booked directly to your calendar. SMS confirmation sent instantly.", color: "#f59e0b" },
+              { icon: "📱", label: "4. Follow up relentlessly", sub: "SMS, email, and outbound calls to every lead that didn't convert on the first touch.", color: C.green },
+              { icon: "📊", label: "5. Close more deals", sub: "Your team only talks to ready-to-buy leads. Full transcripts, recordings, and analytics.", color: "#a78bfa" },
             ].map(({ icon, label, sub, color }, idx) => (
               <div key={label} className="flex min-w-0 items-stretch">
                 <div className="flex flex-1 flex-col gap-2 rounded-xl border border-white/20 bg-white/5 p-4 text-center">
@@ -692,6 +687,58 @@ export default function LandingPage() {
                   <h3 className="text-sm font-semibold text-white">{title}</h3>
                 </div>
                 <p className="text-xs leading-relaxed text-zinc-400">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* WITHOUT vs WITH — outcome comparison */}
+      <section className="border-b border-white/20 bg-black px-6 py-16 md:py-20">
+        <div className="mx-auto max-w-5xl">
+          <div className="mb-12 text-center">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-400">The difference</p>
+            <h2 className="mt-3 text-3xl font-extrabold text-white md:text-4xl">Businesses with ApexAI make more money</h2>
+          </div>
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-8">
+              <p className="mb-4 text-xs font-bold uppercase tracking-wider text-red-400">Without ApexAI</p>
+              <ul className="space-y-3 text-sm text-zinc-300">
+                {["Wasted hours on unqualified leads", "Slow response times — leads go to competitors", "Missed calls after hours = lost revenue", "Empty calendars and frustrated sales teams", "Paying $30K+/year per receptionist"].map((t) => (
+                  <li key={t} className="flex gap-2"><span className="text-red-400">✕</span>{t}</li>
+                ))}
+              </ul>
+            </div>
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-8">
+              <p className="mb-4 text-xs font-bold uppercase tracking-wider text-emerald-400">With ApexAI</p>
+              <ul className="space-y-3 text-sm text-zinc-200">
+                {["AI qualifies every lead before your team touches it", "Under 1 second response — before competitors even see the lead", "24/7 answering, booking, and follow-up — never off", "Calendars full of ready-to-buy appointments", "90% cheaper than hiring, works nights and weekends"].map((t) => (
+                  <li key={t} className="flex gap-2"><span className="text-emerald-400">✓</span>{t}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* OUTCOMES — big numbers */}
+      <section className="border-b border-white/20 bg-black px-6 py-16 md:py-20">
+        <div className="mx-auto max-w-5xl text-center">
+          <p className="text-xs font-bold uppercase tracking-wider text-blue-400">Results that matter</p>
+          <h2 className="mt-3 text-3xl font-extrabold text-white md:text-4xl">Stop guessing. Start closing.</h2>
+          <p className="mx-auto mt-4 max-w-xl text-zinc-400">
+            Businesses using ApexAI see real, measurable revenue impact from day one.
+          </p>
+          <div className="mx-auto mt-12 grid max-w-3xl gap-6 sm:grid-cols-3">
+            {[
+              { value: "4x", label: "More booked appointments", sub: "vs manual follow-up" },
+              { value: "40%", label: "Higher conversion rate", sub: "qualified leads close faster" },
+              { value: "< 30s", label: "Average lead response", sub: "before competitors even see it" },
+            ].map((r) => (
+              <div key={r.label} className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-6">
+                <div className="text-4xl font-black text-blue-400">{r.value}</div>
+                <div className="mt-2 text-sm font-semibold text-white">{r.label}</div>
+                <div className="mt-1 text-xs text-zinc-500">{r.sub}</div>
               </div>
             ))}
           </div>
