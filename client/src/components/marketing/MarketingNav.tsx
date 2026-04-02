@@ -341,12 +341,14 @@ export default function MarketingNav() {
               </Button>
             </Link>
           ) : (
-            <div className="flex items-center gap-4">
-              <a href={getLoginUrl()} className="text-sm font-medium text-white/70 hover:text-white transition-colors whitespace-nowrap">
-                Sign in
+            <div className="flex items-center gap-3 ml-2">
+              <a href={getLoginUrl()}>
+                <Button size="sm" variant="ghost" className="font-medium text-white/70 hover:text-white hover:bg-white/10 whitespace-nowrap h-9 px-4">
+                  Sign in
+                </Button>
               </a>
               <a href={getLoginUrl()}>
-                <Button size="sm" className="font-bold shadow-sm whitespace-nowrap" style={{ backgroundColor: C.blue, color: C.white }}>
+                <Button size="sm" className="font-bold shadow-sm whitespace-nowrap h-9 px-5" style={{ backgroundColor: C.blue, color: C.white }}>
                   Start free trial
                 </Button>
               </a>
