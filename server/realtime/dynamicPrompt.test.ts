@@ -18,8 +18,10 @@ describe("buildVoiceSystemPrompt", () => {
     expect(out).toContain("BOOKING POLICY");
     expect(out).toContain("20008");
     expect(out).toContain("MANDATORY COMPANY FACTS");
-    expect(out).toContain("highly capable, professional AI phone");
-    expect(out).toContain("ACKNOWLEDGE → ANSWER → NEXT STEP");
+    expect(out).toContain("fast, sharp, professional AI phone assistant");
+    expect(out).toContain("acknowledge");
+    expect(out).toContain("answer");
+    expect(out).toContain("guide");
     expect(out).not.toContain("2-3 sentences MAX");
   });
 });

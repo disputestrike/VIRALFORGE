@@ -76,6 +76,8 @@ export async function addSmsJob(data: {
   scheduledTime?: string;
   delay?: number;
   msgId?: number;
+  /** When set, worker sends this exact body (product copy for voice bookings / reminders). */
+  body?: string;
 }): Promise<{ jobId: string; status: string }> {
   const queues = await getQueues();
   const jobId = `sms_${data.leadId}_${Date.now()}`;

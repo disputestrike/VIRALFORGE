@@ -5,6 +5,30 @@
 
 import * as db from "../../db";
 
+/** SignalWire call lifecycle — NOT the same as media WebSocket / stream. */
+export type VoiceCallLifecycleState =
+  | "ringing"
+  | "answered"
+  | "in_progress"
+  | "closing"
+  | "completed";
+
+export type VoiceStreamState =
+  | "connecting"
+  | "active"
+  | "stopped"
+  | "reconnecting"
+  | "closed";
+
+export type VoiceConversationStage =
+  | "answer"
+  | "clarify"
+  | "qualify"
+  | "recommend"
+  | "book"
+  | "close"
+  | "handoff";
+
 export interface VoiceSession {
   sessionId: string;
   leadId: number;
@@ -14,6 +38,12 @@ export interface VoiceSession {
   startTime: number;
   endTime?: number;
   status: "active" | "completed" | "failed";
+  /** Carrier / call leg lifecycle — never advance to completed on stream stop alone. */
+  callState: VoiceCallLifecycleState;
+  /** Bidirectional media stream (SignalWire WebSocket) — independent of call status. */
+  streamState: VoiceStreamState;
+  /** True after stream stop until reconnect, terminal status, or recovery timeout. */
+  awaitingRecovery?: boolean;
   turnState: "idle" | "assistant_speaking" | "user_speaking" | "processing";
   greetingSent: boolean;
   conversationHistory: Array<{ role: "user" | "assistant"; content: string; timestamp: number }>;
@@ -36,6 +66,15 @@ export interface VoiceSession {
     lastIntent: string;
     extractedFacts: Record<string, string>;
   };
+  /** Locked question the assistant must answer before moving on (mirrors policy + explicit lock). */
+  activeQuestion?: string | null;
+  activeQuestionResolved?: boolean;
+  lastIntent?: string;
+  conversationStage?: VoiceConversationStage;
+  extractedFacts?: Record<string, string>;
+  interruptCount?: number;
+  fallbackCount?: number;
+  bookingAllowed?: boolean;
 }
 
 // In-memory session store (keyed by sessionId OR callSid)
@@ -61,6 +100,9 @@ export function createSession(
     callSid,
     startTime: Date.now(),
     status: "active",
+    callState: "ringing",
+    streamState: "connecting",
+    awaitingRecovery: false,
     turnState: "idle",
     greetingSent: false,
     conversationHistory: [],
@@ -71,6 +113,14 @@ export function createSession(
     voiceProfileId: options?.voiceProfileId,
     callerPhone: options?.callerPhone ?? null,
     trace: [],
+    activeQuestion: null,
+    activeQuestionResolved: true,
+    lastIntent: "",
+    conversationStage: "answer",
+    extractedFacts: {},
+    interruptCount: 0,
+    fallbackCount: 0,
+    bookingAllowed: false,
   };
   sessions.set(sessionId, session);
   if (callSid && callSid !== sessionId) {
@@ -138,6 +188,9 @@ export function completeSession(sessionId: string, outcome?: VoiceSession["outco
   if (!session) return;
   session.status = "completed";
   session.endTime = Date.now();
+  session.callState = "completed";
+  session.streamState = "closed";
+  session.awaitingRecovery = false;
   if (outcome) session.outcome = outcome;
   console.log(`[VoiceSession] Session ${sessionId} completed. Outcome: ${outcome}`);
 }

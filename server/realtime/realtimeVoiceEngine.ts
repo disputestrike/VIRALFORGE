@@ -19,7 +19,6 @@ import {
   canOfferBooking,
   inferUtteranceIntent,
   detectLiveTransferIntent,
-  type CallState,
 } from "./callPolicy";
 import { getVoiceProfile, type VoiceProfile } from "./voiceProfiles";
 import {
@@ -52,6 +51,50 @@ import {
 } from "./toolLayer";
 import { buildVoiceSystemPrompt } from "./dynamicPrompt";
 import { normalizeToE164US } from "../_core/phoneE164";
+
+type VoiceOutcome = import("../_core/services/voiceSessionManager").VoiceSession["outcome"];
+
+export type VoiceFinalizeOpts = {
+  reason: string;
+  skipHangupApi?: boolean;
+  outcome?: VoiceOutcome;
+};
+
+const enginesByCallSid = new Map<string, { finalize: (opts: VoiceFinalizeOpts) => Promise<void> }>();
+
+function mapCallStatusToOutcome(status: string): VoiceOutcome | undefined {
+  const s = status.toLowerCase();
+  if (s === "busy" || s === "failed" || s === "no-answer") return "no_answer";
+  if (s === "canceled" || s === "cancelled") return "not_interested";
+  return undefined;
+}
+
+/** HTTP status callback from SignalWire — only this (plus explicit hangup paths) may hard-finalize the call. */
+export async function notifyVoiceCallTerminalFromHttp(
+  callSid: string,
+  callStatus: string
+): Promise<void> {
+  const norm = String(callStatus || "").toLowerCase().trim();
+  const terminal = new Set(["completed", "canceled", "cancelled", "failed", "busy", "no-answer"]);
+  if (!terminal.has(norm)) return;
+  const entry = enginesByCallSid.get(callSid);
+  if (entry) {
+    await entry.finalize({
+      reason: `signalwire_status:${callStatus}`,
+      skipHangupApi: true,
+      outcome: mapCallStatusToOutcome(norm),
+    });
+    return;
+  }
+  const orphan = voiceSessionManager.getSession(callSid);
+  if (orphan) {
+    voiceSessionManager.completeSession(orphan.sessionId, mapCallStatusToOutcome(norm));
+    await voiceSessionManager.persistSessionToDatabase(orphan.sessionId);
+    void import("../_core/services/callOwnerNotifyService").then(({ notifyOwnerAfterVoiceCall }) =>
+      notifyOwnerAfterVoiceCall(orphan.sessionId)
+    );
+  }
+}
 
 /**
  * Push LLM text to TTS sentence by sentence.
@@ -185,7 +228,7 @@ export function createCallEngine(opts: EngineOptions): void {
   /** SignalWire can emit `start` more than once; duplicate greetings → double audio. */
   let greetingPlayed = false;
   let dgReady = false;       // don't send audio to Deepgram until connected
-  let callState = createCallState();
+  let policyState = createCallState();
   let turnCtl: TurnControllerState = createTurnController();
   let keepaliveTimer: NodeJS.Timeout | null = null;
   let voiceProfile: VoiceProfile = resolveVoiceProfileForEngine(voiceProfileId);
@@ -196,6 +239,91 @@ export function createCallEngine(opts: EngineOptions): void {
   let pendingUserTranscript: string | null = null;
   let turnStartedAt = 0;
   let extractedFacts: Record<string, string> = {};
+  /** Media stream recovery — never equate this with call hangup. */
+  let streamRecoveryTimer: NodeJS.Timeout | null = null;
+  let engineRegisteredCallSid: string | null = null;
+  let lastOutboundAudioAt = 0;
+  let silenceWatchTimer: NodeJS.Timeout | null = null;
+
+  function clearStreamRecoveryTimer(): void {
+    if (streamRecoveryTimer) {
+      clearTimeout(streamRecoveryTimer);
+      streamRecoveryTimer = null;
+    }
+  }
+
+  function disarmOutboundSilenceWatch(): void {
+    if (silenceWatchTimer) {
+      clearInterval(silenceWatchTimer);
+      silenceWatchTimer = null;
+    }
+  }
+
+  function registerEngineForCallSid(sid: string): void {
+    if (!sid) return;
+    if (engineRegisteredCallSid && engineRegisteredCallSid !== sid) {
+      enginesByCallSid.delete(engineRegisteredCallSid);
+    }
+    engineRegisteredCallSid = sid;
+    enginesByCallSid.set(sid, { finalize: finalizeHard });
+  }
+
+  function unregisterEngineFromMap(): void {
+    if (engineRegisteredCallSid) {
+      enginesByCallSid.delete(engineRegisteredCallSid);
+      engineRegisteredCallSid = null;
+    }
+  }
+
+  function scheduleRecoveryTermination(): void {
+    clearStreamRecoveryTimer();
+    streamRecoveryTimer = setTimeout(() => {
+      streamRecoveryTimer = null;
+      if (isEnded) return;
+      const sess = activeSessionId ? voiceSessionManager.getSession(activeSessionId) : null;
+      if (
+        sess &&
+        sess.callState === "in_progress" &&
+        sess.streamState !== "active"
+      ) {
+        log("[RECOVERY] Stream inactive after 5s — finalizing (stream_timeout)");
+        traceEvent(callId, "stream_recovery_timeout");
+        void finalizeHard({ reason: "stream_timeout", outcome: "no_answer" });
+      }
+    }, 5000);
+  }
+
+  /** SignalWire <Stream> stop — media leg only; call may still be in-progress. */
+  function onMediaStreamStopped(): void {
+    log("Stream stopped (media) — session not finalized; awaiting reconnect or HTTP terminal status");
+    streamSid = "";
+    traceEvent(callId, "media_stream_stopped");
+    if (activeSessionId) {
+      try {
+        voiceSessionManager.updateSession(activeSessionId, {
+          streamState: "stopped",
+          awaitingRecovery: true,
+        });
+      } catch {}
+    }
+    scheduleRecoveryTermination();
+  }
+
+  function onSignalWireSocketEnded(reason: string): void {
+    if (isEnded) return;
+    log(`SignalWire WebSocket ended (${reason}) — not finalizing immediately`);
+    streamSid = "";
+    traceEvent(callId, "sigws_ended", { reason });
+    if (activeSessionId) {
+      try {
+        voiceSessionManager.updateSession(activeSessionId, {
+          streamState: "closed",
+          awaitingRecovery: true,
+        });
+      } catch {}
+    }
+    scheduleRecoveryTermination();
+  }
 
   function mergeExtractedFactsFromTurn(transcript: string): void {
     const zip = extractZipFromTranscript(transcript);
@@ -206,22 +334,29 @@ export function createCallEngine(opts: EngineOptions): void {
 
   function syncPolicySnapshot(userText: string): void {
     traceEvent(callId, "turn_policy", {
-      mode: callState.mode,
-      activeQuestion: callState.activeQuestion,
-      conversationStage: callState.mode,
+      mode: policyState.mode,
+      activeQuestion: policyState.activeQuestion,
+      conversationStage: policyState.mode,
       lastIntent: inferUtteranceIntent(userText),
       extractedFacts: { ...extractedFacts },
     });
     if (!activeSessionId) return;
+    const intent = inferUtteranceIntent(userText);
     try {
       voiceSessionManager.updateSession(activeSessionId, {
         voiceCallPolicy: {
-          mode: callState.mode,
-          activeQuestion: callState.activeQuestion,
-          conversationStage: callState.mode,
-          lastIntent: inferUtteranceIntent(userText),
+          mode: policyState.mode,
+          activeQuestion: policyState.activeQuestion,
+          conversationStage: policyState.mode,
+          lastIntent: intent,
           extractedFacts: { ...extractedFacts },
         },
+        activeQuestion: policyState.activeQuestion,
+        activeQuestionResolved: policyState.questionAnswered,
+        lastIntent: intent,
+        conversationStage: policyState.mode,
+        extractedFacts: { ...extractedFacts },
+        bookingAllowed: canOfferBooking(policyState),
       });
     } catch {}
   }
@@ -320,6 +455,7 @@ export function createCallEngine(opts: EngineOptions): void {
               streamSid,
               media: { payload: mulaw.toString("base64") },
             }));
+            lastOutboundAudioAt = Date.now();
             isSpeaking = true;
             turnCtl = onAssistantSpeakStart(turnCtl);
             traceEvent(callId, "tts_first_chunk", { bytes: Buffer.from(msg.data, "base64").length });
@@ -356,7 +492,8 @@ export function createCallEngine(opts: EngineOptions): void {
       log(`cartesiaSend SKIPPED: no ws or not open (state=${cartesiaWs?.readyState})`);
       return;
     }
-    const ttsSpeed = Math.min(1.2, Math.max(0.55, voiceProfile.speed * ENV.voiceTtsSpeedScale));
+    const rawSpeed = Math.min(1.2, Math.max(0.55, voiceProfile.speed * ENV.voiceTtsSpeedScale));
+    const ttsSpeed = Math.min(0.98, Math.max(0.94, rawSpeed));
     log(`cartesiaSend: "${text.slice(0,40)}" voiceId=${voiceProfile.cartesiaId} speed=${ttsSpeed}`);
     const hadNoContext = !cartesiaContextId;
     if (!cartesiaContextId) {
@@ -392,7 +529,8 @@ export function createCallEngine(opts: EngineOptions): void {
   function cartesiaFlushExplicit(contextId: string | undefined) {
     if (!cartesiaWs || cartesiaWs.readyState !== WebSocket.OPEN || !contextId) return;
     const voiceId = voiceProfile.cartesiaId?.trim() || "694f9389-aac1-45b6-b726-9d9369183238";
-    const ttsSpeed = Math.min(1.2, Math.max(0.55, voiceProfile.speed * ENV.voiceTtsSpeedScale));
+    const rawSpeed = Math.min(1.2, Math.max(0.55, voiceProfile.speed * ENV.voiceTtsSpeedScale));
+    const ttsSpeed = Math.min(0.98, Math.max(0.94, rawSpeed));
     // Cartesia rejects bare `{ flush: true }` (no voice). Per WS docs: empty transcript + continue + flush.
     cartesiaWs.send(
       JSON.stringify({
@@ -510,6 +648,13 @@ export function createCallEngine(opts: EngineOptions): void {
             turnCtl = onUserSpeechStart(turnCtl);
             generationEpoch++;
             stopSpeaking();
+            if (activeSessionId) {
+              const s = voiceSessionManager.getSession(activeSessionId);
+              if (s)
+                voiceSessionManager.updateSession(activeSessionId, {
+                  interruptCount: (s.interruptCount ?? 0) + 1,
+                });
+            }
           }
 
           if (isFinal && speechFinal && greetingDone) {
@@ -571,7 +716,7 @@ export function createCallEngine(opts: EngineOptions): void {
     turnCtl = onProcessing(turnCtl);
     const epoch = ++generationEpoch;
     turnStartedAt = Date.now();
-    callState = updateCallState(callState, transcript);
+    policyState = updateCallState(policyState, transcript);
     mergeExtractedFactsFromTurn(transcript);
 
     // Deterministic ZIP / discount snippets when user asks (before LLM)
@@ -580,7 +725,7 @@ export function createCallEngine(opts: EngineOptions): void {
     if (zip && (tl.includes("zip") || tl.includes("serve") || tl.includes("area") || tl.includes("coverage"))) {
       const line = lookupServiceAreaSpoken(zip, clientConfig);
       await speak(line, epoch);
-      callState = markQuestionAnswered(callState);
+      policyState = markQuestionAnswered(policyState);
       syncPolicySnapshot(transcript);
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
       return;
@@ -588,19 +733,19 @@ export function createCallEngine(opts: EngineOptions): void {
     if (tl.includes("discount") || tl.includes("promo") || tl.includes("deal")) {
       const line = lookupDiscountsSpoken(clientConfig);
       await speak(line, epoch);
-      callState = markQuestionAnswered(callState);
+      policyState = markQuestionAnswered(policyState);
       syncPolicySnapshot(transcript);
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
       return;
     }
 
     // End call immediately
-    if (callState.endCallRequested) {
+    if (policyState.endCallRequested) {
       log("[POLICY] End call detected");
       traceEvent(callId, "hangup_signal", { reason: "end_intent" });
       syncPolicySnapshot(transcript);
       await speak("No problem, thanks for calling, have a great day.", epoch);
-      setTimeout(() => cleanup(), 1500);
+      setTimeout(() => void finalizeHard({ reason: "end_intent", outcome: "not_interested" }), 1500);
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
       return;
     }
@@ -625,7 +770,7 @@ export function createCallEngine(opts: EngineOptions): void {
           await speak("Sure — connecting you to someone now.", epoch);
           const { transferCallToHuman } = await import("../_core/services/signalwireService");
           await transferCallToHuman(callSid, target);
-          setTimeout(() => cleanup(), 800);
+          setTimeout(() => void finalizeHard({ reason: "live_transfer", skipHangupApi: true, outcome: "callback" }), 800);
           traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
           return;
         }
@@ -673,6 +818,25 @@ export function createCallEngine(opts: EngineOptions): void {
         await respondAnthropicVoice(epoch, transcript);
       } catch (e2: any) {
         log(`[Claude] Retry failed: ${e2?.message ?? e2}`);
+        if (activeSessionId) {
+          const s = voiceSessionManager.getSession(activeSessionId);
+          const fc = (s?.fallbackCount ?? 0) + 1;
+          voiceSessionManager.updateSession(activeSessionId, { fallbackCount: fc });
+          if (fc >= 2) {
+            try {
+              await speak(
+                "I’m going to follow up with you directly to make sure you’re taken care of.",
+                epoch
+              );
+            } catch {}
+            setTimeout(
+              () => void finalizeHard({ reason: "stuck_fallback", outcome: "callback" }),
+              2000
+            );
+            traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+            return;
+          }
+        }
         try {
           await speak(reprompt, epoch);
         } catch {}
@@ -685,7 +849,7 @@ export function createCallEngine(opts: EngineOptions): void {
     const sentimentNote = currentSentiment !== "neutral"
       ? `\n\nCALLER SENTIMENT: ${currentSentiment.toUpperCase()} — adjust tone. Frustrated: direct/factual. Confused: simplify. Positive: maintain momentum.`
       : "";
-    const base = buildVoiceSystemPrompt(callState, businessName, industry, clientConfig) + sentimentNote;
+    const base = buildVoiceSystemPrompt(policyState, businessName, industry, clientConfig) + sentimentNote;
     if (!activeUserId) return base;
     try {
       const { buildVoiceTenantContextBlock } = await import("../_core/services/tenantContextForVoice");
@@ -731,6 +895,26 @@ export function createCallEngine(opts: EngineOptions): void {
     // Cancel any in-flight Cartesia synthesis + clear telephony buffer before starting a new answer.
     // Without this, the previous context keeps streaming audio while the new one speaks → double/scrambled.
     stopSpeaking();
+    disarmOutboundSilenceWatch();
+    lastOutboundAudioAt = Date.now();
+    let llmAckTimer: NodeJS.Timeout | null = setTimeout(() => {
+      llmAckTimer = null;
+      if (epoch !== generationEpoch || isEnded) return;
+      traceEvent(callId, "llm_slow_ack_800ms");
+      log("[FAILSAFE] LLM >800ms to first token — brief ack");
+      void speak("Got it — give me a second.", epoch);
+    }, 800);
+    silenceWatchTimer = setInterval(() => {
+      if (isEnded || epoch !== generationEpoch) {
+        disarmOutboundSilenceWatch();
+        return;
+      }
+      if (!isSpeaking) return;
+      if (Date.now() - lastOutboundAudioAt < 2000) return;
+      disarmOutboundSilenceWatch();
+      traceEvent(callId, "failsafe_silence_2s_outbound");
+      void speak("Still here — just making sure I didn’t miss anything.", epoch);
+    }, 500);
     // Fresh context for this entire response — all clauses share it via continue=true
     cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     let assembled = "";
@@ -766,6 +950,10 @@ export function createCallEngine(opts: EngineOptions): void {
       for await (const event of stream) {
         if (epoch !== generationEpoch || isEnded) break;
         if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
+          if (llmAckTimer) {
+            clearTimeout(llmAckTimer);
+            llmAckTimer = null;
+          }
           const delta = event.delta.text || "";
           assembled += delta;
           fullText += delta;
@@ -773,8 +961,14 @@ export function createCallEngine(opts: EngineOptions): void {
         }
       }
     } catch (e: any) {
+      disarmOutboundSilenceWatch();
       log(`[STREAM] Error: ${e.message}`);
       throw e;
+    } finally {
+      if (llmAckTimer) {
+        clearTimeout(llmAckTimer);
+        llmAckTimer = null;
+      }
     }
 
     // Flush only if we continued the context (continue:true). Single-clause replies use continue:false only,
@@ -792,11 +986,12 @@ export function createCallEngine(opts: EngineOptions): void {
     const cleanResponse = fullText.replace(/TOOL:\s*\w+\s*\{[^}]*\}/g, "").trim();
     if (cleanResponse) {
       appendHistory("assistant", cleanResponse);
-      callState = markQuestionAnswered(callState);
+      policyState = markQuestionAnswered(policyState);
     }
 
     // Handle tool calls
     await handleToolCalls(fullText, epoch);
+    disarmOutboundSilenceWatch();
     return { clean: cleanResponse, full: fullText };
   }
 
@@ -827,24 +1022,54 @@ export function createCallEngine(opts: EngineOptions): void {
 
     if (toolName === "end_call") {
       await speak("No problem, thanks for calling, have a great day.", epoch);
-      setTimeout(() => cleanup(), 1500);
+      setTimeout(() => void finalizeHard({ reason: "tool_end_call", outcome: "not_interested" }), 1500);
     } else if (toolName === "book_appointment") {
-      if (!canOfferBooking(callState)) {
+      if (!canOfferBooking(policyState)) {
         log("[TOOL] book_appointment blocked — policy");
         await speak("Got it. What day works for a quick call?", epoch);
         return;
       }
       try {
-        const { createManualAppointment } = await import("../db");
-        await (createManualAppointment as any)({
+        const { finalizeVoiceAppointmentBooking } = await import("../_core/services/voiceBookingPipeline");
+        const sess = activeSessionId ? voiceSessionManager.getSession(activeSessionId) : null;
+        const booked = await finalizeVoiceAppointmentBooking({
           leadId: activeLeadId || 0,
-          userId: activeUserId || 1,
-          scheduledAt: `${toolArgs.date || "TBD"} ${toolArgs.time || "TBD"}`,
-          notes: `AI booking. Caller: ${toolArgs.name}, Phone: ${toolArgs.phone}`,
-          status: "confirmed",
+          userId: activeUserId,
+          sessionId: activeSessionId,
+          callerPhone: sess?.callerPhone,
+          businessName: clientConfig.businessName,
+          toolArgs: {
+            name: toolArgs.name,
+            phone: toolArgs.phone,
+            date: toolArgs.date,
+            time: toolArgs.time,
+            service: toolArgs.service,
+            notes: toolArgs.notes,
+          },
+          transcriptSnippet: sess?.transcript?.slice(-2500),
         });
-        log(`[TOOL] Appointment booked for ${toolArgs.name}`);
-      } catch (e) { log(`[TOOL] Booking error: ${e}`); }
+        if (booked && booked.leadId > 0 && booked.leadId !== activeLeadId) {
+          activeLeadId = booked.leadId;
+        }
+        if (booked) {
+          log(`[TOOL] Appointment booked id=${booked.insertId} lead=${booked.leadId}`);
+          await speak(
+            "You're all set — I sent a text with your appointment time. Reply to that number if anything changes.",
+            epoch
+          );
+        } else {
+          log("[TOOL] Booking failed — no DB row");
+          await speak(
+            "I couldn't lock that into the calendar from here — someone from the team will call you shortly to confirm.",
+            epoch
+          );
+        }
+      } catch (e) {
+        log(`[TOOL] Booking error: ${e}`);
+        try {
+          await speak("Let me have someone call you back to finalize that time.", epoch);
+        } catch {}
+      }
     } else if (toolName === "save_lead") {
       try {
         const { updateLead } = await import("../db");
@@ -859,17 +1084,25 @@ export function createCallEngine(opts: EngineOptions): void {
     }
   }
 
-  // ── Cleanup ───────────────────────────────────────────────────────────────
-  async function cleanup(): Promise<void> {
+  // ── Hard finalize (call leg ended or irrecoverable stream) ───────────────
+  async function finalizeHard(opts: VoiceFinalizeOpts): Promise<void> {
     if (isEnded) return;
     isEnded = true;
-    log("Call cleanup");
+    clearStreamRecoveryTimer();
+    disarmOutboundSilenceWatch();
+    unregisterEngineFromMap();
+    log(`Call finalize: ${opts.reason}`);
+
+    if (activeSessionId) {
+      try {
+        voiceSessionManager.updateSession(activeSessionId, { callState: "closing", awaitingRecovery: false });
+      } catch {}
+    }
 
     // Auto-generate call summary in background
     if (conversationHistory.length > 1 && activeUserId) {
       const history = [...conversationHistory];
       const uid = activeUserId;
-      const lid = activeLeadId;
       setImmediate(async () => {
         try {
           const { generateCallSummaryFromTranscript } = await import("../_core/services/callSummaryService");
@@ -884,9 +1117,14 @@ export function createCallEngine(opts: EngineOptions): void {
     try { dgWs?.close(); } catch {}
     try { cartesiaWs?.close(); } catch {}
 
-    // Terminate SignalWire call
     const sid = callSid;
-    if (sid && ENV.signalwireSpaceUrl && ENV.signalwireProjectId && ENV.signalwireToken) {
+    if (
+      !opts.skipHangupApi &&
+      sid &&
+      ENV.signalwireSpaceUrl &&
+      ENV.signalwireProjectId &&
+      ENV.signalwireToken
+    ) {
       try {
         await fetch(
           `https://${ENV.signalwireSpaceUrl}/api/laml/2010-04-01/Accounts/${ENV.signalwireProjectId}/Calls/${sid}`,
@@ -901,7 +1139,7 @@ export function createCallEngine(opts: EngineOptions): void {
             body: "Status=completed",
           }
         );
-        log(`[CLEANUP] SignalWire call ${sid} terminated`);
+        log(`[FINALIZE] SignalWire call ${sid} terminated`);
       } catch {}
     }
 
@@ -909,7 +1147,7 @@ export function createCallEngine(opts: EngineOptions): void {
     if (activeSessionId) {
       const sessionIdForNotify = activeSessionId;
       try {
-        voiceSessionManager.completeSession(sessionIdForNotify);
+        voiceSessionManager.completeSession(sessionIdForNotify, opts.outcome);
         await voiceSessionManager.persistSessionToDatabase(sessionIdForNotify);
         void import("../_core/services/callOwnerNotifyService").then(({ notifyOwnerAfterVoiceCall }) =>
           notifyOwnerAfterVoiceCall(sessionIdForNotify)
@@ -931,6 +1169,14 @@ export function createCallEngine(opts: EngineOptions): void {
       log("SignalWire connected");
       traceEvent(callId, "ws_connected");
       ensureAudioPipeline();
+      if (activeSessionId) {
+        try {
+          voiceSessionManager.updateSession(activeSessionId, {
+            streamState: "connecting",
+            callState: "answered",
+          });
+        } catch {}
+      }
 
       // Keepalive
       keepaliveTimer = setInterval(() => {
@@ -944,11 +1190,23 @@ export function createCallEngine(opts: EngineOptions): void {
       // Pipeline already started on "connected" — don't call again or we get duplicate connections
       streamSid = msg.streamSid || msg.start?.streamSid || "";
       callSid = msg.start?.callSid || msg.callSid || streamSid;
+      clearStreamRecoveryTimer();
+      if (callSid) registerEngineForCallSid(callSid);
       const params = msg.start?.customParameters || msg.customParameters || {};
       if (params.sessionId) activeSessionId = String(params.sessionId);
       if (params.leadId !== undefined && params.leadId !== "")
         activeLeadId = parseInt(String(params.leadId), 10);
       if (sigWs) (sigWs as any)._callSid = callSid;
+      if (activeSessionId) {
+        try {
+          voiceSessionManager.updateSession(activeSessionId, {
+            callState: "in_progress",
+            streamState: "active",
+            awaitingRecovery: false,
+            callSid,
+          } as any);
+        } catch {}
+      }
       traceEvent(callId, "stream_start", {
         streamSid,
         callSid,
@@ -981,7 +1239,11 @@ export function createCallEngine(opts: EngineOptions): void {
           if (sess?.voiceProfileId) voiceProfile = resolveVoiceProfileForEngine(sess.voiceProfileId);
           if (sess?.userId) activeUserId = sess.userId ?? undefined;
           if (activeSessionId && callSid) {
-            voiceSessionManager.updateSession(activeSessionId, { callSid } as any);
+            voiceSessionManager.updateSession(activeSessionId, {
+              callSid,
+              callState: "in_progress",
+              streamState: "active",
+            } as any);
           }
         } catch (e) {
           log(`Session bind: ${e}`);
@@ -1026,6 +1288,13 @@ export function createCallEngine(opts: EngineOptions): void {
           turnCtl = onUserSpeechStart(turnCtl);
           generationEpoch++;
           stopSpeaking();
+          if (activeSessionId) {
+            const s = voiceSessionManager.getSession(activeSessionId);
+            if (s)
+              voiceSessionManager.updateSession(activeSessionId, {
+                interruptCount: (s.interruptCount ?? 0) + 1,
+              });
+          }
         } else if (energy <= th && !turnCtl.interruptRequested) {
           return;
         }
@@ -1037,11 +1306,10 @@ export function createCallEngine(opts: EngineOptions): void {
     }
 
     else if (event === "stop") {
-      log("Stream stopped");
-      await cleanup();
+      onMediaStreamStopped();
     }
   });
 
-  sigWs.on("close", () => { log("SignalWire WS closed"); cleanup(); });
-  sigWs.on("error", (e) => { log(`SignalWire error: ${e.message}`); cleanup(); });
+  sigWs.on("close", () => onSignalWireSocketEnded("close"));
+  sigWs.on("error", (e) => onSignalWireSocketEnded(`error:${e.message}`));
 }

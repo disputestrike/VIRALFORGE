@@ -77,6 +77,8 @@ export class VoiceRealtimePipeline {
   private _lastTranscript = "";  // for dedup check
   // Keepalive to prevent WS timeout
   private keepaliveTimer: NodeJS.Timeout | null = null;
+  /** Media stream stop/close is not call hangup — recover or timeout before DB finalize. */
+  private streamStopRecoveryTimer: NodeJS.Timeout | null = null;
 
   constructor(options: VoiceRealtimeOptions) {
     this.socket = options.socket;
@@ -97,7 +99,20 @@ export class VoiceRealtimePipeline {
     } catch (e) { this.logger.error("[PIPE] parse error", e); }
   }
 
-  handleClose(): void { this.cleanup(); if (this.sessionId) voiceSessionManager.endSession(this.sessionId); }
+  handleClose(): void {
+    this.logger.log("[PIPE] WebSocket closed — deferring cleanup (not immediate hangup)");
+    if (this.sessionId) {
+      try {
+        voiceSessionManager.updateSession(this.sessionId, {
+          streamState: "closed",
+          awaitingRecovery: true,
+        });
+      } catch {}
+    }
+    this.schedulePipelineStreamRecovery(() => {
+      if (this.sessionId) voiceSessionManager.endSession(this.sessionId);
+    });
+  }
   handleError(e: unknown): void { this.logger.error("[PIPE] error", e); }
 
   // ── START ─────────────────────────────────────────────────────────────────
@@ -121,8 +136,16 @@ export class VoiceRealtimePipeline {
     if (!voiceSessionManager.getSession(this.sessionId)) {
       voiceSessionManager.createSession(leadId ? parseInt(leadId, 10) : 0, "default", this.sessionId);
     }
-    // Store callSid in session so transfer tool can use it
-    voiceSessionManager.updateSession(this.sessionId, { callSid } as any);
+    if (this.streamStopRecoveryTimer) {
+      clearTimeout(this.streamStopRecoveryTimer);
+      this.streamStopRecoveryTimer = null;
+    }
+    voiceSessionManager.updateSession(this.sessionId, {
+      callSid,
+      streamState: "active",
+      awaitingRecovery: false,
+      callState: "in_progress",
+    } as any);
 
     // Connect Deepgram live WebSocket for streaming VAD STT
     this.connectDeepgram();
@@ -468,12 +491,35 @@ export class VoiceRealtimePipeline {
     }, 25000);
   }
 
+  private schedulePipelineStreamRecovery(onTimeout: () => void): void {
+    if (this.streamStopRecoveryTimer) clearTimeout(this.streamStopRecoveryTimer);
+    this.streamStopRecoveryTimer = setTimeout(() => {
+      this.streamStopRecoveryTimer = null;
+      const s = this.sessionId ? voiceSessionManager.getSession(this.sessionId) : null;
+      if (s?.callState === "in_progress" && s.streamState !== "active") {
+        this.cleanup();
+        onTimeout();
+      }
+    }, 5000);
+  }
+
   private handleStop(): void {
-    this.cleanup();
+    this.logger.log("[PIPE] Stream stop — deferring session finalize");
+    this.streamSid = null;
     if (this.sessionId) {
-      voiceSessionManager.completeSession(this.sessionId);
-      void this.sendCallSummaryToOwner();
+      try {
+        voiceSessionManager.updateSession(this.sessionId, {
+          streamState: "stopped",
+          awaitingRecovery: true,
+        });
+      } catch {}
     }
+    this.schedulePipelineStreamRecovery(() => {
+      if (this.sessionId) {
+        voiceSessionManager.completeSession(this.sessionId);
+        void this.sendCallSummaryToOwner();
+      }
+    });
   }
 
   private async sendCallSummaryToOwner(): Promise<void> {
@@ -758,22 +804,32 @@ export class VoiceRealtimePipeline {
 
     switch (name) {
       case "book_appointment": {
-        // Wire to ApexAI appointment booking
         try {
-          const db = await import("../../db");
-          const leadId = session?.leadId;
-          if (leadId && leadId > 0) {
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(10, 0, 0, 0);
-            await db.createManualAppointment({
-              leadId,
-              scheduledTime: tomorrow,
-              notes: `Booked via voice call. ${JSON.stringify(args)}`,
-            });
-          }
-        } catch (e) { this.logger.error("[TOOL:book] DB error", e); }
-        return JSON.stringify({ ok: true, message: "Appointment scheduled." });
+          const { finalizeVoiceAppointmentBooking } = await import("./voiceBookingPipeline");
+          const booked = await finalizeVoiceAppointmentBooking({
+            leadId: session?.leadId || 0,
+            userId: session?.userId ?? undefined,
+            sessionId: this.sessionId || undefined,
+            callerPhone: session?.callerPhone,
+            businessName: undefined,
+            toolArgs: {
+              name: typeof args.name === "string" ? args.name : undefined,
+              phone: typeof args.phone === "string" ? args.phone : undefined,
+              date: typeof args.date === "string" ? args.date : undefined,
+              time: typeof args.time === "string" ? args.time : undefined,
+              service: typeof args.service === "string" ? args.service : undefined,
+              notes: typeof args.notes === "string" ? args.notes : undefined,
+            },
+            transcriptSnippet: session?.transcript?.slice(-2500),
+          });
+          return JSON.stringify({
+            ok: !!booked,
+            message: booked ? "Appointment saved; customer SMS and reminders queued." : "Booking failed",
+          });
+        } catch (e) {
+          this.logger.error("[TOOL:book] error", e);
+          return JSON.stringify({ ok: false, message: String(e) });
+        }
       }
 
       case "save_lead": {
@@ -1038,6 +1094,10 @@ TOOL: end_call {}`;
   private audioSize(): number { return this.audioChunks.reduce((s, c) => s + c.length, 0); }
 
   private cleanup(): void {
+    if (this.streamStopRecoveryTimer) {
+      clearTimeout(this.streamStopRecoveryTimer);
+      this.streamStopRecoveryTimer = null;
+    }
     if (this.silenceTimer) clearTimeout(this.silenceTimer);
     if (this.speakingTimeout) clearTimeout(this.speakingTimeout);
     if (this.replyStartTimer) clearTimeout(this.replyStartTimer);

@@ -28,6 +28,7 @@ const DEEPGRAM_AGENT_URL = "wss://agent.deepgram.com/v1/agent/converse";
 interface CallState {
   callId: string;
   streamSid: string;
+  callSid?: string;
   sigWs: WebSocket;           // SignalWire WebSocket
   dgWs: WebSocket | null;     // Deepgram Voice Agent WebSocket
   userId?: number;
@@ -37,6 +38,7 @@ interface CallState {
   industry?: string;
   isEnded: boolean;
   keepaliveTimer: NodeJS.Timeout | null;
+  streamRecoveryTimer: NodeJS.Timeout | null;
   logger: (msg: string) => void;
 }
 
@@ -284,19 +286,28 @@ async function handleToolCall(state: CallState, msg: any): Promise<void> {
 
   try {
     if (function_name === "book_appointment") {
-      // Write to DB
       try {
-        const { createManualAppointment } = await import("../db");
-        await (createManualAppointment as any)({
+        const { finalizeVoiceAppointmentBooking } = await import("../_core/services/voiceBookingPipeline");
+        const booked = await finalizeVoiceAppointmentBooking({
           leadId: state.leadId || 0,
-          userId: state.userId || 1,
-          scheduledAt: `${input.date || "TBD"} ${input.time || "TBD"}`,
-          notes: `Booked by AI. Caller: ${input.name}, Phone: ${input.phone}`,
-          status: "confirmed",
+          userId: state.userId,
+          sessionId: state.sessionId,
+          callerPhone: undefined,
+          businessName: state.businessName,
+          toolArgs: {
+            name: input.name,
+            phone: input.phone,
+            date: input.date,
+            time: input.time,
+            service: input.service,
+            notes: input.notes,
+          },
         });
-        result = { ok: true, message: `Appointment booked for ${input.name} at ${input.date} ${input.time}` };
+        result = booked
+          ? { ok: true, message: `Appointment booked for ${input.name}` }
+          : { ok: false, message: "Could not save appointment — team will follow up" };
       } catch (dbErr) {
-        result = { ok: true, message: `Appointment recorded for ${input.name}` };
+        result = { ok: false, message: String(dbErr) };
       }
     } else if (function_name === "end_call") {
       result = { ok: true, message: "Ending call" };
@@ -326,6 +337,10 @@ async function cleanupCall(state: CallState): Promise<void> {
 
   state.logger("[CALL] Cleaning up call");
 
+  if (state.streamRecoveryTimer) {
+    clearTimeout(state.streamRecoveryTimer);
+    state.streamRecoveryTimer = null;
+  }
   if (state.keepaliveTimer) {
     clearInterval(state.keepaliveTimer);
     state.keepaliveTimer = null;
@@ -341,6 +356,23 @@ async function cleanupCall(state: CallState): Promise<void> {
       await voiceSessionManager.persistSessionToDatabase(state.sessionId);
     } catch {}
   }
+}
+
+function scheduleStreamRecoveryCleanup(state: CallState): void {
+  if (state.streamRecoveryTimer) clearTimeout(state.streamRecoveryTimer);
+  state.streamRecoveryTimer = setTimeout(() => {
+    state.streamRecoveryTimer = null;
+    if (state.isEnded) return;
+    const sess = state.sessionId ? voiceSessionManager.getSession(state.sessionId) : null;
+    if (
+      sess &&
+      sess.callState === "in_progress" &&
+      sess.streamState !== "active"
+    ) {
+      state.logger("[CALL] Stream recovery timeout — cleanup");
+      void cleanupCall(state);
+    }
+  }, 5000);
 }
 
 // ── Main handler — called from SignalWire WebSocket ───────────────────────────
@@ -369,6 +401,7 @@ export function handleSignalWireSocket(
     industry: options.industry,
     isEnded: false,
     keepaliveTimer: null,
+    streamRecoveryTimer: null,
     logger,
   };
 
@@ -401,7 +434,23 @@ export function handleSignalWireSocket(
     else if (event === "start") {
       state.streamSid = msg.streamSid || msg.start?.streamSid || "";
       const callSid = msg.start?.callSid || msg.callSid || state.streamSid;
+      state.callSid = callSid;
       logger(`Stream started: streamSid=${state.streamSid} callSid=${callSid}`);
+
+      if (state.streamRecoveryTimer) {
+        clearTimeout(state.streamRecoveryTimer);
+        state.streamRecoveryTimer = null;
+      }
+      if (state.sessionId) {
+        try {
+          voiceSessionManager.updateSession(state.sessionId, {
+            streamState: "active",
+            awaitingRecovery: false,
+            callState: "in_progress",
+            callSid,
+          } as any);
+        } catch {}
+      }
 
       // Store callSid for end_call REST API
       (sigWs as any)._callSid = callSid;
@@ -420,8 +469,17 @@ export function handleSignalWireSocket(
     }
 
     else if (event === "stop") {
-      logger("SignalWire stream stopped");
-      cleanupCall(state);
+      logger("SignalWire stream stopped — deferring cleanup (media ≠ call lifecycle)");
+      state.streamSid = "";
+      if (state.sessionId) {
+        try {
+          voiceSessionManager.updateSession(state.sessionId, {
+            streamState: "stopped",
+            awaitingRecovery: true,
+          });
+        } catch {}
+      }
+      scheduleStreamRecoveryCleanup(state);
     }
 
     else if (event === "mark") {
@@ -430,12 +488,30 @@ export function handleSignalWireSocket(
   });
 
   sigWs.on("close", () => {
-    logger("SignalWire WebSocket closed");
-    cleanupCall(state);
+    logger("SignalWire WebSocket closed — deferring cleanup");
+    state.streamSid = "";
+    if (state.sessionId) {
+      try {
+        voiceSessionManager.updateSession(state.sessionId, {
+          streamState: "closed",
+          awaitingRecovery: true,
+        });
+      } catch {}
+    }
+    scheduleStreamRecoveryCleanup(state);
   });
 
   sigWs.on("error", (err) => {
-    logger(`SignalWire error: ${err.message}`);
-    cleanupCall(state);
+    logger(`SignalWire error: ${err.message} — deferring cleanup`);
+    state.streamSid = "";
+    if (state.sessionId) {
+      try {
+        voiceSessionManager.updateSession(state.sessionId, {
+          streamState: "closed",
+          awaitingRecovery: true,
+        });
+      } catch {}
+    }
+    scheduleStreamRecoveryCleanup(state);
   });
 }

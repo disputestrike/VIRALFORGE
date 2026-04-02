@@ -18,7 +18,12 @@ export type VoiceTracePhase =
   | "tts_first_chunk"
   | "hangup_signal"
   | "cleanup"
-  | "barge_in_energy";
+  | "barge_in_energy"
+  | "stream_recovery_timeout"
+  | "media_stream_stopped"
+  | "sigws_ended"
+  | "llm_slow_ack_800ms"
+  | "failsafe_silence_2s_outbound";
 
 const starts = new Map<string, number>();
 

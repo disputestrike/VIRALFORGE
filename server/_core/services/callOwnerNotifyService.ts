@@ -40,8 +40,13 @@ export async function notifyOwnerAfterVoiceCall(sessionId: string): Promise<void
     const last = callerLines[callerLines.length - 1] || "";
     const transcript = session.transcript?.trim() || "";
 
+    const bookingLine =
+      session.appointmentBooked && session.appointmentId
+        ? `✅ Appointment booked (id ${session.appointmentId})`
+        : null;
     const summaryBlock = [
       `📞 ApexAI — call ended`,
+      bookingLine,
       `Turns: ${history.length}`,
       first ? `First: "${first.slice(0, 120)}${first.length > 120 ? "…" : ""}"` : null,
       last && last !== first ? `Last: "${last.slice(0, 120)}${last.length > 120 ? "…" : ""}"` : null,
@@ -69,7 +74,9 @@ export async function notifyOwnerAfterVoiceCall(sessionId: string): Promise<void
       await resend.emails.send({
         from: ENV.resendFromHeader,
         to: email,
-        subject: `Call transcript — ${new Date(session.startTime).toLocaleString()}`,
+        subject: session.appointmentBooked
+          ? `Call + booking — ${new Date(session.startTime).toLocaleString()}`
+          : `Call transcript — ${new Date(session.startTime).toLocaleString()}`,
         html: `<p style="font-family:system-ui,sans-serif;color:#333">Full transcript:</p><pre style="font-family:system-ui,sans-serif;white-space:pre-wrap;background:#f6f6f6;padding:12px;border-radius:8px">${escapeHtml(transcript)}</pre>`,
       });
       console.log(`[CallOwnerNotify] Email transcript sent`);

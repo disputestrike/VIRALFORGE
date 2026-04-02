@@ -14,7 +14,7 @@ import { apiRateLimiter, aiRateLimiter, authRateLimiter, webhookRateLimiter } fr
 import * as voiceProcessingService from "./services/voiceProcessingService";
 import { startSessionPersistenceInterval } from "./services/voiceSessionManager";
 // Live calls: realtimeVoiceEngine — Deepgram STT → Anthropic Claude (Haiku) → Cartesia TTS.
-import { createCallEngine } from "../realtime/realtimeVoiceEngine";
+import { createCallEngine, notifyVoiceCallTerminalFromHttp } from "../realtime/realtimeVoiceEngine";
 import { getUsRingtoneWav } from "./telephony/usRingtoneWav";
 import { registerWebchatPublicRoutes } from "./webchatPublicApi";
 
@@ -250,22 +250,26 @@ async function startServer() {
       "sms",
       async (job) => {
         const jobStart = Date.now();
-        const { phone, type, leadName, scheduledTime, msgId } = job.data;
+        const { phone, type, leadName, scheduledTime, msgId, body: bodyOverride } = job.data;
         console.log(`[SMSWorker] ▶ QUEUED→PROCESSING | jobId: ${job.id} | type: ${type} | phone: ${phone} | leadId: ${job.data.leadId} | msgId: ${msgId || "none"}`);
         const dbMod = await import("../db");
         try {
           const { default: swService } = await import("./services/signalwireService");
 
-          let message = "";
-          if (type === "appointment_confirmation") {
+          let message = typeof bodyOverride === "string" && bodyOverride.trim() ? bodyOverride.trim() : "";
+          if (!message && type === "appointment_confirmation") {
             message = `Hi ${leadName || "there"}! Your appointment is confirmed for ${scheduledTime || "your scheduled time"}. Reply STOP to cancel.`;
-          } else if (type === "appointment_reminder") {
+          }
+          if (!message && type === "appointment_reminder") {
             message = `Reminder ${leadName || "there"}: Your appointment is ${scheduledTime || "coming up"}. See you soon!`;
-          } else if (type === "follow_up") {
+          }
+          if (!message && type === "follow_up") {
             message = `Hi ${leadName || "there"}! Following up on our call. Still interested? Reply YES or let me know how I can help.`;
-          } else if (type === "no_show_followup") {
+          }
+          if (!message && type === "no_show_followup") {
             message = `Hi ${leadName || "there"}, we missed you at your appointment. Would you like to reschedule?`;
-          } else {
+          }
+          if (!message) {
             message = `Hi ${leadName || "there"}, this is a message from ApexAI.`;
           }
 
@@ -635,11 +639,17 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
 </Response>`);
   });
 
-  app.post("/api/voice/status", validateTwilioSignature, (req, res) => {
-    console.log("[Voice] Status callback:", {
-      CallSid: req.body.CallSid,
-      CallStatus: req.body.CallStatus,
-    });
+  app.post("/api/voice/status", validateTwilioSignature, async (req, res) => {
+    const CallSid = req.body.CallSid as string | undefined;
+    const CallStatus = req.body.CallStatus as string | undefined;
+    console.log("[Voice] Status callback:", { CallSid, CallStatus });
+    if (CallSid && CallStatus) {
+      try {
+        await notifyVoiceCallTerminalFromHttp(CallSid, CallStatus);
+      } catch (e) {
+        console.error("[Voice] notifyVoiceCallTerminalFromHttp:", e);
+      }
+    }
     res.send("OK");
   });
 

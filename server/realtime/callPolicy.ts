@@ -12,7 +12,8 @@ export type ConversationMode =
   | "close"
   | "handoff";
 
-export interface CallState {
+/** Per-turn conversation policy (modes, questions, booking gates). Not telephony call lifecycle. */
+export interface ConversationPolicyState {
   mode: ConversationMode;
   activeQuestion: string | null;
   questionAnswered: boolean;
@@ -23,7 +24,10 @@ export interface CallState {
   endCallRequested: boolean;
 }
 
-export function createCallState(): CallState {
+/** @deprecated Prefer ConversationPolicyState — name kept for imports across the codebase. */
+export type CallState = ConversationPolicyState;
+
+export function createCallState(): ConversationPolicyState {
   return {
     mode: "answer",
     activeQuestion: null,
@@ -143,7 +147,7 @@ export function isComplexTurn(transcript: string): boolean {
   ].some(k => t.includes(k));
 }
 
-export function updateCallState(state: CallState, transcript: string): CallState {
+export function updateCallState(state: ConversationPolicyState, transcript: string): ConversationPolicyState {
   const updated = { ...state };
   updated.turnCount++;
 
@@ -189,7 +193,7 @@ export function updateCallState(state: CallState, transcript: string): CallState
   return updated;
 }
 
-export function markQuestionAnswered(state: CallState): CallState {
+export function markQuestionAnswered(state: ConversationPolicyState): ConversationPolicyState {
   const updated = { ...state };
   updated.questionAnswered = true;
   updated.activeQuestion = null;
