@@ -25,7 +25,7 @@ const customerRouter = router({
     )
     .mutation(async ({ input }) => {
       // Create as a lead for follow-up, real customer onboards via Google OAuth + Stripe
-      const { createLead } = await import("../../db");
+      const { createLead } = await import("../db");
       const { insertId } = await createLead({
         firstName: input.companyName,
         lastName: "Signup",
@@ -42,7 +42,7 @@ const customerRouter = router({
     }),
 
   get: protectedProcedure.query(async ({ ctx }) => {
-    const { getUserById } = await import("../../db");
+    const { getUserById } = await import("../db");
     const user = await getUserById(ctx.user.id);
     if (!user) throw new TRPCError({ code: "NOT_FOUND" });
     return {
@@ -54,7 +54,7 @@ const customerRouter = router({
   }),
 
   getUsage: protectedProcedure.query(async ({ ctx }) => {
-    const { getGlobalMetrics } = await import("../../db");
+    const { getGlobalMetrics } = await import("../db");
     const m = await getGlobalMetrics(ctx.user.id);
     const limit = 50000; // default plan limit
     return {
@@ -81,7 +81,7 @@ const dashboardRouter = router({
   stats: protectedProcedure
     .input(z.object({ dateRange: z.enum(["today", "week", "month", "year"]).default("month") }))
     .query(async ({ ctx }) => {
-      const { getGlobalMetrics, getDashboardBreakdown } = await import("../../db");
+      const { getGlobalMetrics, getDashboardBreakdown } = await import("../db");
       const m = await getGlobalMetrics(ctx.user.id);
       const bd = await getDashboardBreakdown(ctx.user.id);
       return {
@@ -175,12 +175,12 @@ const leadsRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      const { getLeads } = await import("../../db");
+      const { getLeads } = await import("../db");
       return getLeads({ limit: input.limit, offset: input.offset, userId: ctx.user.id });
     }),
 
   get: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
-    const { getLeadById } = await import("../../db");
+    const { getLeadById } = await import("../db");
     return getLeadById(input.id) ?? null;
   }),
 });
