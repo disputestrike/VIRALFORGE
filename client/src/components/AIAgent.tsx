@@ -1,11 +1,10 @@
 /**
  * AI Agent — floating assistant available on every authenticated page
- * Context-aware, uses Anthropic via the existing voiceAI.generateScript endpoint pattern
+ * Context-aware; answers are produced server-side from live account data
  * Does NOT change any existing page UI — purely additive
  */
 
 import { useState, useRef, useEffect } from "react";
-import { trpc } from "@/lib/trpc";
 import { Bot, X, Send, Minimize2, Maximize2, Loader2, ChevronDown } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -31,8 +30,8 @@ const SUGGESTED_QUESTIONS = [
   "How many leads do I have?",
   "Why can't I make calls yet?",
   "How do I generate a script?",
-  "What keys do I still need?",
-  "How does the AI call pipeline work?",
+  "Why isn’t my account fully set up yet?",
+  "How do AI phone calls work?",
 ];
 
 export default function AIAgent() {
@@ -45,9 +44,6 @@ export default function AIAgent() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { data: stats } = trpc.appointments.stats.useQuery();
-  const { data: leadsData } = trpc.leads.list.useQuery({ limit: 1 } as any);
-
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -55,36 +51,6 @@ export default function AIAgent() {
   useEffect(() => {
     if (open && !minimized) inputRef.current?.focus();
   }, [open, minimized]);
-
-  const buildSystemPrompt = () => {
-    const pageCtx = PAGE_CONTEXT[location] || `The user is on the ${location} page.`;
-    return `You are ApexAI's built-in assistant — a helpful, direct AI agent embedded in the ApexAI sales automation platform.
-
-Current page: ${pageCtx}
-
-Platform status:
-- Total appointments: ${stats?.total ?? "unknown"}
-- Upcoming appointments: ${stats?.upcoming ?? "unknown"}
-- Show rate: ${stats?.showRate ?? "unknown"}%
-
-You help users:
-- Understand how to use any feature on the current page
-- Diagnose why something isn't working (missing API keys, config issues)
-- Navigate to the right page for what they need
-- Understand how AI calls, appointments, campaigns, and leads work
-
-Key facts about ApexAI:
-- AI calls need: SIGNALWIRE_PROJECT_ID, SIGNALWIRE_TOKEN, SIGNALWIRE_SPACE_URL, SIGNALWIRE_PHONE_NUMBER, CARTESIA_API_KEY for TTS, DEEPGRAM_API_KEY (or OPENAI_API_KEY for Whisper), and CEREBRAS_API_KEY_* for replies
-- Script generation uses: ANTHROPIC_API_KEY (already set if AI features work)
-- Email needs: RESEND_API_KEY
-- Voice transcription uses: OPENAI_API_KEY (Whisper)
-- Appointments are booked automatically when the AI detects a prospect agreeing to a time during a call
-- Leads move through pipeline: new → contacted → qualified → converted
-- Google Calendar booking URL goes in VITE_GCAL_BOOKING_URL Railway variable
-
-Be concise, friendly, and specific. If a feature isn't working, tell them exactly which key to add in Railway Variables.
-Never make up information. If you don't know something, say so.`;
-  };
 
   const sendMessage = async (userMessage: string) => {
     if (!userMessage.trim() || loading) return;

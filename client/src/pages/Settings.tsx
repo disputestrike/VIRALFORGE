@@ -460,7 +460,7 @@ export default function Settings() {
             <p className="text-xs text-muted-foreground">Loading…</p>
           ) : (phoneNumbers?.length ?? 0) === 0 ? (
             <p className="text-xs text-muted-foreground">
-              No dedicated numbers yet. Complete the onboarding step to provision a SignalWire line, or your account may use a legacy pool.
+              No dedicated numbers yet. Complete the onboarding step to provision a phone line, or your account may use a legacy pool.
             </p>
           ) : (
             <ul className="space-y-2">
@@ -508,7 +508,7 @@ export default function Settings() {
           <p className="text-sm text-muted-foreground">
             Subscriptions are billed through Stripe. Set <code className="text-xs">STRIPE_SECRET_KEY</code>,{" "}
             <code className="text-xs">STRIPE_PRICE_STARTER|GROWTH|ENTERPRISE</code>, and{" "}
-            <code className="text-xs">STRIPE_WEBHOOK_SECRET</code> on Railway; webhook URL:{" "}
+            <code className="text-xs">STRIPE_WEBHOOK_SECRET</code> in your deployment environment; webhook URL:{" "}
             <code className="text-xs break-all">{typeof window !== "undefined" ? `${window.location.origin}/api/stripe/webhook` : "/api/stripe/webhook"}</code>
           </p>
           {billingStatus && typeof billingStatus === "object" && "stripeConfigured" in billingStatus ? (
@@ -579,8 +579,7 @@ export default function Settings() {
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
             Required training sources: <strong>website</strong> (we also read og:title, description, logo, theme-color for branding),{" "}
-            <strong>PDF</strong> by URL or file upload, and <strong>plain-text</strong> by URL. Text is chunked and embedded with{" "}
-            <span className="font-mono text-xs">OPENAI_API_KEY</span> on Railway; chunks and branding feed live voice calls.
+            <strong>PDF</strong> by URL or file upload, and <strong>plain-text</strong> by URL. Text is chunked and embedded when your workspace has embedding configured; chunks and branding feed live voice calls.
           </p>
           <div className="flex flex-wrap gap-2 items-end">
             <div className="flex-1 min-w-[160px] space-y-1.5">
@@ -1985,7 +1984,7 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Choose the Cartesia voice your AI uses on every live call.
+            Choose the voice profile your AI uses on every live call.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2011,8 +2010,10 @@ export default function Settings() {
                     </span>
                     <span className="text-xs text-muted-foreground capitalize">{v.presentation}</span>
                     <span className="text-xs text-muted-foreground">·</span>
-                    <span className={`text-xs font-medium ${v.provider === "cartesia" ? "text-green-400" : "text-yellow-400"}`}>
-                      {v.provider === "cartesia" ? "⚡ Fast" : "✦ Premium"}
+                    <span
+                      className={`text-xs font-medium ${v.telephonyOptimized ? "text-green-400" : "text-yellow-400"}`}
+                    >
+                      {v.telephonyOptimized ? "⚡ Phone-optimized" : "✦ Studio"}
                     </span>
                   </div>
                 </button>

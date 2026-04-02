@@ -33,10 +33,32 @@ export type NavMegaItem = {
   icon?: LucideIcon;
 };
 
+/** Languages available for AI conversations (same set as Settings → language). */
+export const SUPPORTED_CONVERSATION_LANGUAGES = [
+  { code: "en", name: "English" },
+  { code: "es", name: "Spanish" },
+  { code: "fr", name: "French" },
+  { code: "de", name: "German" },
+  { code: "pt", name: "Portuguese" },
+  { code: "it", name: "Italian" },
+  { code: "nl", name: "Dutch" },
+  { code: "pl", name: "Polish" },
+  { code: "ru", name: "Russian" },
+  { code: "zh", name: "Chinese (Mandarin)" },
+  { code: "ja", name: "Japanese" },
+  { code: "ko", name: "Korean" },
+] as const;
+
+export const CONVERSATION_LANGUAGE_COUNT = SUPPORTED_CONVERSATION_LANGUAGES.length;
+
+/** Readable list for hero, demos, and footers (no code names). */
+export const SUPPORTED_LANGUAGES_MARKETING_LIST =
+  "English, Spanish, French, German, Portuguese, Italian, Dutch, Polish, Russian, Chinese (Mandarin), Japanese, and Korean";
+
 export const platformOverview = {
   title: "The ApexAI platform",
   subtitle:
-    "Unified communications for revenue teams: inbound and outbound voice, SMS, and email — one knowledge base, one CRM, one place to measure outcomes. Built for businesses that win or lose on the phone.",
+    "Unified communications for revenue teams: inbound and outbound voice, SMS, and email — one knowledge base, one CRM, one place to measure outcomes. Built for businesses that win or lose on the phone. Run conversations in 12 languages (Spanish, French, German, and more); set your default in Settings.",
 };
 
 /** Landing: omnichannel / “one brain” narrative (no competitor names). */
@@ -285,14 +307,14 @@ export const resourcesNav: NavMegaItem[] = [
   { href: "/about", title: "About ApexAI", description: "Why we built inbound + outbound in one product." },
 ];
 
-/** Mirrors `docs/integration/CROSSWALK.md` Part 1 (rows 1–20) — product surface in Settings + core flows */
+/** In-product capabilities surfaced in Settings and core flows (marketing grid). */
 export const platformCapabilities: { title: string; blurb: string }[] = [
   { title: "Dedicated phone numbers", blurb: "Provision and activate lines per tenant; inbound SMS routes to your account." },
   { title: "Knowledge base", blurb: "Upload and crawl sources so voice answers from your facts." },
   { title: "CRM & lead capture", blurb: "Leads, scoring hooks, and pipelines inside the app." },
   { title: "AI call summaries", blurb: "Post-call summaries on recordings for coaching and CRM." },
   { title: "Lead scoring", blurb: "Configurable rules that run when leads are created." },
-  { title: "Voice profiles", blurb: "Multiple Cartesia voices; per-user selection in Settings." },
+  { title: "Voice profiles", blurb: "Multiple unique voice profiles; per-user selection in Settings." },
   { title: "Spam & blocklist", blurb: "Inbound rejection patterns to protect your lines." },
   { title: "Escalation rules", blurb: "Keyword routing to human transfer when needed." },
   { title: "Zapier", blurb: "Outbound webhooks for lead created and call completed." },
@@ -307,6 +329,10 @@ export const platformCapabilities: { title: string; blurb: string }[] = [
   { title: "RCS readiness", blurb: "Carrier registration data model for rich messaging." },
   { title: "Webchat widgets", blurb: "Embeddable chat that captures leads into the same CRM." },
   { title: "Analytics dashboard", blurb: "Dashboard breakdowns, snapshots, and funnel metrics." },
+  {
+    title: "Multilingual conversations",
+    blurb: `Default call language in Settings — ${CONVERSATION_LANGUAGE_COUNT} options including Spanish, French, German, Portuguese, and more.`,
+  },
 ];
 
 /** Exact bullets from Pricing.tsx — inbound / outbound plans */

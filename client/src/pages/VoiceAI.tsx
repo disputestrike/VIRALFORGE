@@ -93,8 +93,8 @@ export default function VoiceAI() {
       toast.success("Script generated — fully personalized with your company details");
     },
     onError: (e) => {
-      if (e.message.includes("BUILT_IN_FORGE_API_KEY")) {
-        toast.error("AI not configured — add BUILT_IN_FORGE_API_KEY to Railway Variables");
+      if (e.message.includes("BUILT_IN_FORGE_API_KEY") || e.message.toLowerCase().includes("not configured")) {
+        toast.error("AI script generation isn’t available — ask your workspace admin to finish AI setup.");
       } else {
         toast.error(e.message);
       }

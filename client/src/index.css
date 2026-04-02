@@ -54,7 +54,7 @@
   --chart-4: oklch(0.6 0.2 310);
   --chart-5: oklch(0.55 0.22 25);
   --radius: 0.5rem;
-  /* Dark mode (default) — softened from pure black to dark gray like Cartesia */
+  /* Dark mode (default) — softened from pure black to dark gray */
   --background: oklch(0.13 0.01 260);
   --foreground: oklch(0.96 0.005 260);
   --card: oklch(0.16 0.012 260);

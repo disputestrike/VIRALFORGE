@@ -19,7 +19,7 @@ const compliance = [
     label: "SOC 2 Ready",
     color: GREEN,
     heading: "SOC 2 Ready — Security Controls",
-    body: "ApexAI is built on Railway infrastructure, which is SOC 2 Type II certified. Our access controls, audit logging, data isolation, and encryption-in-transit meet the Trust Service Criteria for Security, Availability, and Confidentiality. Every user account is fully siloed — no cross-tenant data access is possible.",
+    body: "ApexAI runs on enterprise-grade cloud infrastructure with SOC 2 Type II certified controls. Our access controls, audit logging, data isolation, and encryption-in-transit meet the Trust Service Criteria for Security, Availability, and Confidentiality. Every user account is fully siloed — no cross-tenant data access is possible.",
     items: [
       "Role-based access control (RBAC)",
       "Tenant data isolation on all queries",

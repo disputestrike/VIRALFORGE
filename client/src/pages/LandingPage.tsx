@@ -11,6 +11,7 @@ import LandingTestimonialCarousel from "@/components/marketing/LandingTestimonia
 import ApexLogo from "@/components/branding/ApexLogo";
 import { landingColors as C } from "@/components/marketing/landingTheme";
 import {
+  CONVERSATION_LANGUAGE_COUNT,
   platformCapabilities,
   platformOverview,
   platformPillars,
@@ -19,6 +20,7 @@ import {
   productFeatures,
   scaleWithApexSection,
   solutionsByIndustry,
+  SUPPORTED_LANGUAGES_MARKETING_LIST,
   trustEnterpriseBullets,
   unifiedCommunicationsSection,
 } from "@/components/marketing/siteContent";
@@ -215,11 +217,7 @@ export default function LandingPage() {
         <div className="pointer-events-none absolute left-1/2 top-[8%] h-[420px] w-[780px] -translate-x-1/2 bg-[radial-gradient(ellipse,rgba(29,111,244,0.12)_0%,transparent_65%)]" />
         <div className="relative mx-auto max-w-3xl">
           <div className="mb-6 flex justify-center sm:mb-8">
-            <ApexLogo variant="full" size="lg" imgClassName="rounded-md border border-white/10 px-3 py-1.5" />
-          </div>
-          <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-200">
-            <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />
-            Live — production lines answering now
+            <ApexLogo variant="mark" size="lg" imgClassName="rounded-md border border-white/10 px-3 py-1.5" />
           </div>
           <h1 className="text-balance text-4xl font-black leading-[1.08] tracking-tight md:text-6xl md:leading-[1.05]">
             Inbound and outbound AI voice.
@@ -245,7 +243,7 @@ export default function LandingPage() {
               { value: "< 1s", label: "Typical pickup" },
               { value: "24/7", label: "Inbound coverage" },
               { value: "1 brain", label: "Voice + SMS + email" },
-              { value: "8+", label: "Cartesia voices" },
+              { value: "8+", label: "Unique voices" },
             ].map((s) => (
               <div key={s.label}>
                 <div className="text-2xl font-black text-blue-300">{s.value}</div>
@@ -253,6 +251,11 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+          <p className="mx-auto mt-8 max-w-2xl text-pretty text-sm font-medium leading-relaxed text-blue-300/90">
+            <span className="text-white">{CONVERSATION_LANGUAGE_COUNT} conversation languages</span>
+            <span className="text-zinc-500"> — </span>
+            {SUPPORTED_LANGUAGES_MARKETING_LIST}.
+          </p>
         </div>
       </section>
 
@@ -439,14 +442,14 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* CROSSWALK-aligned capabilities (Settings + core flows) */}
+      {/* Capabilities grid — matches in-app Settings and core flows */}
       <section id="capabilities" className="scroll-mt-24 border-b border-white/20 bg-black px-6 py-20 md:py-24">
         <div className="mx-auto max-w-6xl">
           <div className="mx-auto mb-12 max-w-2xl text-center">
             <p className="text-xs font-bold uppercase tracking-wider text-blue-400">Full product surface</p>
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">Everything we ship in the product</h2>
             <p className="mt-4 text-lg text-zinc-300">
-              One account ties together voice, SMS, email campaigns, CRM, knowledge, and integrations — so your team does not juggle disconnected tools. Mirrors our integration crosswalk (20 core capabilities).
+              One account ties together voice, SMS, email campaigns, CRM, knowledge, and integrations — so your team does not juggle disconnected tools. Includes multilingual calls, webchat, analytics, and the rest of the stack below.
             </p>
           </div>
           <div className="mb-14 grid gap-6 lg:grid-cols-2">
@@ -477,9 +480,6 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
-          <p className="mt-8 text-center text-xs text-zinc-500">
-            Detailed status: <code className="rounded bg-white/5 px-1.5 py-0.5 text-zinc-400">docs/integration/CROSSWALK.md</code>
-          </p>
         </div>
       </section>
 

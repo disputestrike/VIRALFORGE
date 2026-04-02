@@ -1,11 +1,12 @@
 import { useState, useRef } from "react";
 import { Play, Pause, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CONVERSATION_LANGUAGE_COUNT, SUPPORTED_LANGUAGES_MARKETING_LIST } from "@/components/marketing/siteContent";
 
 const D2 = "#000000";
 const BLUE = "#1d6ff4";
 const BLUE_LIGHT = "#60a5fa";
-const GREEN = "#34d399";
+const EMERALD = "#34d399";
 const DIM2 = "rgba(255,255,255,0.55)";
 const DIM3 = "rgba(255,255,255,0.22)";
 
@@ -15,8 +16,23 @@ function sampleUrl(fileBase: string): string {
   return `${prefix}audio-samples/${fileBase}.mp3`;
 }
 
-/** Local files under `client/public/audio-samples/` (pulled from demo CDN) — reliable playback, no hotlink-only failures */
+/**
+ * Sample audio under `client/public/audio-samples/`.
+ * `suggestedVoiceProfile` matches labels in Settings → AI Voice (same tone as the sample script).
+ */
 const DEMOS = [
+  {
+    id: "spanish",
+    label: "Spanish",
+    color: "#f43f5e",
+    emoji: "🇪🇸",
+    tagline: "Full conversations en Español",
+    description: "AI fluently handles sales conversations in Spanish — solar, roofing, HVAC and more.",
+    audioFile: "spanish",
+    duration: "0:43",
+    sampleScript: "¡Hola! Le llamo sobre su interés en paneles solares. ¿Es usted el propietario de su casa?",
+    suggestedVoiceProfile: "Sarah — Warm Sales",
+  },
   {
     id: "solar",
     label: "Solar",
@@ -27,6 +43,7 @@ const DEMOS = [
     audioFile: "solar",
     duration: "0:43",
     sampleScript: "Hi! I'm calling about your interest in going solar. Do you own your home?",
+    suggestedVoiceProfile: "Sarah — Warm Sales",
   },
   {
     id: "hvac",
@@ -38,6 +55,7 @@ const DEMOS = [
     audioFile: "hvac",
     duration: "0:43",
     sampleScript: "Hi! I saw you reached out about your HVAC system. Is this an emergency or routine maintenance?",
+    suggestedVoiceProfile: "Nina — Friendly Female",
   },
   {
     id: "roofing",
@@ -49,6 +67,7 @@ const DEMOS = [
     audioFile: "roofing",
     duration: "0:43",
     sampleScript: "Hi! I'm following up about storm damage in your area. Have you had your roof inspected recently?",
+    suggestedVoiceProfile: "Jordan — Authoritative",
   },
   {
     id: "realestate",
@@ -60,6 +79,7 @@ const DEMOS = [
     audioFile: "realestate",
     duration: "0:43",
     sampleScript: "Hi! I'm calling about the property you were interested in. Are you pre-approved for financing?",
+    suggestedVoiceProfile: "Clyde — Professional",
   },
   {
     id: "insurance",
@@ -71,17 +91,7 @@ const DEMOS = [
     audioFile: "insurance",
     duration: "0:43",
     sampleScript: "Hi! I'm calling about your insurance quote request. Are you currently covered or shopping for new coverage?",
-  },
-  {
-    id: "spanish",
-    label: "Spanish",
-    color: "#f43f5e",
-    emoji: "🇪🇸",
-    tagline: "Full conversations en Español",
-    description: "AI fluently handles sales conversations in Spanish — solar, roofing, HVAC and more.",
-    audioFile: "spanish",
-    duration: "0:43",
-    sampleScript: "¡Hola! Le llamo sobre su interés en paneles solares. ¿Es usted el propietario de su casa?",
+    suggestedVoiceProfile: "Clyde — Professional",
   },
 ];
 
@@ -141,6 +151,17 @@ export default function IndustryDemos() {
           <p className="mx-auto max-w-3xl px-2 text-base leading-relaxed sm:text-lg" style={{ color: DIM2 }}>
             Short recordings from real-style flows. Served from our site so play works consistently — then get a live call to your phone.
           </p>
+          <div
+            className="mx-auto mt-6 max-w-3xl rounded-2xl border px-4 py-4 text-left sm:px-6 sm:text-center"
+            style={{ borderColor: `${EMERALD}40`, backgroundColor: `${EMERALD}0d` }}
+          >
+            <p className="text-sm font-bold text-emerald-300">
+              Multilingual AI — {CONVERSATION_LANGUAGE_COUNT} languages
+            </p>
+            <p className="mt-2 text-sm leading-relaxed" style={{ color: DIM2 }}>
+              Spanish sample is first below; production calls use the language you set in Settings. Full list: {SUPPORTED_LANGUAGES_MARKETING_LIST}.
+            </p>
+          </div>
           {playbackError ? (
             <p className="mt-4 text-sm text-amber-300" role="alert">
               {playbackError}
@@ -172,8 +193,11 @@ export default function IndustryDemos() {
                 </span>
               </div>
 
-              <p className="mb-5 text-sm leading-relaxed" style={{ color: DIM2 }}>
+              <p className="mb-2 text-sm leading-relaxed" style={{ color: DIM2 }}>
                 {demo.tagline}
+              </p>
+              <p className="mb-4 text-xs leading-relaxed text-zinc-500">
+                Suggested voice in Settings: <span className="font-medium text-zinc-400">{demo.suggestedVoiceProfile}</span>
               </p>
 
               <div className="mb-6 rounded-xl p-4 text-sm italic leading-relaxed sm:p-5" style={{ backgroundColor: `${demo.color}0d`, color: DIM2 }}>
