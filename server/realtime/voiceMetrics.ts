@@ -23,7 +23,9 @@ export type VoiceTracePhase =
   | "media_stream_stopped"
   | "sigws_ended"
   | "llm_slow_ack_800ms"
-  | "failsafe_silence_2s_outbound";
+  | "failsafe_silence_2s_outbound"
+  | "strict_classify"
+  | "date_authority_short_circuit";
 
 const starts = new Map<string, number>();
 

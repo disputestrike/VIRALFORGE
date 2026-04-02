@@ -75,6 +75,20 @@ export interface VoiceSession {
   interruptCount?: number;
   fallbackCount?: number;
   bookingAllowed?: boolean;
+  /** Last strict-controller extracted facts (JSON-serializable; for ops / replay / debugging). */
+  strictFactsSnapshot?: {
+    industry?: string;
+    subIndustry?: string;
+    callVolume?: number;
+    painLabels: string[];
+    name?: string;
+    phoneDigits?: string;
+    discussedTopics: string[];
+  };
+  /** Last classifier intent label written on policy sync. */
+  lastStrictIntent?: string;
+  /** Last controller-chosen conversation mode written on policy sync. */
+  lastStrictMode?: string;
 }
 
 // In-memory session store (keyed by sessionId OR callSid)

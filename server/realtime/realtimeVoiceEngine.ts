@@ -51,6 +51,15 @@ import {
 } from "./toolLayer";
 import { buildVoiceSystemPrompt } from "./dynamicPrompt";
 import { normalizeToE164US } from "../_core/phoneE164";
+import { classifyTurn } from "./classifyTurn";
+import {
+  mergeStrictTurnState,
+  planStrictLlmTurn,
+  routeStrictBeforeLlm,
+  strictFactsToSessionSnapshot,
+} from "./strictController";
+import { extractLastQuestion } from "./repeatGuard";
+import { emptyStrictFacts, HARD_RULES, type StrictFacts } from "./strictTypes";
 
 type VoiceOutcome = import("../_core/services/voiceSessionManager").VoiceSession["outcome"];
 
@@ -239,6 +248,9 @@ export function createCallEngine(opts: EngineOptions): void {
   let pendingUserTranscript: string | null = null;
   let turnStartedAt = 0;
   let extractedFacts: Record<string, string> = {};
+  /** Controller memory — industry, pain, volume; model must not re-ask. */
+  let strictFacts: StrictFacts = emptyStrictFacts();
+  let lastAssistantQuestion: string | null = null;
   /** Media stream recovery — never equate this with call hangup. */
   let streamRecoveryTimer: NodeJS.Timeout | null = null;
   let engineRegisteredCallSid: string | null = null;
@@ -332,13 +344,19 @@ export function createCallEngine(opts: EngineOptions): void {
     if (m) extractedFacts = { ...extractedFacts, firstName: m[1]! };
   }
 
-  function syncPolicySnapshot(userText: string): void {
+  function syncPolicySnapshot(
+    userText: string,
+    strictTurn?: { intent: string; mode: string }
+  ): void {
     traceEvent(callId, "turn_policy", {
       mode: policyState.mode,
       activeQuestion: policyState.activeQuestion,
       conversationStage: policyState.mode,
       lastIntent: inferUtteranceIntent(userText),
       extractedFacts: { ...extractedFacts },
+      strictFacts: strictFactsToSessionSnapshot(strictFacts),
+      strictIntent: strictTurn?.intent,
+      strictMode: strictTurn?.mode,
     });
     if (!activeSessionId) return;
     const intent = inferUtteranceIntent(userText);
@@ -357,6 +375,10 @@ export function createCallEngine(opts: EngineOptions): void {
         conversationStage: policyState.mode,
         extractedFacts: { ...extractedFacts },
         bookingAllowed: canOfferBooking(policyState),
+        strictFactsSnapshot: strictFactsToSessionSnapshot(strictFacts),
+        ...(strictTurn
+          ? { lastStrictIntent: strictTurn.intent, lastStrictMode: strictTurn.mode }
+          : {}),
       });
     } catch {}
   }
@@ -378,16 +400,17 @@ export function createCallEngine(opts: EngineOptions): void {
   /** Prefer persisted session transcript when synced so CRM/debug match what the LLM sees. */
   function historyForLlm(): { role: "user" | "assistant"; content: string }[] {
     const sid = activeSessionId;
+    const maxMsgs = Math.min(16, HARD_RULES.MAX_RECENT_TURNS_TO_MODEL * 2);
     if (sid) {
       const s = voiceSessionManager.getSession(sid);
       if (s?.conversationHistory?.length) {
-        return s.conversationHistory.slice(-16).map((m) => ({
+        return s.conversationHistory.slice(-maxMsgs).map((m) => ({
           role: m.role,
           content: m.content,
         }));
       }
     }
-    return conversationHistory.slice(-16);
+    return conversationHistory.slice(-maxMsgs);
   }
   let firstMediaLogged = false;
 
@@ -718,6 +741,22 @@ export function createCallEngine(opts: EngineOptions): void {
     turnStartedAt = Date.now();
     policyState = updateCallState(policyState, transcript);
     mergeExtractedFactsFromTurn(transcript);
+    const mergedStrict = mergeStrictTurnState(transcript, strictFacts, policyState);
+    strictFacts = mergedStrict.strictFacts;
+    policyState = mergedStrict.policyState;
+
+    const classified = classifyTurn(transcript);
+    const strictPre = routeStrictBeforeLlm(transcript, new Date(), classified);
+    if (strictPre) {
+      if (strictPre.kind === "date_authority") {
+        traceEvent(callId, "date_authority_short_circuit");
+      }
+      await speak(strictPre.speakText, epoch);
+      policyState = markQuestionAnswered(policyState);
+      syncPolicySnapshot(transcript, strictPre.trace);
+      traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+      return;
+    }
 
     // Deterministic ZIP / discount snippets when user asks (before LLM)
     const zip = extractZipFromTranscript(transcript);
@@ -726,7 +765,7 @@ export function createCallEngine(opts: EngineOptions): void {
       const line = lookupServiceAreaSpoken(zip, clientConfig);
       await speak(line, epoch);
       policyState = markQuestionAnswered(policyState);
-      syncPolicySnapshot(transcript);
+      syncPolicySnapshot(transcript, { intent: classified.intent, mode: "answer" });
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
       return;
     }
@@ -734,7 +773,7 @@ export function createCallEngine(opts: EngineOptions): void {
       const line = lookupDiscountsSpoken(clientConfig);
       await speak(line, epoch);
       policyState = markQuestionAnswered(policyState);
-      syncPolicySnapshot(transcript);
+      syncPolicySnapshot(transcript, { intent: classified.intent, mode: "answer" });
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
       return;
     }
@@ -743,7 +782,7 @@ export function createCallEngine(opts: EngineOptions): void {
     if (policyState.endCallRequested) {
       log("[POLICY] End call detected");
       traceEvent(callId, "hangup_signal", { reason: "end_intent" });
-      syncPolicySnapshot(transcript);
+      syncPolicySnapshot(transcript, { intent: classified.intent, mode: "close" });
       await speak("No problem, thanks for calling, have a great day.", epoch);
       setTimeout(() => void finalizeHard({ reason: "end_intent", outcome: "not_interested" }), 1500);
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
@@ -764,7 +803,7 @@ export function createCallEngine(opts: EngineOptions): void {
         const target = raw ? normalizeToE164US(raw) || raw : null;
         if (target) {
           appendHistory("user", transcript);
-          syncPolicySnapshot(transcript);
+          syncPolicySnapshot(transcript, { intent: classified.intent, mode: "handoff" });
           log(`[POLICY] Live transfer → ${target.slice(0, 6)}…`);
           traceEvent(callId, "hangup_signal", { reason: "live_transfer" });
           await speak("Sure — connecting you to someone now.", epoch);
@@ -780,7 +819,6 @@ export function createCallEngine(opts: EngineOptions): void {
     }
 
     appendHistory("user", transcript);
-    syncPolicySnapshot(transcript);
 
     // Run sentiment in background — update for next turn
     setImmediate(async () => {
@@ -809,13 +847,29 @@ export function createCallEngine(opts: EngineOptions): void {
       return;
     }
 
+    const now = new Date();
+    const plan = planStrictLlmTurn({
+      policyState,
+      strictFacts,
+      transcript,
+      lastAssistantQuestion,
+      now,
+      classified,
+    });
+    policyState = plan.policyForPrompt;
+    syncPolicySnapshot(transcript, plan.trace);
+    traceEvent(callId, "strict_classify", {
+      intent: plan.classified.intent,
+      mode: plan.policyForPrompt.mode,
+    });
+
     try {
-      await respondAnthropicVoice(epoch, transcript);
+      await respondAnthropicVoice(epoch, transcript, plan.strictBlock);
     } catch (e: any) {
       log(`[Claude] Failed: ${e?.message ?? e}`);
       try {
         await new Promise((r) => setTimeout(r, 350));
-        await respondAnthropicVoice(epoch, transcript);
+        await respondAnthropicVoice(epoch, transcript, plan.strictBlock);
       } catch (e2: any) {
         log(`[Claude] Retry failed: ${e2?.message ?? e2}`);
         if (activeSessionId) {
@@ -845,11 +899,17 @@ export function createCallEngine(opts: EngineOptions): void {
     traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
   }
 
-  async function buildSystemPromptWithTenant(userTranscript: string): Promise<string> {
+  async function buildSystemPromptWithTenant(
+    userTranscript: string,
+    strictPrefix: string
+  ): Promise<string> {
     const sentimentNote = currentSentiment !== "neutral"
       ? `\n\nCALLER SENTIMENT: ${currentSentiment.toUpperCase()} — adjust tone. Frustrated: direct/factual. Confused: simplify. Positive: maintain momentum.`
       : "";
-    const base = buildVoiceSystemPrompt(policyState, businessName, industry, clientConfig) + sentimentNote;
+    const base =
+      (strictPrefix ? strictPrefix + "\n\n" : "") +
+      buildVoiceSystemPrompt(policyState, businessName, industry, clientConfig) +
+      sentimentNote;
     if (!activeUserId) return base;
     try {
       const { buildVoiceTenantContextBlock } = await import("../_core/services/tenantContextForVoice");
@@ -865,12 +925,16 @@ export function createCallEngine(opts: EngineOptions): void {
     return base;
   }
 
-  async function respondAnthropicVoice(epoch: number, userTranscript: string): Promise<void> {
+  async function respondAnthropicVoice(
+    epoch: number,
+    userTranscript: string,
+    strictBlock: string
+  ): Promise<void> {
     const anthropicKey = (process.env.ANTHROPIC_API_KEY ?? "").trim();
     if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY not set");
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey: anthropicKey });
-    const prompt = await buildSystemPromptWithTenant(userTranscript);
+    const prompt = await buildSystemPromptWithTenant(userTranscript, strictBlock);
     const messages = historyForLlm().map(m => ({
       role: m.role as "user" | "assistant",
       content: m.content,
@@ -987,6 +1051,8 @@ export function createCallEngine(opts: EngineOptions): void {
     if (cleanResponse) {
       appendHistory("assistant", cleanResponse);
       policyState = markQuestionAnswered(policyState);
+      const lq = extractLastQuestion(cleanResponse);
+      if (lq) lastAssistantQuestion = lq;
     }
 
     // Handle tool calls
