@@ -91,7 +91,7 @@ export default function Dashboard() {
         <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
         <span className="text-primary font-medium">24/7 AI Assistant</span>
         <span className="text-muted-foreground hidden sm:inline">· Activate to answer every inbound call automatically</span>
-        <Link href="/pricing" className="ml-auto text-xs px-3 py-1 rounded-md font-medium flex-shrink-0"
+        <Link href="/settings#billing" className="ml-auto text-xs px-3 py-1 rounded-md font-medium flex-shrink-0"
           style={{ backgroundColor: "rgba(29,111,244,0.15)", color: "#60a5fa", border: "1px solid rgba(29,111,244,0.3)" }}>
           Activate from $149/mo →
         </Link>

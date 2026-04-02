@@ -236,11 +236,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem disabled>
-                <Settings className="w-4 h-4 mr-2" />
-                Settings
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout} className="text-destructive">
                 <LogOut className="w-4 h-4 mr-2" />
                 Sign Out

@@ -149,6 +149,9 @@ export default function MarketingFooter() {
               <a href="/security" className={link}>
                 Security
               </a>
+              <a href="/admin" className={link}>
+                Admin
+              </a>
             </div>
           </div>
         </div>

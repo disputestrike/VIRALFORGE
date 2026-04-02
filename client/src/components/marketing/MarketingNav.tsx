@@ -341,11 +341,16 @@ export default function MarketingNav() {
               </Button>
             </Link>
           ) : (
-            <a href={getLoginUrl()}>
-              <Button size="sm" className="ml-1 font-bold shadow-sm" style={{ backgroundColor: C.blue, color: C.white }}>
-                Get started free
-              </Button>
-            </a>
+            <>
+              <a href={getLoginUrl()} className="text-sm font-medium text-white/70 hover:text-white transition-colors mr-3">
+                Sign in
+              </a>
+              <a href={getLoginUrl()}>
+                <Button size="sm" className="ml-1 font-bold shadow-sm" style={{ backgroundColor: C.blue, color: C.white }}>
+                  Start free trial
+                </Button>
+              </a>
+            </>
           )}
         </div>
 
@@ -374,9 +379,14 @@ export default function MarketingNav() {
           </Link>
           <a href={getLoginUrl()} className="mt-2 block" onClick={closeMobile}>
             <Button className="w-full font-bold" style={{ backgroundColor: C.blue, color: C.white }}>
-              {user ? "Open app" : "Get started free"}
+              {user ? "Open app" : "Start free trial"}
             </Button>
           </a>
+          {!user && (
+            <a href={getLoginUrl()} className="mt-2 block text-center text-sm text-white/70 py-2" onClick={closeMobile}>
+              Already have an account? Sign in
+            </a>
+          )}
         </div>
       )}
     </nav>

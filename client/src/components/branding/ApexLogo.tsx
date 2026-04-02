@@ -38,8 +38,8 @@ function LogoMark({ className }: { className?: string }) {
 function WordmarkText({ className }: { className?: string }) {
   return (
     <span className={cn("inline-flex items-baseline", className)}>
-      <span className="text-white">Apex</span>
-      <span className="text-blue-400">AI</span>
+      <span className="text-foreground">Apex</span>
+      <span className="text-blue-500">AI</span>
     </span>
   );
 }

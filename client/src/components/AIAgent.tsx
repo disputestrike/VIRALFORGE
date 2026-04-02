@@ -158,7 +158,7 @@ export default function AIAgent() {
                       ? { backgroundColor: "#1d6ff4", color: "white" }
                       : { backgroundColor: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.85)" }
                     }>
-                    {msg.content}
+                    {msg.content.replace(/\*\*/g, "").replace(/\*/g, "").replace(/#{1,3}\s/g, "")}
                   </div>
                 </div>
               ))
