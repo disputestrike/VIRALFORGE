@@ -760,7 +760,7 @@ export function createCallEngine(opts: EngineOptions): void {
       try {
         const { getUserById } = await import("../db");
         const owner = await getUserById(activeUserId);
-        const raw = owner?.transferNumber?.trim();
+        const raw = owner?.transferNumber?.trim() || ENV.liveTransferNumber;
         const target = raw ? normalizeToE164US(raw) || raw : null;
         if (target) {
           appendHistory("user", transcript);

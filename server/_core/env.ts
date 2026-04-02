@@ -128,8 +128,10 @@ export const ENV = {
       this.anthropicApiKey !== ""
     );
   },
-  /** When true and `users.transferNumber` is set, live voice may transfer via SignalWire. */
+  /** When true and a transfer target exists (user profile or env), live voice may transfer via SignalWire. */
   liveTransferEnabled: process.env.LIVE_TRANSFER_ENABLED === "true",
+  /** Fallback PSTN when `users.transferNumber` is empty — E.164 e.g. +15551234567 */
+  liveTransferNumber: (process.env.LIVE_TRANSFER_NUMBER ?? "").trim(),
   get queueEnabled()  { return this.redisUrl !== ""; },
   get stripeEnabled() { return this.stripeSecretKey !== ""; },
 
