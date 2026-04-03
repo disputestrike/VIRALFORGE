@@ -109,6 +109,10 @@ export default function Leads() {
       setForm({ firstName: "", lastName: "", email: "", phone: "", company: "", industry: "", title: "", linkedinUrl: "", notes: "" });
       toast.success("Lead created");
     },
+    onError: (e) => {
+      toast.error(e.message || "Failed to create lead");
+      console.error("[Lead Create Error]", e);
+    },
   });
   const deleteMutation = trpc.leads.delete.useMutation({
     onSuccess: () => { utils.leads.list.invalidate(); toast.success("Lead deleted"); },
