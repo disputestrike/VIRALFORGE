@@ -1245,12 +1245,12 @@ export function createCallEngine(opts: EngineOptions): void {
     syncPolicySnapshot("silence_reengage", plan.trace);
 
     const silenceLlmCue =
-      "Internal cue: No new speech was detected after your last reply. Respond in ONE or TWO short sentences. Continue the same business topic from the conversation. Sound like a senior sales rep. FORBIDDEN phrases: still with me, still there, checking in, just wanted to make sure, can you hear me, on the line, are you there.";
+      "Internal cue: The caller has been quiet. Ask ONE short follow-up question directly related to the last thing discussed. Maximum 15 words. Do NOT introduce new topics. Do NOT be enthusiastic. Do NOT say exciting, fantastic, or awesome. Just ask a simple, relevant question. FORBIDDEN phrases: still with me, still there, checking in, just wanted to make sure, can you hear me, on the line, are you there, exciting, fantastic.";
 
     if (!ENV.xaiApiKey) {
       try {
         await speak(
-          "When you have a second — is the bigger pain missed calls after hours, or getting swamped during the day?",
+          "What questions do you have so far?",
           epoch
         );
       } catch {}

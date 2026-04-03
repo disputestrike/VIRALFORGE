@@ -72,7 +72,7 @@ export const ENV = {
   /** Multiply Cartesia voice profile speed (~0.91 default; override with VOICE_TTS_SPEED_SCALE). */
   voiceTtsSpeedScale: Math.min(1.25, Math.max(0.55, parseFloat(process.env.VOICE_TTS_SPEED_SCALE ?? "1.0") || 1.0)),
   /** After Deepgram speech_final, pause before LLM — target 200–300ms for natural turn-taking. */
-  voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "275", 10) || 0),
+  voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "120", 10) || 0),
   /**
    * After assistant audio finishes, if the caller stays quiet, prompt one upbeat check-in (sales tempo).
    * Set VOICE_USER_SILENCE_REENGAGE_ENABLED=false to disable.
@@ -89,7 +89,7 @@ export const ENV = {
    */
   voiceBargeInEnergyThreshold: (() => {
     const raw =
-      parseInt(process.env.VOICE_BARGE_IN_ENERGY_THRESHOLD || process.env.INTERRUPTION_ENERGY_THRESHOLD || "48", 10) || 48;
+      parseInt(process.env.VOICE_BARGE_IN_ENERGY_THRESHOLD || process.env.INTERRUPTION_ENERGY_THRESHOLD || "75", 10) || 75;
     const scaled = raw > 127 ? Math.round(raw / 5) : raw;
     return Math.max(12, Math.min(125, scaled));
   })(),
@@ -98,9 +98,9 @@ export const ENV = {
   /** Deepgram utterance_end_ms — cap wait for utterance boundary. */
   voiceDeepgramUtteranceEndMs: Math.max(300, Math.min(3000, parseInt(process.env.VOICE_DEEPGRAM_UTTERANCE_END_MS ?? "800", 10) || 800)),
   /** Voice LLM max tokens per turn. */
-  voiceLlmMaxTokens: Math.min(1200, Math.max(400, parseInt(process.env.VOICE_LLM_MAX_TOKENS ?? "800", 10) || 800)),
+  voiceLlmMaxTokens: Math.min(1200, Math.max(200, parseInt(process.env.VOICE_LLM_MAX_TOKENS ?? "350", 10) || 350)),
   /** Voice LLM temperature. */
-  voiceLlmTemperature: Math.min(0.85, Math.max(0.2, parseFloat(process.env.VOICE_LLM_TEMPERATURE ?? "0.40") || 0.4)),
+  voiceLlmTemperature: Math.min(0.85, Math.max(0.1, parseFloat(process.env.VOICE_LLM_TEMPERATURE ?? "0.25") || 0.25)),
   /**
    * Ops / compliance (read in voice webhooks + engine, not all mirrored here):
    * - VOICE_METRICS_PERSIST=false — skip DB inserts for voice_metric_events (see server/realtime/voiceMetrics.ts).
