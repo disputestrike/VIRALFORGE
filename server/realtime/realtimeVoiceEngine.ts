@@ -1401,9 +1401,10 @@ export function createCallEngine(opts: EngineOptions): void {
         .trim();
       const speakable = speakableLine(clean);
       if (!speakable) return;
-      const continueCtx = !firstTtsClause;
-      if (continueCtx) cartesiaNeedsEndFlush = true;
-      cartesiaSend(speakable, continueCtx);
+      // Each sentence gets its own Cartesia context to avoid "Context has closed" errors.
+      // Clear the old context so cartesiaSend() creates a fresh one.
+      cartesiaContextId = "";
+      cartesiaSend(speakable, false);
       firstTtsClause = false;
     };
 
@@ -1754,7 +1755,7 @@ export function createCallEngine(opts: EngineOptions): void {
           const outboundScript = sessGreet?.outboundScript?.trim();
           const isOutbound = sessGreet?.callDirection === "outbound";
           let greeting: string;
-          const bname = clientConfig.businessName.replace("ApexAI", "Apex A I").replace("Apex AI", "Apex A I");
+          const bname = clientConfig.businessName;
           if (isOutbound && outboundScript) {
             const scriptLine = speakableLine(outboundScript);
             greeting = sessGreet?.complianceRecordingPending

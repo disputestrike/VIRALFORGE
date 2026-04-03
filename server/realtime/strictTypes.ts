@@ -27,6 +27,8 @@ export type StrictIntent =
   | "provide_availability"
   | "date_time_question"
   | "meta_voice_complaint"
+  | "question"
+  | "statement"
   | "unknown";
 
 export interface StrictFacts {

@@ -32,7 +32,7 @@ function pickIntent(text: string): StrictIntent {
   if (BOOK_HINT.test(t)) return "booking_interest";
   if (isObjection(text)) return "objection";
   if (CONFUSION_HINT.test(t) || /^(what|huh)\??$/i.test(text.trim())) return "confusion";
-  if (detectUserQuestion(text) && !PRICE_HINT.test(t) && !AREA_HINT.test(t)) return "ask_what_it_is";
+  if (detectUserQuestion(text) && !PRICE_HINT.test(t) && !AREA_HINT.test(t)) return "question";
   if (/\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/.test(text) || /\b\d{10,11}\b/.test(text.replace(/\D/g, "")))
     return "provide_contact_info";
   if (AVAIL_HINT.test(t) && BOOK_HINT.test(t)) return "provide_availability";

@@ -23,7 +23,8 @@ export function determineStrictConversationMode(
     classified.intent === "setup_time_question" ||
     classified.intent === "service_area_question" ||
     classified.intent === "industry_fit_question" ||
-    classified.intent === "ask_what_it_is"
+    classified.intent === "ask_what_it_is" ||
+    classified.intent === "question"
   ) {
     return "answer";
   }
