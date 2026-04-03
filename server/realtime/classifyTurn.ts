@@ -7,7 +7,8 @@ import { isDateRelatedQuestion } from "./dateAuthority";
 import type { ClassifiedTurn, StrictIntent } from "./strictTypes";
 
 const HUMAN_HINT = /\b(human|person|real (person|human)|live agent|representative|transfer me|speak to someone)\b/i;
-const BOOK_HINT = /\b(book|schedule|demo|appointment|set up a (time|call)|calendar)\b/i;
+const BOOK_HINT = /\b(book|schedule|appointment|set up a (time|call)|calendar)\b/i;
+const DEMO_HINT = /\b(demo|show me|walk me through|test it|role ?play|roleplay|pretend|simulate|how does this work|can I try|let me see)\b/i;
 const PRICE_HINT = /\b(price|pricing|cost|how much|fee|plan)\b/i;
 const SUCCESS_HINT = /\b(success rate|results|prove|guarantee|roi|work for)\b/i;
 const SETUP_HINT = /\b(set ?up|install|get started|onboarding|how long)\b/i;
@@ -32,6 +33,7 @@ function pickIntent(text: string): StrictIntent {
   if (BOOK_HINT.test(t)) return "booking_interest";
   if (isObjection(text)) return "objection";
   if (CONFUSION_HINT.test(t) || /^(what|huh)\??$/i.test(text.trim())) return "confusion";
+  if (DEMO_HINT.test(t)) return "booking_interest";
   if (detectUserQuestion(text) && !PRICE_HINT.test(t) && !AREA_HINT.test(t)) return "question";
   if (/\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/.test(text) || /\b\d{10,11}\b/.test(text.replace(/\D/g, "")))
     return "provide_contact_info";
