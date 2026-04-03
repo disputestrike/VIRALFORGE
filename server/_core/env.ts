@@ -120,6 +120,8 @@ export const ENV = {
   voiceGrokJsonEnvelope: process.env.VOICE_GROK_JSON_ENVELOPE === "true",
   /** Send Cartesia `generation_config.emotion` when profile has `ttsEmotion` (disable if API rejects). */
   voiceCartesiaEmotion: process.env.VOICE_CARTESIA_EMOTION !== "false",
+  /** External voice-metrics-service base URL (e.g. https://voice-metrics-production.up.railway.app). Events are POSTed fire-and-forget. Leave unset to disable. */
+  voiceMetricsServiceUrl: (process.env.VOICE_METRICS_URL ?? "").replace(/\/$/, ""),
 
   // ── Groq (optional ultra-low-latency LLM fallback) ──────────────────────────
   groqApiKey: (process.env.GROQ_API_KEY ?? "").trim(),

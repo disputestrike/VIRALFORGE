@@ -3,9 +3,49 @@
  *
  * Production path (canonical): SignalWire bidirectional stream → realtimeVoiceEngine.ts
  * (Deepgram STT → Grok → Cartesia TTS). deepgramVoiceAgent.ts is not wired on the live WS path.
+ *
+ * External metrics: set VOICE_METRICS_URL to post events to voice-metrics-service.
  */
 
 const callIdToSessionId = new Map<string, string>();
+
+/** Fire-and-forget POST to external voice-metrics-service. Never throws, never awaited. */
+function postToMetricsService(
+  callId: string,
+  sessionId: string | null | undefined,
+  phase: string,
+  msSinceCallStart: number,
+  extra?: Record<string, unknown>
+): void {
+  // Lazy import env to avoid circular deps at module load time
+  let url: string;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    url = require("../_core/env").env.voiceMetricsServiceUrl as string;
+  } catch {
+    return;
+  }
+  if (!url) return;
+
+  const body = JSON.stringify({
+    callId,
+    sessionId: sessionId ?? null,
+    phase,
+    msSinceCallStart,
+    extra: extra ?? null,
+  });
+
+  setImmediate(() => {
+    fetch(`${url}/metrics/event`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      signal: AbortSignal.timeout(3000),
+    }).catch(() => {
+      // Silently drop — metrics must never impact call quality
+    });
+  });
+}
 
 /** Binds internal callId to SignalWire session for DB persistence. */
 export function registerCallSessionForMetrics(callId: string, sessionId: string | undefined): void {
@@ -61,8 +101,12 @@ export function traceEvent(
   const payload = { phase, msSinceCallStart: elapsed, ...extra };
   console.log(`[VOICE-TRACE] ${callId} | ${phase} | +${elapsed}ms`, JSON.stringify(payload));
 
-  if (process.env.VOICE_METRICS_PERSIST === "false") return;
   const sessionId = callIdToSessionId.get(callId);
+
+  // Post to external voice-metrics-service (fire-and-forget, never blocks)
+  postToMetricsService(callId, sessionId, phase, elapsed, extra);
+
+  if (process.env.VOICE_METRICS_PERSIST === "false") return;
   setImmediate(() => {
     void import("../db").then(({ insertVoiceMetricEvent }) =>
       insertVoiceMetricEvent({
