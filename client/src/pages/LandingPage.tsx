@@ -1,6 +1,6 @@
 import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import DemoCallWidget from "@/components/DemoCallWidget";
 import ROICalculator from "@/components/ROICalculator";
 import IndustryDemos from "@/components/IndustryDemos";
@@ -53,22 +53,8 @@ const testimonials = [
 
 const logos = ["Solar Pro", "RoofRight", "HVAC Masters", "InsureNow", "RealEdge", "BuildCo", "SkyLine", "ProServ"];
 
-const tickerItems = [
-  "🟢 Sarah K. just booked a solar appointment — Irving TX",
-  "🟢 Roofing campaign: 38 bookings booked today",
-  "🟢 HVAC lead qualified: $12k job — Phoenix AZ",
-  "🟢 Insurance: 147 calls handled this hour",
-  "🟢 Real estate: 22 showings scheduled today",
-];
-
 export default function LandingPage() {
   const [activeTab, setActiveTab] = useState(0);
-  const [ticker, setTicker] = useState(0);
-
-  useEffect(() => {
-    const t = setInterval(() => setTicker((n) => n + 1), 4200);
-    return () => clearInterval(t);
-  }, []);
 
   const tabs = [
     { label: "Inbound AI", icon: <PhoneIncoming size={14} /> },
@@ -204,10 +190,6 @@ export default function LandingPage() {
         @media(max-width:900px){.how-works-grid{grid-template-columns:1fr!important;gap:14px!important}.how-works-arrow{display:none!important}}
         @media(max-width:768px){.footer-cols{grid-template-columns:1fr!important;gap:28px!important}}
       `}</style>
-
-      <div className="border-b border-white/25 bg-black px-6 py-2.5 text-center text-sm font-semibold text-white/90">
-        {tickerItems[ticker % tickerItems.length]}
-      </div>
 
       <MarketingNav />
 
