@@ -28,6 +28,7 @@ import { mobileRouter } from "./routers/mobileRouter";
 import { socialRouter } from "./routers/socialRouter";
 import { webchatRouter } from "./routers/webchatRouter";
 import { rcsRouter } from "./routers/rcsRouter";
+import { metricsRouter } from "./_core/routes/metricsRouter";
 import { ENV } from "./_core/env";
 import { scoreFromRules, type RuleEntry } from "./_core/services/leadScoringApply";
 
@@ -1787,6 +1788,7 @@ export const appRouter = router({
   social: socialRouter,
   webchat: webchatRouter,
   rcs: rcsRouter,
+  metrics: metricsRouter,
 });
 
 export type AppRouter = typeof appRouter;
