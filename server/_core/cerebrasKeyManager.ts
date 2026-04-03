@@ -6,7 +6,7 @@
 
 import { ENV } from "./env";
 
-const CALLS_PER_KEY_BEFORE_ROTATE = 25; // rotate before hitting rate limit
+const CALLS_PER_KEY_BEFORE_ROTATE = 8; // rotate aggressively to avoid Cerebras queue limits
 
 let currentIndex = 0;
 let callsSinceRotation = 0;

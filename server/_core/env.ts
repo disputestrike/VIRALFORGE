@@ -129,7 +129,7 @@ export const ENV = {
     (process.env.CEREBRAS_API_KEY_4 ?? "").trim(),
     (process.env.CEREBRAS_API_KEY_5 ?? "").trim(),
   ].filter(k => k.length > 0),
-  cerebrasModel: (process.env.CEREBRAS_MODEL ?? "llama-3.3-70b").trim(),
+  cerebrasModel: (process.env.CEREBRAS_MODEL ?? "qwen-3-235b-a22b-instruct-2507").trim(),
   /** Convenience: first valid key (for simple checks) */
   get cerebrasApiKey(): string { return this.cerebrasKeys[0] ?? ""; },
 

@@ -1,7 +1,7 @@
 /**
  * LLM — Cerebras (OpenAI-compatible API). 5-key round-robin.
  * Set CEREBRAS_API_KEY_1 through CEREBRAS_API_KEY_5.
- * Model: CEREBRAS_MODEL or default llama-3.3-70b.
+ * Model: CEREBRAS_MODEL or default qwen-3-235b-a22b-instruct-2507.
  */
 
 import OpenAI from "openai";
@@ -70,7 +70,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       : [{ role: "user" as const, content: "Hello" }];
 
   const model =
-    (params.model || process.env.CEREBRAS_MODEL || "llama-3.3-70b").trim();
+    (params.model || process.env.CEREBRAS_MODEL || "qwen-3-235b-a22b-instruct-2507").trim();
 
   const client = makeCerebrasClient(apiKey);
 
@@ -90,7 +90,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     };
   } catch (e: any) {
     // On rate limit (429), rotate key and retry once
-    if (e?.status === 429 || e?.message?.includes("429") || e?.message?.includes("rate")) {
+    if (e?.status === 429 || e?.message?.includes("429") || e?.message?.includes("rate") || e?.message?.includes("queue_exceeded") || e?.message?.includes("too_many_requests")) {
       console.warn("[Cerebras] Rate limit hit — rotating key and retrying");
       rotateCerebrasKey();
       const retryKey = getCerebrasKey();

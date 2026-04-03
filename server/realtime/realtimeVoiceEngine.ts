@@ -1148,6 +1148,8 @@ export function createCallEngine(opts: EngineOptions): void {
       await respondVoiceLlm(epoch, transcript, plan.strictBlock, recoveryPrefixForLlm);
     } catch (e: any) {
       log(`[Voice LLM] Failed: ${e?.message ?? e}`);
+      // Rotate to next Cerebras key before retry
+      try { const { rotateCerebrasKey } = await import("../_core/cerebrasKeyManager"); rotateCerebrasKey(); } catch {}
       try {
         await new Promise((r) => setTimeout(r, 350));
         await respondVoiceLlm(epoch, transcript, plan.strictBlock, recoveryPrefixForLlm);

@@ -21,7 +21,7 @@ export interface LLMResponse {
 }
 
 function defaultRouterModel(): string {
-  return (process.env.CEREBRAS_MODEL || process.env.LLM_MODEL || "llama-3.3-70b").trim();
+  return (process.env.CEREBRAS_MODEL || process.env.LLM_MODEL || "qwen-3-235b-a22b-instruct-2507").trim();
 }
 
 // ── Routing Logic (semantic label only) ───────────────────────────────────────
