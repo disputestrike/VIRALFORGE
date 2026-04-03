@@ -383,7 +383,18 @@ export async function getAnalyticsSnapshots(opts?: { campaignId?: number; channe
 
 export async function getGlobalMetrics(userId?: number) {
   const db = await getDb();
-  if (!db) return { responseRate: 0, scheduleRate: 0, showRate: 0, salesIncrease: 0, totalLeads: 0, totalCampaigns: 0, totalMessages: 0, totalRevenue: 0 };
+  if (!db)
+    return {
+      responseRate: 0,
+      scheduleRate: 0,
+      showRate: 0,
+      salesIncrease: 0,
+      totalLeads: 0,
+      totalCampaigns: 0,
+      totalMessages: 0,
+      totalRevenue: 0,
+      totalAppointments: 0,
+    };
   const [leadsCount, campaignsData, messagesCount, analyticsData] = await Promise.all([
     userId ? db.select({ count: sql<number>`count(*)` }).from(leads).where(eq(leads.createdBy, userId)) : db.select({ count: sql<number>`count(*)` }).from(leads),
     userId ? db.select({ count: sql<number>`count(*)`, revenue: sql<number>`sum(revenueGenerated)`, responses: sql<number>`sum(responseCount)`, scheduled: sql<number>`sum(scheduledCount)`, showed: sql<number>`sum(showCount)`, sent: sql<number>`sum(sentCount)`, converted: sql<number>`sum(convertedCount)` }).from(campaigns).where(eq(campaigns.createdBy, userId)) : db.select({ count: sql<number>`count(*)`, revenue: sql<number>`sum(revenueGenerated)`, responses: sql<number>`sum(responseCount)`, scheduled: sql<number>`sum(scheduledCount)`, showed: sql<number>`sum(showCount)`, sent: sql<number>`sum(sentCount)`, converted: sql<number>`sum(convertedCount)` }).from(campaigns),
@@ -406,6 +417,7 @@ export async function getGlobalMetrics(userId?: number) {
     totalCampaigns: Number(c?.count ?? 0),
     totalMessages: Number(messagesCount[0]?.count ?? 0),
     totalRevenue: Number(c?.revenue ?? 0),
+    totalAppointments: Number(c?.scheduled ?? 0),
   };
 }
 

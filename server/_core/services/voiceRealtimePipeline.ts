@@ -2,7 +2,7 @@
  * VoiceRealtimePipeline — Full scaffold implementation
  *
  * Deepgram live WebSocket STT with VAD
- * Anthropic Claude streaming → Cartesia streaming TTS (clause by clause)
+ * xAI Grok (OpenAI-compatible) streaming → Cartesia streaming TTS (clause by clause)
  * Energy-based barge-in detection (PCM energy, not mulaw heuristics)
  * generationEpoch: stale generation loops abort immediately on barge-in
  * Silence fallback line: "one moment" if no reply starts within 700ms
@@ -740,7 +740,7 @@ export class VoiceRealtimePipeline {
     ];
 
     const semantic = this.chooseRoute(transcript, this.customer.objectionHistory.length);
-    this.logger.log(`[PIPE] llm=anthropic semantic=${semantic} epoch=${epoch}`);
+    this.logger.log(`[PIPE] llm=xai-grok semantic=${semantic} epoch=${epoch}`);
 
     if (!(process.env.ANTHROPIC_API_KEY ?? "").trim()) {
       this.logger.error("[PIPE] ANTHROPIC_API_KEY missing — cannot run LLM");
@@ -762,34 +762,37 @@ export class VoiceRealtimePipeline {
     this.cartesiaNeedsNewContext = true;
     this.lastCartesiaContinueWasTrue = false;
     this.assistantResponseInProgress = true;
-    const { default: Anthropic } = await import("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+    const xaiKey = ENV.xaiApiKey;
+    if (!xaiKey) {
+      this.logger.error("[PIPE] Missing XAI_API_KEY for Grok");
+      this.assistantResponseInProgress = false;
+      return;
+    }
+    const { default: OpenAI } = await import("openai");
+    const client = new OpenAI({ apiKey: xaiKey, baseURL: "https://api.x.ai/v1" });
 
     const systemMsg = messages.find(m => m.role === "system")?.content ?? "";
     const chatMsgs = messages
       .filter(m => m.role !== "system")
       .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
 
-    const stream = await client.messages.stream({
-      model: ENV.voiceClaudeModel,
+    const stream = await client.chat.completions.create({
+      model: ENV.grokModel,
       max_tokens: Math.min(1024, Math.max(400, ENV.voiceLlmMaxTokens * 2)),
       temperature: Math.min(0.75, Math.max(0.35, ENV.voiceLlmTemperature)),
-      system: systemMsg,
-      messages: chatMsgs,
+      messages: [{ role: "system", content: systemMsg }, ...chatMsgs],
+      stream: true,
     });
 
     let assembled = "";
 
-    for await (const event of stream) {
+    for await (const chunk of stream) {
       if (epoch !== this.generationEpoch) {
-        stream.abort();
         this.assistantResponseInProgress = false;
         return;
       }
-
-      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-        assembled += event.delta.text;
-      }
+      const t = chunk.choices?.[0]?.delta?.content;
+      if (typeof t === "string" && t) assembled += t;
     }
 
     if (epoch !== this.generationEpoch) {

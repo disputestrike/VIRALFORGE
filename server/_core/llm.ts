@@ -1,9 +1,9 @@
 /**
- * LLM — Anthropic Claude only. Set ANTHROPIC_API_KEY (required).
- * Model: LLM_MODEL, or CLAUDE_MODEL, or default Haiku 4.5.
+ * LLM — xAI Grok (OpenAI-compatible API). Set XAI_API_KEY (required).
+ * Model: GROK_MODEL or default grok-3-fast.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
 export type Role = "system" | "user" | "assistant";
 
@@ -29,21 +29,21 @@ export type InvokeResult = {
   }>;
 };
 
-let _anthropicClient: Anthropic | null = null;
+let _xaiClient: OpenAI | null = null;
 
-function getAnthropicClient(): Anthropic {
-  if (!_anthropicClient) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey?.trim()) throw new Error("ANTHROPIC_API_KEY is required");
-    _anthropicClient = new Anthropic({ apiKey });
+function getXaiClient(): OpenAI {
+  if (!_xaiClient) {
+    const apiKey = (process.env.XAI_API_KEY ?? "").trim();
+    if (!apiKey) throw new Error("XAI_API_KEY is required");
+    _xaiClient = new OpenAI({ apiKey, baseURL: "https://api.x.ai/v1" });
   }
-  return _anthropicClient;
+  return _xaiClient;
 }
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey?.trim()) {
-    throw new Error("ANTHROPIC_API_KEY is required — ApexAI uses Claude (Anthropic) for all LLM calls.");
+  const apiKey = (process.env.XAI_API_KEY ?? "").trim();
+  if (!apiKey) {
+    throw new Error("XAI_API_KEY is required — ApexAI uses xAI Grok for LLM calls.");
   }
 
   const maxTokens = Math.min(
@@ -65,24 +65,20 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
         }))
       : [{ role: "user" as const, content: "Hello" }];
 
-  const client = getAnthropicClient();
+  const client = getXaiClient();
   const model =
-    params.model ||
-    process.env.LLM_MODEL ||
-    process.env.CLAUDE_MODEL ||
-    "claude-haiku-4-5-20251001";
+    (params.model || process.env.GROK_MODEL || process.env.LLM_MODEL || "grok-3-fast").trim();
 
-  const response = await client.messages.create({
+  const response = await client.chat.completions.create({
     model,
     max_tokens: Math.max(64, maxTokens),
-    ...(systemPrompt?.trim() ? { system: systemPrompt } : {}),
-    messages,
+    messages: [
+      ...(systemPrompt?.trim() ? [{ role: "system" as const, content: systemPrompt }] : []),
+      ...messages,
+    ],
   });
 
-  const textContent = response.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
+  const textContent = response.choices?.[0]?.message?.content ?? "";
 
   return {
     choices: [{ message: { role: "assistant", content: textContent } }],

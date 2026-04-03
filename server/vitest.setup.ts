@@ -239,6 +239,7 @@ function buildMock() {
       totalCampaigns: 0,
       totalMessages: 0,
       totalRevenue: 0,
+      totalAppointments: 0,
     }),
 
     createAnalyticsSnapshot: vi.fn().mockImplementation(async (data: Record<string, unknown>) => {

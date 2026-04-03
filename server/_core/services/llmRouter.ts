@@ -1,9 +1,9 @@
 /**
- * LLM Router — Anthropic Claude only (all ApexAI LLM traffic).
+ * LLM Router — xAI Grok (OpenAI-compatible). XAI_API_KEY required.
  * chooseRoute() is used for analytics / logging (fast vs smart intent), not provider selection.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -21,11 +21,7 @@ export interface LLMResponse {
 }
 
 function defaultRouterModel(): string {
-  return (
-    process.env.CLAUDE_MODEL ||
-    process.env.LLM_MODEL ||
-    "claude-haiku-4-5-20251001"
-  ).trim();
+  return (process.env.GROK_MODEL || process.env.LLM_MODEL || "grok-3-fast").trim();
 }
 
 // ── Routing Logic (semantic label only) ───────────────────────────────────────
@@ -63,32 +59,30 @@ export function chooseRoute(
   return "fast";
 }
 
-// ── Claude (only path) ────────────────────────────────────────────────────────
+// ── Grok (xAI OpenAI-compatible) ───────────────────────────────────────────────
 
-async function callClaude(messages: RouterMessage[], maxTokens = 200): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey?.trim()) throw new Error("ANTHROPIC_API_KEY not set");
+async function callGrok(messages: RouterMessage[], maxTokens = 200): Promise<string> {
+  const apiKey = (process.env.XAI_API_KEY ?? "").trim();
+  if (!apiKey) throw new Error("XAI_API_KEY not set");
 
-  const client = new Anthropic({ apiKey });
+  const client = new OpenAI({ apiKey, baseURL: "https://api.x.ai/v1" });
   const systemMsg = messages.find((m) => m.role === "system")?.content ?? "";
   const chatMessages = messages
     .filter((m) => m.role !== "system")
     .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
   const model = defaultRouterModel();
-  const response = await client.messages.create({
+  const response = await client.chat.completions.create({
     model,
     max_tokens: maxTokens,
     temperature: 0.3,
-    system: systemMsg,
-    messages: chatMessages,
+    messages: [
+      ...(systemMsg ? [{ role: "system" as const, content: systemMsg }] : []),
+      ...chatMessages,
+    ],
   });
 
-  return response.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join(" ")
-    .trim();
+  return (response.choices?.[0]?.message?.content ?? "").trim();
 }
 
 // ── Main Router ───────────────────────────────────────────────────────────────
@@ -101,9 +95,9 @@ export async function routedLLMCall(
 ): Promise<LLMResponse> {
   const semanticRoute = chooseRoute(transcript, turnHistory, objectionCount);
   const t0 = Date.now();
-  const text = await callClaude(messages, 512);
+  const text = await callGrok(messages, 512);
   console.log(
-    `[LLM:Claude] route=${semanticRoute} model=${defaultRouterModel()} "${text.slice(0, 60)}" (${Date.now() - t0}ms)`
+    `[LLM:Grok] route=${semanticRoute} model=${defaultRouterModel()} "${text.slice(0, 60)}" (${Date.now() - t0}ms)`
   );
   return {
     text,
