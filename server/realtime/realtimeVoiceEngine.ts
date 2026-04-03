@@ -1058,7 +1058,7 @@ export function createCallEngine(opts: EngineOptions): void {
       traceEvent(callId, "hangup_signal", { reason: "end_intent" });
       syncPolicySnapshot(transcript, { intent: classified.intent, mode: "close" });
       appendHistory("user", transcript);
-      await speak("No problem, thanks for calling, have a great day.", epoch);
+      await speak("Thanks so much for calling. Have a wonderful day, and don't hesitate to call back anytime.", epoch);
       setTimeout(() => void finalizeHard({ reason: "end_intent", outcome: "not_interested" }), 1500);
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
       return;
@@ -1510,7 +1510,7 @@ export function createCallEngine(opts: EngineOptions): void {
     log(`[TOOL] ${toolName}: ${JSON.stringify(toolArgs)}`);
 
     if (toolName === "end_call") {
-      await speak("No problem, thanks for calling, have a great day.", epoch);
+      await speak("Thanks so much for calling. Have a wonderful day, and don't hesitate to call back anytime.", epoch);
       setTimeout(() => void finalizeHard({ reason: "tool_end_call", outcome: "not_interested" }), 1500);
     } else if (toolName === "book_appointment") {
       if (!canOfferBooking(policyState)) {
@@ -1758,10 +1758,10 @@ export function createCallEngine(opts: EngineOptions): void {
               : scriptLine;
           } else if (isOutbound) {
             greeting = sessGreet?.complianceRecordingPending
-              ? `This call may be recorded for quality assurance. Hi, this is ${bname} — do you have a quick moment?`
-              : `Hi, this is ${bname} — do you have a quick moment?`;
+              ? `This call may be recorded for quality assurance. Hi, this is Alex from ${bname} — do you have a quick moment?`
+              : `Hi, this is Alex from ${bname} — do you have a quick moment?`;
           } else {
-            greeting = `Hi, thanks for calling ${bname}. How can I help you today?`;
+            greeting = `Hi, thanks for calling ${bname}, this is Alex. How can I help you today?`;
           }
           await speak(greeting, generationEpoch);
           if (

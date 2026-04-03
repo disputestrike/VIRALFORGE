@@ -72,7 +72,7 @@ export const ENV = {
   /** Multiply Cartesia voice profile speed (~0.91 default; override with VOICE_TTS_SPEED_SCALE). */
   voiceTtsSpeedScale: Math.min(1.25, Math.max(0.55, parseFloat(process.env.VOICE_TTS_SPEED_SCALE ?? "1.0") || 1.0)),
   /** After Deepgram speech_final, pause before LLM — target 200–300ms for natural turn-taking. */
-  voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "120", 10) || 0),
+  voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "80", 10) || 0),
   /**
    * After assistant audio finishes, if the caller stays quiet, prompt one upbeat check-in (sales tempo).
    * Set VOICE_USER_SILENCE_REENGAGE_ENABLED=false to disable.
@@ -81,7 +81,7 @@ export const ENV = {
   /** Ms of user silence after assistant playback ends before auto check-in (3s–30s). Default 12s — long enough for user to think. */
   voiceUserSilenceReengageMs: Math.max(
     3000,
-    Math.min(30000, parseInt(process.env.VOICE_USER_SILENCE_REENGAGE_MS ?? "12000", 10) || 12000)
+    Math.min(30000, parseInt(process.env.VOICE_USER_SILENCE_REENGAGE_MS ?? "10000", 10) || 12000)
   ),
   /**
    * Mu-law barge-in threshold on the 0–127 scale used by estimateEnergy (avg distance from silence).
@@ -98,7 +98,7 @@ export const ENV = {
   /** Deepgram utterance_end_ms — cap wait for utterance boundary. */
   voiceDeepgramUtteranceEndMs: Math.max(300, Math.min(3000, parseInt(process.env.VOICE_DEEPGRAM_UTTERANCE_END_MS ?? "800", 10) || 800)),
   /** Voice LLM max tokens per turn. */
-  voiceLlmMaxTokens: Math.min(1200, Math.max(200, parseInt(process.env.VOICE_LLM_MAX_TOKENS ?? "350", 10) || 350)),
+  voiceLlmMaxTokens: Math.min(1200, Math.max(200, parseInt(process.env.VOICE_LLM_MAX_TOKENS ?? "600", 10) || 350)),
   /** Voice LLM temperature. */
   voiceLlmTemperature: Math.min(0.85, Math.max(0.1, parseFloat(process.env.VOICE_LLM_TEMPERATURE ?? "0.25") || 0.25)),
   /**

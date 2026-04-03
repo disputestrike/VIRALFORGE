@@ -259,7 +259,7 @@ export const COPY_BLOCKS = {
   /** Continuation tone — assumptive, not a cold handoff. */
   booking:
     "Let's do this — I can show you exactly how this works for your business.\n\nI've got tomorrow at 10 or 2 — which works better?",
-  close: "Thanks for the time — talk soon.",
+  close: "Thanks so much for calling. Have a great day, and feel free to call back anytime.",
 } as const;
 
 export type BlueprintDeterministicResult =
