@@ -190,9 +190,9 @@ async function startServer() {
   console.log(`  Google Auth: ${ENV.googleClientId ? "✅ enabled" : "❌ disabled (set GOOGLE_CLIENT_ID)"}`);
   console.log(`  Voice/SMS:   ${ENV.voiceEnabled ? "✅ SignalWire ready" : "⚠️  disabled (set SIGNALWIRE_PROJECT_ID)"}`);
   console.log(`  Email:       ${ENV.emailEnabled ? "✅ Resend ready" : "⚠️  disabled (set RESEND_API_KEY)"}`);
-  console.log(`  STT:         ${ENV.sttEnabled ? "✅ Whisper ready" : "⚠️  disabled (set OPENAI_API_KEY)"}`);
+  console.log(`  STT:         ${ENV.sttEnabled ? "✅ Deepgram ready" : "⚠️  disabled (set DEEPGRAM_API_KEY)"}`);
   console.log(`  TTS:         ${ENV.ttsEnabled ? "✅ Cartesia ready" : "⚠️  disabled (set CARTESIA_API_KEY)"}`);
-  console.log(`  AI/LLM:      ${ENV.aiEnabled ? "✅ Claude (ANTHROPIC_API_KEY)" : "⚠️  disabled — set ANTHROPIC_API_KEY"}`);
+  console.log(`  AI/LLM:      ${ENV.aiEnabled ? `✅ Cerebras (${ENV.cerebrasModel})` : "⚠️  disabled — set CEREBRAS_API_KEY"}`);
   console.log("");
 
   // INTEGRATION: Initialize job queue and workers
@@ -537,12 +537,12 @@ async function startServer() {
         voice:    ENV.voiceEnabled  ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         voiceRealtime: ENV.voiceRealtimeReady
           ? "ready (deepgram+cartesia+cerebras)"
-          : "incomplete — set DEEPGRAM_API_KEY, CARTESIA_API_KEY, and ANTHROPIC_API_KEY (live voice uses Claude only)",
+          : "incomplete — set DEEPGRAM_API_KEY, CARTESIA_API_KEY, and CEREBRAS_API_KEY (live voice uses Cerebras LLM)",
         sms:      ENV.smsEnabled    ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         email:    ENV.emailEnabled  ? "ready"  : "disabled — add RESEND_API_KEY",
         stripe:   ENV.stripeEnabled ? "ready — webhook POST /api/stripe/webhook" : "disabled — add STRIPE_SECRET_KEY + price ids",
         calendar: (process.env.GCAL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID) ? "ready (Google Calendar)" : "ready (add-to-calendar links)",
-        stt:      ENV.sttEnabled    ? "ready"  : "disabled — add OPENAI_API_KEY or DEEPGRAM_API_KEY",
+        stt:      ENV.sttEnabled    ? "ready (Deepgram)"  : "disabled — add DEEPGRAM_API_KEY",
         tts:      ENV.ttsEnabled    ? "ready"  : "disabled — add CARTESIA_API_KEY",
         ai:       ENV.aiEnabled     ? `ready (Cerebras — ${ENV.cerebrasModel})`  : "disabled — add CEREBRAS_API_KEY",
       },
@@ -725,7 +725,7 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
       let userText = TranscriptionText || "";
 
       if (!userText && RecordingUrl) {
-        // Download recording and transcribe with Whisper
+        // Download recording and transcribe with Deepgram STT
         const audioResp = await fetch(`${RecordingUrl}.wav`);
         const audioBuffer = Buffer.from(await audioResp.arrayBuffer());
         const { transcribeAudio } = await import("./services/sttService");
