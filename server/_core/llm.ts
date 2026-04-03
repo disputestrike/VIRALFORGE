@@ -1,7 +1,7 @@
 /**
  * LLM — Cerebras (OpenAI-compatible API). 5-key round-robin.
  * Set CEREBRAS_API_KEY_1 through CEREBRAS_API_KEY_5.
- * Model: CEREBRAS_MODEL or default qwen-3-235b-a22b-instruct-2507.
+ * Model: CEREBRAS_MODEL or default llama3.1-8b.
  */
 
 import OpenAI from "openai";
@@ -70,7 +70,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       : [{ role: "user" as const, content: "Hello" }];
 
   const model =
-    (params.model || process.env.CEREBRAS_MODEL || "qwen-3-235b-a22b-instruct-2507").trim();
+    (params.model || process.env.CEREBRAS_MODEL || "llama3.1-8b").trim();
 
   const client = makeCerebrasClient(apiKey);
 
