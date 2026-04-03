@@ -90,7 +90,7 @@ export async function generateResponse(
 
   const pack = INDUSTRY_PACKS[state.industry] || INDUSTRY_PACKS.general;
   const businessName = clientConfig?.businessName || "ApexAI";
-  const agentName = clientConfig?.agentName || "Aria";
+  const agentName = clientConfig?.agentName || "Alex";
 
   // 1. Classify intent
   const classification = await classifyIntent(userText, state.industry);

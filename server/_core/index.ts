@@ -190,9 +190,11 @@ async function startServer() {
   console.log(`  Google Auth: ${ENV.googleClientId ? "✅ enabled" : "❌ disabled (set GOOGLE_CLIENT_ID)"}`);
   console.log(`  Voice/SMS:   ${ENV.voiceEnabled ? "✅ SignalWire ready" : "⚠️  disabled (set SIGNALWIRE_PROJECT_ID)"}`);
   console.log(`  Email:       ${ENV.emailEnabled ? "✅ Resend ready" : "⚠️  disabled (set RESEND_API_KEY)"}`);
-  console.log(`  STT:         ${ENV.sttEnabled ? "✅ Deepgram ready" : "⚠️  disabled (set DEEPGRAM_API_KEY)"}`);
-  console.log(`  TTS:         ${ENV.ttsEnabled ? "✅ Cartesia ready" : "⚠️  disabled (set CARTESIA_API_KEY)"}`);
-  console.log(`  AI/LLM:      ${ENV.aiEnabled ? `✅ Cerebras (${ENV.cerebrasModel})` : "⚠️  disabled — set CEREBRAS_API_KEY"}`);
+  console.log(`  STT:         ${ENV.sttEnabled ? `✅ Deepgram ready (model=${process.env.VOICE_DEEPGRAM_MODEL ?? "nova-3"})` : "⚠️  disabled (set DEEPGRAM_API_KEY)"}`);
+  const activeTts = ENV.elevenLabsApiKey ? `Cartesia+ElevenLabs (TTS_PROVIDER=${ENV.ttsProvider})` : "Cartesia";
+  console.log(`  TTS:         ${ENV.ttsEnabled || ENV.elevenLabsApiKey ? `✅ ${activeTts}` : "⚠️  disabled (set CARTESIA_API_KEY or ELEVENLABS_API_KEY)"}`);
+  const activeLlm = ENV.cerebrasApiKey ? `Cerebras (${ENV.cerebrasModel})` : ENV.anthropicApiKey ? "Anthropic Claude" : ENV.groqApiKey ? "Groq" : "NONE";
+  console.log(`  AI/LLM:      ${ENV.aiEnabled ? `✅ ${activeLlm} [LLM_PROVIDER=${ENV.llmProvider}]` : "⚠️  disabled — set CEREBRAS_API_KEY, ANTHROPIC_API_KEY, or GROQ_API_KEY"}`);
   console.log("");
 
   // INTEGRATION: Initialize job queue and workers
@@ -536,15 +538,15 @@ async function startServer() {
         redis:    ENV.redisUrl    ? "configured" : "missing — using in-memory fallback",
         voice:    ENV.voiceEnabled  ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         voiceRealtime: ENV.voiceRealtimeReady
-          ? "ready (deepgram+cartesia+cerebras)"
-          : "incomplete — set DEEPGRAM_API_KEY, CARTESIA_API_KEY, and CEREBRAS_API_KEY (live voice uses Cerebras LLM)",
+          ? `ready (Deepgram nova-3 STT + ${ENV.llmProvider} LLM + ${ENV.ttsProvider} TTS)`
+          : "incomplete — set DEEPGRAM_API_KEY + one LLM key (CEREBRAS/ANTHROPIC/GROQ) + one TTS key (CARTESIA/ELEVENLABS)",
         sms:      ENV.smsEnabled    ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         email:    ENV.emailEnabled  ? "ready"  : "disabled — add RESEND_API_KEY",
         stripe:   ENV.stripeEnabled ? "ready — webhook POST /api/stripe/webhook" : "disabled — add STRIPE_SECRET_KEY + price ids",
         calendar: (process.env.GCAL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID) ? "ready (Google Calendar)" : "ready (add-to-calendar links)",
-        stt:      ENV.sttEnabled    ? "ready (Deepgram)"  : "disabled — add DEEPGRAM_API_KEY",
-        tts:      ENV.ttsEnabled    ? "ready"  : "disabled — add CARTESIA_API_KEY",
-        ai:       ENV.aiEnabled     ? `ready (Cerebras — ${ENV.cerebrasModel})`  : "disabled — add CEREBRAS_API_KEY",
+        stt:      ENV.sttEnabled    ? `ready (Deepgram ${process.env.VOICE_DEEPGRAM_MODEL ?? "nova-3"})` : "disabled — add DEEPGRAM_API_KEY",
+        tts:      (ENV.ttsEnabled || ENV.elevenLabsApiKey) ? `ready (${ENV.ttsProvider})` : "disabled — add CARTESIA_API_KEY or ELEVENLABS_API_KEY",
+        ai:       ENV.aiEnabled ? `ready (${ENV.llmProvider} — ${ENV.cerebrasModel || "configured"})` : "disabled — add CEREBRAS_API_KEY, ANTHROPIC_API_KEY, or GROQ_API_KEY",
       },
     });
   });

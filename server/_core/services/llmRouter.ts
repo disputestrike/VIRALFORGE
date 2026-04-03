@@ -1,6 +1,13 @@
 /**
- * LLM Router — Cerebras (OpenAI-compatible). CEREBRAS_API_KEY_1..5 required.
- * chooseRoute() is used for analytics / logging (fast vs smart intent), not provider selection.
+ * LLM Router — Multi-provider with intelligent routing.
+ *
+ * Provider selection (LLM_PROVIDER env var):
+ *   cerebras  (default) — llama3.1-8b via OpenAI-compatible API, 5-key round-robin
+ *   anthropic           — Claude claude-3-5-haiku (complex reasoning, tool-heavy flows)
+ *   groq                — llama-3.1-8b-instant (ultra-low-latency fallback)
+ *
+ * chooseRoute() determines semantic label (fast vs smart) for analytics/logging.
+ * The provider itself is selected by LLM_PROVIDER or callsite opts.
  */
 
 import OpenAI from "openai";
@@ -8,6 +15,7 @@ import OpenAI from "openai";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type LLMRoute = "fast" | "smart";
+export type LLMProvider = "cerebras" | "anthropic" | "groq";
 
 export interface RouterMessage {
   role: "system" | "user" | "assistant";
@@ -18,10 +26,26 @@ export interface LLMResponse {
   text: string;
   route: LLMRoute;
   latencyMs: number;
+  provider: LLMProvider;
 }
 
-function defaultRouterModel(): string {
+function defaultRouterModel(provider: LLMProvider): string {
+  if (provider === "anthropic") {
+    return (process.env.ANTHROPIC_MODEL || "claude-3-5-haiku-20241022").trim();
+  }
+  if (provider === "groq") {
+    return (process.env.GROQ_MODEL || "llama-3.1-8b-instant").trim();
+  }
   return (process.env.CEREBRAS_MODEL || process.env.LLM_MODEL || "llama3.1-8b").trim();
+}
+
+/** Resolve active LLM provider. Prefers LLM_PROVIDER env, then auto-detects by available keys. */
+function resolveProvider(override?: LLMProvider): LLMProvider {
+  const pref = (override || process.env.LLM_PROVIDER || "").toLowerCase().trim() as LLMProvider;
+  if (pref === "anthropic" && process.env.ANTHROPIC_API_KEY?.trim()) return "anthropic";
+  if (pref === "groq" && process.env.GROQ_API_KEY?.trim()) return "groq";
+  // Default: Cerebras (requires at least one key)
+  return "cerebras";
 }
 
 // ── Routing Logic (semantic label only) ───────────────────────────────────────
@@ -59,19 +83,77 @@ export function chooseRoute(
   return "fast";
 }
 
-// ── Grok (xAI OpenAI-compatible) ───────────────────────────────────────────────
+// ── Cerebras (OpenAI-compatible) ──────────────────────────────────────────────
 
-async function callGrok(messages: RouterMessage[], maxTokens = 200): Promise<string> {
+async function callCerebras(messages: RouterMessage[], maxTokens = 200): Promise<string> {
   const { getCerebrasKey } = await import("../cerebrasKeyManager");
   const apiKey = getCerebrasKey();
+  if (!apiKey) throw new Error("CEREBRAS_API_KEY not configured");
 
   const client = new OpenAI({ apiKey, baseURL: "https://api.cerebras.ai/v1" });
+  const model = defaultRouterModel("cerebras");
+
   const systemMsg = messages.find((m) => m.role === "system")?.content ?? "";
   const chatMessages = messages
     .filter((m) => m.role !== "system")
     .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
-  const model = defaultRouterModel();
+  const response = await client.chat.completions.create({
+    model,
+    max_tokens: maxTokens,
+    temperature: 0.3,
+    messages: [
+      ...(systemMsg ? [{ role: "system" as const, content: systemMsg }] : []),
+      ...chatMessages,
+    ],
+  });
+
+  return (response.choices?.[0]?.message?.content ?? "").trim();
+}
+
+// ── Anthropic Claude ──────────────────────────────────────────────────────────
+
+async function callAnthropic(messages: RouterMessage[], maxTokens = 400): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
+
+  const { default: Anthropic } = await import("@anthropic-ai/sdk");
+  const client = new Anthropic({ apiKey });
+  const model = defaultRouterModel("anthropic");
+
+  const systemMsg = messages.find((m) => m.role === "system")?.content ?? "";
+  const chatMessages = messages
+    .filter((m) => m.role !== "system")
+    .map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    }));
+
+  const response = await client.messages.create({
+    model,
+    max_tokens: maxTokens,
+    system: systemMsg || undefined,
+    messages: chatMessages,
+  });
+
+  const block = response.content?.[0];
+  return (block && "text" in block ? block.text : "").trim();
+}
+
+// ── Groq (OpenAI-compatible) ──────────────────────────────────────────────────
+
+async function callGroq(messages: RouterMessage[], maxTokens = 200): Promise<string> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error("GROQ_API_KEY not configured");
+
+  const client = new OpenAI({ apiKey, baseURL: "https://api.groq.com/openai/v1" });
+  const model = defaultRouterModel("groq");
+
+  const systemMsg = messages.find((m) => m.role === "system")?.content ?? "";
+  const chatMessages = messages
+    .filter((m) => m.role !== "system")
+    .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+
   const response = await client.chat.completions.create({
     model,
     max_tokens: maxTokens,
@@ -91,18 +173,69 @@ export async function routedLLMCall(
   messages: RouterMessage[],
   transcript: string,
   turnHistory: Array<{ role: string; content: string }>,
-  objectionCount = 0
+  objectionCount = 0,
+  providerOverride?: LLMProvider
 ): Promise<LLMResponse> {
   const semanticRoute = chooseRoute(transcript, turnHistory, objectionCount);
+  // For smart routing: prefer anthropic if available (better reasoning), else cerebras
+  const wantProvider: LLMProvider =
+    providerOverride ??
+    (semanticRoute === "smart" && process.env.ANTHROPIC_API_KEY?.trim()
+      ? "anthropic"
+      : resolveProvider());
+
+  const provider = resolveProvider(wantProvider);
   const t0 = Date.now();
-  const text = await callGrok(messages, 512);
+  let text = "";
+
+  try {
+    if (provider === "anthropic") {
+      text = await callAnthropic(messages, 512);
+    } else if (provider === "groq") {
+      text = await callGroq(messages, 512);
+    } else {
+      text = await callCerebras(messages, 512);
+    }
+  } catch (err: any) {
+    // Fallback chain: anthropic → cerebras → groq
+    const tried = new Set([provider]);
+    for (const fallback of ["cerebras", "groq", "anthropic"] as LLMProvider[]) {
+      if (tried.has(fallback)) continue;
+      const hasFallbackKey =
+        fallback === "cerebras"
+          ? Boolean(process.env.CEREBRAS_API_KEY?.trim() || process.env.CEREBRAS_API_KEY_1?.trim())
+          : fallback === "anthropic"
+          ? Boolean(process.env.ANTHROPIC_API_KEY?.trim())
+          : Boolean(process.env.GROQ_API_KEY?.trim());
+      if (!hasFallbackKey) continue;
+      console.warn(`[LLM:Router] ${provider} failed (${err.message}) — falling back to ${fallback}`);
+      try {
+        if (fallback === "anthropic") text = await callAnthropic(messages, 512);
+        else if (fallback === "groq") text = await callGroq(messages, 512);
+        else text = await callCerebras(messages, 512);
+        console.log(`[LLM:${fallback}] fallback success route=${semanticRoute} (${Date.now() - t0}ms)`);
+        return {
+          text,
+          route: semanticRoute === "smart" ? "smart" : "fast",
+          latencyMs: Date.now() - t0,
+          provider: fallback,
+        };
+      } catch {
+        tried.add(fallback);
+      }
+    }
+    throw err; // all providers exhausted
+  }
+
+  const model = defaultRouterModel(provider);
   console.log(
-    `[LLM:Grok] route=${semanticRoute} model=${defaultRouterModel()} "${text.slice(0, 60)}" (${Date.now() - t0}ms)`
+    `[LLM:${provider}] route=${semanticRoute} model=${model} "${text.slice(0, 60)}" (${Date.now() - t0}ms)`
   );
   return {
     text,
     route: semanticRoute === "smart" ? "smart" : "fast",
     latencyMs: Date.now() - t0,
+    provider,
   };
 }
 

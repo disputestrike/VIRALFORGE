@@ -21,8 +21,11 @@ async function transcribeDeepgram(audioBuffer: Buffer, language: string): Promis
 
   // Deepgram REST pre-recorded endpoint — fastest path for buffered audio
   // Returns transcript in ~100-200ms
+  // Nova-3: best accuracy for telephony audio per research spec.
+  // Set VOICE_DEEPGRAM_MODEL=nova-2-phonecall to revert to legacy model.
+  const model = (process.env.VOICE_DEEPGRAM_MODEL ?? "nova-3").trim();
   const params = new URLSearchParams({
-    model: "nova-2",
+    model,
     language: language || "en",
     punctuate: "true",
     smart_format: "true",
@@ -31,6 +34,10 @@ async function transcribeDeepgram(audioBuffer: Buffer, language: string): Promis
     sample_rate: "8000",
     channels: "1",
   });
+  // PII redaction — enabled by default; disable with VOICE_DEEPGRAM_REDACT=false
+  if (process.env.VOICE_DEEPGRAM_REDACT !== "false") {
+    params.set("redact", "pci");
+  }
 
   const response = await fetch(
     `https://api.deepgram.com/v1/listen?${params.toString()}`,

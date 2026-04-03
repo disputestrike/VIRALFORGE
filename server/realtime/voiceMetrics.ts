@@ -40,7 +40,10 @@ export type VoiceTracePhase =
   | "fast_intent_interim"
   | "latency_stt_final_to_tts_first"
   | "compliance_opt_out"
-  | "llm_json_envelope_applied";
+  | "llm_json_envelope_applied"
+  | "tts_first_clause_streaming"
+  | "tts_clause"
+  | "latency_budget_exceeded";
 
 const starts = new Map<string, number>();
 

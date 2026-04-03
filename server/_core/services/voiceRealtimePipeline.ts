@@ -193,7 +193,7 @@ export class VoiceRealtimePipeline {
       return;
     }
 
-    const model = (process.env.VOICE_DEEPGRAM_MODEL ?? "nova-2-phonecall").trim();
+    const model = (process.env.VOICE_DEEPGRAM_MODEL ?? "nova-3").trim();
     const params = new URLSearchParams({
       model,
       encoding: "mulaw",
@@ -280,7 +280,7 @@ export class VoiceRealtimePipeline {
     const apiKey = process.env.CARTESIA_API_KEY;
     if (!apiKey) return;
 
-    const url = `wss://api.cartesia.ai/tts/websocket?api_key=${apiKey}&cartesia_version=2024-06-10`;
+    const url = `wss://api.cartesia.ai/tts/websocket?api_key=${apiKey}&cartesia_version=2024-11-13`;
 
     import("ws").then(({ default: WebSocket }) => {
       const ws = new WebSocket(url);

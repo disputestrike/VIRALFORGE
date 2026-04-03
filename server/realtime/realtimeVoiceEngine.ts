@@ -748,7 +748,9 @@ export function createCallEngine(opts: EngineOptions): void {
 
     // Minimal query set avoids HTTP 400 on handshake (telephony-optimized model + mulaw 8k).
     // Extra flags (utterance_end_ms, vad_events, smart_format) caused 400 on some projects — opt in via env.
-    const model = (process.env.VOICE_DEEPGRAM_MODEL ?? "nova-2-phonecall").trim();
+    // Default: nova-3 (or nova-3-phonecall) for best accuracy per research spec.
+    // Set VOICE_DEEPGRAM_MODEL=nova-2-phonecall to revert to legacy model.
+    const model = (process.env.VOICE_DEEPGRAM_MODEL ?? "nova-3").trim();
     const params = new URLSearchParams({
       model,
       encoding: "mulaw",
@@ -768,6 +770,10 @@ export function createCallEngine(opts: EngineOptions): void {
     }
     if (process.env.VOICE_DEEPGRAM_SMART_FORMAT === "true") {
       params.set("smart_format", "true");
+    }
+    // PII redaction — enabled by default to protect callers; disable with VOICE_DEEPGRAM_REDACT=false.
+    if (process.env.VOICE_DEEPGRAM_REDACT !== "false") {
+      params.set("redact", "pci");
     }
 
     const url = `wss://api.deepgram.com/v1/listen?${params}`;
@@ -1108,16 +1114,17 @@ export function createCallEngine(opts: EngineOptions): void {
       "I didn't quite catch that—could you say that again in a few words?";
     const { getCerebrasKey, rotateCerebrasKey, getCerebrasKeyIndex } = await import("../_core/cerebrasKeyManager");
     const cerebrasKey = getCerebrasKey();
+    const activeProvider = ENV.llmProvider || "cerebras";
     traceEvent(callId, "llm_route", {
-      path: "cerebras",
+      path: activeProvider,
       model: ENV.cerebrasModel,
     });
     log(
-      `[ROUTE] Voice LLM: Cerebras model=${ENV.cerebrasModel} key=${getCerebrasKeyIndex()}/${ENV.cerebrasKeys.length}`
+      `[ROUTE] Voice LLM: provider=${activeProvider} model=${ENV.cerebrasModel} key=${getCerebrasKeyIndex()}/${ENV.cerebrasKeys.length}`
     );
 
-    if (!cerebrasKey) {
-      log("[Voice] Missing CEREBRAS_API_KEY — configure at least one for live voice");
+    if (!ENV.aiEnabled) {
+      log("[Voice] No LLM provider configured — add CEREBRAS_API_KEY, ANTHROPIC_API_KEY, or GROQ_API_KEY");
       try {
         await speak(
           "I'm sorry, this line isn't fully configured right now. Please try again later.",
@@ -1127,6 +1134,18 @@ export function createCallEngine(opts: EngineOptions): void {
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
       return;
     }
+
+    // Latency budget enforcement — sub-700ms end-to-end target from research spec.
+    // After 700ms total turn time with no TTS audio, speak a brief hold line.
+    const LATENCY_BUDGET_MS = parseInt(process.env.VOICE_LATENCY_BUDGET_MS ?? "700", 10) || 700;
+    const latencyBudgetTimer = setTimeout(() => {
+      if (epoch !== generationEpoch || isEnded || isSpeaking) return;
+      traceEvent(callId, "latency_budget_exceeded", { budgetMs: LATENCY_BUDGET_MS });
+      log(`[LATENCY] Turn exceeded ${LATENCY_BUDGET_MS}ms budget — inserting hold ack`);
+      void speak("One moment.", epoch);
+    }, LATENCY_BUDGET_MS);
+
+    const clearLatencyTimer = () => clearTimeout(latencyBudgetTimer);
 
     const now = new Date();
     const plan = planStrictLlmTurn({
@@ -1146,6 +1165,7 @@ export function createCallEngine(opts: EngineOptions): void {
 
     try {
       await respondVoiceLlm(epoch, transcript, plan.strictBlock, recoveryPrefixForLlm);
+      clearLatencyTimer();
     } catch (e: any) {
       log(`[Voice LLM] Failed: ${e?.message ?? e}`);
       // Rotate to next Cerebras key before retry
@@ -1352,7 +1372,14 @@ export function createCallEngine(opts: EngineOptions): void {
     if (!clean.trim() && !full.trim()) throw new Error("Empty Cerebras response");
   }
 
-  // ── Stream LLM → buffer → direct-answer guard → Cartesia sentence-by-sentence ────────────────────────
+  // ── True streaming LLM → TTS pipeline — research-compliant ──────────────────
+  //
+  // Tokens flow from LLM in real-time. As soon as a sentence boundary is detected
+  // (. ! ? followed by space/end, or a long clause with a comma/dash boundary),
+  // that clause is sent to Cartesia TTS immediately — before the full LLM response
+  // is complete. This is the "agent_chunk" streaming architecture from the research doc:
+  //   STT → speech_final → LLM token stream → clause boundary → Cartesia → audio
+  // Latency budget: first TTS audio fires ~150–300ms after LLM first token.
   async function streamToCartesia(
     textDeltas: AsyncIterable<string>,
     epoch: number,
@@ -1383,14 +1410,35 @@ export function createCallEngine(opts: EngineOptions): void {
       void speak("Still with you — almost there.", epoch);
     }, 500);
 
-    cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     let fullText = "";
-    let firstTtsClause = true;
-    let cartesiaNeedsEndFlush = false;
+    let tokenBuffer = ""; // accumulates tokens until a speakable clause boundary
+    let clausesSent = 0;
+
+    // Sentence-boundary detector for streaming tokens.
+    // Returns the next complete clause to speak and the remaining buffer.
+    function extractNextClause(buf: string): { clause: string; remainder: string } | null {
+      // Hard sentence boundaries: . ! ? followed by space or end-of-string
+      const hardBoundary = /[.!?](?=[\s]|$)/;
+      const m = buf.match(hardBoundary);
+      if (m && m.index !== undefined) {
+        const boundary = m.index + m[0].length;
+        return { clause: buf.slice(0, boundary).trim(), remainder: buf.slice(boundary).trimStart() };
+      }
+      // Soft clause boundary: comma or em-dash after at least 30 chars — only if buffer > 60 chars
+      // to avoid chopping short phrases mid-thought.
+      if (buf.length > 60) {
+        const softBoundary = /[,—](?=\s)/;
+        const sm = buf.match(softBoundary);
+        if (sm && sm.index !== undefined && sm.index >= 30) {
+          return { clause: buf.slice(0, sm.index + 1).trim(), remainder: buf.slice(sm.index + 1).trimStart() };
+        }
+      }
+      return null;
+    }
 
     const sendClause = (text: string) => {
       if (!text.trim() || epoch !== generationEpoch || isEnded) return;
-      const clean = text
+      const cleaned = text
         .replace(/TOOL:\s*\w+\s*\{[^}]*\}/g, "")
         .replace(/https?:\/\/[^\s]+/gi, "")
         .replace(/www\.[^\s]+/gi, "")
@@ -1399,13 +1447,16 @@ export function createCallEngine(opts: EngineOptions): void {
         .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
         .replace(/\s+/g, " ")
         .trim();
-      const speakable = speakableLine(clean);
+      const speakable = speakableLine(cleaned);
       if (!speakable) return;
-      // Each sentence gets its own Cartesia context to avoid "Context has closed" errors.
-      // Clear the old context so cartesiaSend() creates a fresh one.
+      // Each clause gets its own fresh Cartesia context to avoid "Context has closed" errors.
       cartesiaContextId = "";
       cartesiaSend(speakable, false);
-      firstTtsClause = false;
+      clausesSent++;
+      traceEvent(callId, clausesSent === 1 ? "tts_first_clause_streaming" : "tts_clause", {
+        clause: speakable.slice(0, 60),
+        clauseIndex: clausesSent,
+      });
     };
 
     try {
@@ -1417,6 +1468,16 @@ export function createCallEngine(opts: EngineOptions): void {
             llmAckTimer = null;
           }
           fullText += delta;
+          tokenBuffer += delta;
+
+          // Try to extract and send complete clauses as tokens arrive.
+          // This is the key streaming optimization: TTS starts before LLM finishes.
+          let next = extractNextClause(tokenBuffer);
+          while (next) {
+            sendClause(next.clause);
+            tokenBuffer = next.remainder;
+            next = extractNextClause(tokenBuffer);
+          }
         }
       }
     } catch (e: any) {
@@ -1440,11 +1501,26 @@ export function createCallEngine(opts: EngineOptions): void {
     if (ENV.voiceGrokJsonEnvelope) {
       const extracted = tryExtractJsonSpokenText(fullText);
       if (extracted) {
+        // Re-process: flush the extracted text as streaming clauses
         fullText = extracted;
+        tokenBuffer = extracted;
+        let next = extractNextClause(tokenBuffer);
+        while (next) {
+          if (clausesSent === 0) sendClause(next.clause); // only if nothing sent yet
+          tokenBuffer = next.remainder;
+          next = extractNextClause(tokenBuffer);
+        }
         traceEvent(callId, "llm_json_envelope_applied", { len: extracted.length });
       }
     }
 
+    // Flush any remaining buffer (e.g. last sentence without trailing punctuation)
+    if (tokenBuffer.trim() && epoch === generationEpoch && !isEnded) {
+      sendClause(tokenBuffer.trim());
+      tokenBuffer = "";
+    }
+
+    // Build full clean response for guard + history
     let cleanResponse = fullText.replace(/TOOL:\s*\w+\s*\{[^}]*\}/g, "").trim();
     const guard = postProcessAssistantResponse(userTranscript, cleanResponse, classifyIntent(userTranscript));
     if (guard.answerInsufficient) {
@@ -1465,14 +1541,8 @@ export function createCallEngine(opts: EngineOptions): void {
       logVoiceControllerEvent(callId, "failure", { bucket: "spoke_too_long", detail: "sentence_count" });
     }
 
-    const toSpeak = parts.length > 0 ? parts : [cleanResponse];
-    for (const sent of toSpeak) {
-      if (!sent.trim()) continue;
-      sendClause(sent);
-    }
-    if (cartesiaNeedsEndFlush && cartesiaContextId) {
-      cartesiaFlushExplicit(cartesiaContextId);
-    }
+    // Note: we do NOT re-send clauses here — they were already sent during streaming above.
+    // The sendClause loop above has already dispatched audio to Cartesia token-by-token.
 
     if (cleanResponse) {
       appendHistory("assistant", cleanResponse);

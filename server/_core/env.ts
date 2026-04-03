@@ -121,7 +121,25 @@ export const ENV = {
   /** Send Cartesia `generation_config.emotion` when profile has `ttsEmotion` (disable if API rejects). */
   voiceCartesiaEmotion: process.env.VOICE_CARTESIA_EMOTION !== "false",
 
-  // ── CEREBRAS ONLY — sole LLM provider (5-key round-robin) ──
+  // ── Groq (optional ultra-low-latency LLM fallback) ──────────────────────────
+  groqApiKey: (process.env.GROQ_API_KEY ?? "").trim(),
+  groqModel: (process.env.GROQ_MODEL ?? "llama-3.1-8b-instant").trim(),
+
+  /**
+   * LLM provider selection for voice pipeline.
+   * cerebras (default) | anthropic | groq
+   * The router auto-upgrades to anthropic for "smart" routes when ANTHROPIC_API_KEY is set.
+   */
+  llmProvider: (process.env.LLM_PROVIDER ?? "cerebras").trim(),
+
+  /**
+   * TTS provider selection.
+   * cartesia (default) | elevenlabs
+   * Auto-fallback: if primary unavailable, tries the other.
+   */
+  ttsProvider: (process.env.TTS_PROVIDER ?? "cartesia").trim(),
+
+  // ── Cerebras (primary LLM — 5-key round-robin) ──────────────────────────
   cerebrasKeys: [
     (process.env.CEREBRAS_API_KEY ?? process.env.CEREBRAS_API_KEY_1 ?? "").trim(),
     (process.env.CEREBRAS_API_KEY_2 ?? "").trim(),
@@ -164,13 +182,16 @@ export const ENV = {
   get emailEnabled()  { return this.resendApiKey !== ""; },
   get ttsEnabled()    { return (process.env.CARTESIA_API_KEY ?? "").trim() !== ""; },
   get sttEnabled()    { return this.deepgramApiKey !== ""; },
-  /** Live SignalWire streaming voice: Deepgram + Cartesia + xAI Grok (LLM). */
+  /** Live SignalWire streaming voice: requires Deepgram STT + any LLM + any TTS. */
   get voiceRealtimeReady() {
-    return (
-      this.deepgramApiKey !== "" &&
-      this.cartesiaApiKey !== "" &&
-      this.cerebrasApiKey !== ""
-    );
+    const hasLlm =
+      this.cerebrasApiKey !== "" ||
+      this.anthropicApiKey !== "" ||
+      this.groqApiKey !== "";
+    const hasTts =
+      this.cartesiaApiKey !== "" ||
+      this.elevenLabsApiKey !== "";
+    return this.deepgramApiKey !== "" && hasLlm && hasTts;
   },
   /** When true and a transfer target exists (user profile or env), live voice may transfer via SignalWire. */
   liveTransferEnabled: process.env.LIVE_TRANSFER_ENABLED === "true",
@@ -185,8 +206,12 @@ export const ENV = {
     const name = (this.resendFromName || "ApexAI").trim() || "ApexAI";
     return `${name} <${email}>`;
   },
-  /** AI enabled — xAI Grok for all LLM tasks. */
+  /** AI enabled — true when any LLM provider key is configured. */
   get aiEnabled() {
-    return this.cerebrasApiKey !== "";
+    return (
+      this.cerebrasApiKey !== "" ||
+      this.anthropicApiKey !== "" ||
+      this.groqApiKey !== ""
+    );
   },
 };
