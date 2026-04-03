@@ -124,6 +124,24 @@ export const PHRASE_RECOVERY = [
   "you got it wrong",
 ];
 
+/** Frustration / rejection phrases — agent should offer graceful exit, not continue pitching. */
+export const PHRASE_FRUSTRATION = [
+  "go away",
+  "leave me alone",
+  "stop calling",
+  "stop it",
+  "i said no",
+  "please stop",
+  "quit it",
+  "get off",
+  "hang up",
+  "don't call me",
+  "don't want this",
+  "i don't want to",
+  "not interested",
+  "stop talking",
+];
+
 export const PHRASE_SKEPTICISM = [
   "sounds gimmicky",
   "sounds like a bot",
@@ -182,12 +200,17 @@ export type DeterministicBucket =
   | "benefit"
   | "pricing"
   | "booking_signal"
+  | "frustration"
   | "none";
 
 /** Which phrase map fired (first match wins by bucket order). */
 export function classifyDeterministicBucket(text: string): DeterministicBucket {
   const t = text.trim();
   if (!t) return "none";
+  // Frustration checked first — highest priority; agent must not continue pitching
+  if (contains(t, PHRASE_FRUSTRATION)) return "frustration";
+  // Repeated "no" pattern (e.g. "no no no", "no no")
+  if (/\bno\b.*\bno\b/i.test(t)) return "frustration";
   if (contains(t, PHRASE_SILENCE_COMPLAINT)) return "silence_meta";
   if (contains(t, PHRASE_RECOVERY)) return "recovery";
   if (contains(t, PHRASE_SKEPTICISM)) return "skepticism";
@@ -225,6 +248,9 @@ export function classifyIntent(text: string): BlueprintIntent {
       return "chaos_input";
     case "silence_meta":
       return "re_engagement";
+    case "frustration":
+      // Frustration is handled deterministically before LLM; map to pressure for trace purposes
+      return "pressure";
     default:
       if (contains(text, ["book", "demo", "schedule"])) return "booking";
       return "unknown";
@@ -252,6 +278,9 @@ export const COPY_BLOCKS = {
   /** Controlled recovery: acknowledge → reset frame → return control to caller. */
   recovery_controlled:
     "I hear you. Would you like me to end the call, or is there something specific I can help with?",
+  /** Graceful exit when caller is frustrated or repeatedly rejecting. */
+  frustration_exit:
+    "Totally understand — I won't take up more of your time. Have a great day.",
   chaos: "Got it. Go ahead whenever you're ready.",
   /** After “why aren’t you talking” — bridge then LLM continues the real thread. */
   silence_complaint_bridge:
@@ -475,6 +504,20 @@ export function routeBlueprintDeterministic(
 
   if (bucket !== "skepticism") {
     next = { ...next, skepticismLatch: false };
+  }
+
+  // Frustration bucket — highest priority: graceful exit immediately
+  if (bucket === "frustration") {
+    next = { ...next, mode: "normal", escalationLevel: 0 };
+    return {
+      next,
+      route: {
+        kind: "speak",
+        text: COPY_BLOCKS.frustration_exit,
+        markAnswered: true,
+        endCall: true,
+      },
+    };
   }
 
   if (detectUserAngry(t) && bucket !== "recovery") {

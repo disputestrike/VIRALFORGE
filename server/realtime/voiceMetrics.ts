@@ -40,7 +40,14 @@ export type VoiceTracePhase =
   | "fast_intent_interim"
   | "latency_stt_final_to_tts_first"
   | "compliance_opt_out"
-  | "llm_json_envelope_applied";
+  | "llm_json_envelope_applied"
+  // ── Conversation quality metrics ──────────────────────────────────────────
+  | "quality_frustration_detected"
+  | "quality_disengagement_detected"
+  | "quality_repetition_detected"
+  | "quality_graceful_exit_triggered"
+  | "quality_momentum_shift"
+  | "quality_turn_metrics";
 
 const starts = new Map<string, number>();
 

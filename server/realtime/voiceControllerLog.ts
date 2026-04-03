@@ -13,7 +13,12 @@ export type VoiceControllerFailureBucket =
   | "recovery_failed"
   | "repetition_loop"
   | "stale_final_fired"
-  | "tts_ack_too_talky";
+  | "tts_ack_too_talky"
+  // ── Conversation quality buckets ──────────────────────────────────────────
+  | "frustration_not_handled"
+  | "response_too_repetitive"
+  | "momentum_ignored"
+  | "graceful_exit_delayed";
 
 export function logVoiceControllerEvent(
   callId: string,

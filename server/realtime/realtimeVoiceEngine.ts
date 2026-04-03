@@ -19,6 +19,7 @@ import {
   canOfferBooking,
   inferUtteranceIntent,
   detectLiveTransferIntent,
+  detectFrustrationEscalation,
 } from "./callPolicy";
 import { getVoiceProfile, type VoiceProfile } from "./voiceProfiles";
 import {
@@ -55,7 +56,14 @@ import {
   lookupDiscountsSpoken,
   lookupServiceAreaSpoken,
 } from "./toolLayer";
-import { buildVoiceSystemPrompt } from "./dynamicPrompt";
+import {
+  buildVoiceSystemPrompt,
+  createConversationQualityState,
+  detectCustomerMomentum,
+  trackAssistantPhrase,
+  computeRepetitionScore,
+  type ConversationQualityState,
+} from "./dynamicPrompt";
 import { normalizeToE164US } from "../_core/phoneE164";
 import { classifyTurn } from "./classifyTurn";
 import {
@@ -247,6 +255,8 @@ export function createCallEngine(opts: EngineOptions): void {
   let voiceProfile: VoiceProfile = resolveVoiceProfileForEngine(voiceProfileId);
   const conversationHistory: { role: "user" | "assistant"; content: string }[] = [];
   let currentSentiment = "neutral"; // updated per turn from sentimentInfer
+  /** Conversation quality state — momentum, repetition tracking, engagement score. */
+  let conversationQuality: ConversationQualityState = createConversationQualityState();
   /** Prevents overlapping handleUserTurn from concurrent Deepgram speech_final events (epoch churn + broken LLM turns). */
   let userTurnBusy = false;
   let pendingUserTranscript: string | null = null;
@@ -525,20 +535,36 @@ export function createCallEngine(opts: EngineOptions): void {
     }
   }
 
-  /** Prefer persisted session transcript when synced so CRM/debug match what the LLM sees. */
+  /** Prefer persisted session transcript when synced so CRM/debug match what the LLM sees.
+   *
+   * Context window weighting: last 3 messages are always included at full weight.
+   * Older messages (4–8) are included but truncated to 50% of their length to keep
+   * the context window focused on recent conversation without losing earlier context.
+   */
   function historyForLlm(): { role: "user" | "assistant"; content: string }[] {
     const sid = activeSessionId;
     const maxMsgs = Math.min(16, HARD_RULES.MAX_RECENT_TURNS_TO_MODEL * 2);
+    let raw: { role: "user" | "assistant"; content: string }[] = [];
     if (sid) {
       const s = voiceSessionManager.getSession(sid);
       if (s?.conversationHistory?.length) {
-        return s.conversationHistory.slice(-maxMsgs).map((m) => ({
-          role: m.role,
+        raw = s.conversationHistory.slice(-maxMsgs).map((m) => ({
+          role: m.role as "user" | "assistant",
           content: m.content,
         }));
       }
     }
-    return conversationHistory.slice(-maxMsgs);
+    if (!raw.length) raw = conversationHistory.slice(-maxMsgs);
+
+    // Weight recent messages: last 3 = full, older = truncated to 50% length
+    const FULL_WEIGHT_COUNT = 3;
+    if (raw.length <= FULL_WEIGHT_COUNT) return raw;
+    const older = raw.slice(0, -FULL_WEIGHT_COUNT).map((m) => ({
+      role: m.role,
+      content: m.content.length > 120 ? m.content.slice(0, Math.ceil(m.content.length * 0.5)) + "…" : m.content,
+    }));
+    const recent = raw.slice(-FULL_WEIGHT_COUNT);
+    return [...older, ...recent];
   }
   let firstMediaLogged = false;
 
@@ -963,6 +989,39 @@ export function createCallEngine(opts: EngineOptions): void {
       return;
     }
 
+    // ── Conversation quality: update momentum before policy ──────────────────
+    const prevMomentum = conversationQuality.momentum;
+    conversationQuality = detectCustomerMomentum(transcript, conversationQuality);
+    if (conversationQuality.momentum !== prevMomentum) {
+      traceEvent(callId, "quality_momentum_shift", {
+        from: prevMomentum,
+        to: conversationQuality.momentum,
+        engagementScore: conversationQuality.engagementScore,
+      });
+    }
+
+    // Fast-path: frustration escalation → graceful exit before any policy/LLM work
+    if (conversationQuality.momentum === "frustrated" || detectFrustrationEscalation(transcript)) {
+      traceEvent(callId, "quality_frustration_detected", {
+        transcript: transcript.slice(0, 80),
+        frustrationCount: conversationQuality.frustrationCount,
+      });
+      logVoiceControllerEvent(callId, "info", {
+        bucket: "frustration_not_handled",
+        detail: "graceful_exit_triggered",
+        transcriptSnippet: transcript.slice(0, 80),
+      });
+      traceEvent(callId, "quality_graceful_exit_triggered", { reason: "frustration" });
+      appendHistory("user", transcript);
+      const exitLine = extractedFacts.firstName
+        ? `Totally understand, ${extractedFacts.firstName} — I'll let you go. Have a great day.`
+        : "Totally understand — I won't take up more of your time. Have a great day.";
+      await speak(exitLine, epoch);
+      setTimeout(() => void finalizeHard({ reason: "frustration_graceful_exit", outcome: "not_interested" }), 1500);
+      traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+      return;
+    }
+
     policyState = updateCallState(policyState, transcript);
     mergeExtractedFactsFromTurn(transcript);
     const mergedStrict = mergeStrictTurnState(transcript, strictFacts, policyState);
@@ -1202,7 +1261,10 @@ export function createCallEngine(opts: EngineOptions): void {
       : "";
     const base =
       (strictPrefix ? strictPrefix + "\n\n" : "") +
-      buildVoiceSystemPrompt(policyState, businessName, industry, clientConfig) +
+      buildVoiceSystemPrompt(policyState, businessName, industry, clientConfig, {
+        momentum: conversationQuality.momentum,
+        recentAssistantPhrases: conversationQuality.recentPhrases,
+      }) +
       sentimentNote +
       languageNote;
     if (!activeUserId) return base;
@@ -1475,6 +1537,26 @@ export function createCallEngine(opts: EngineOptions): void {
     }
 
     if (cleanResponse) {
+      // ── Response quality checks ─────────────────────────────────────────────
+      const repScore = computeRepetitionScore(conversationQuality, cleanResponse);
+      if (repScore >= 0.45) {
+        traceEvent(callId, "quality_repetition_detected", { score: repScore });
+        logVoiceControllerEvent(callId, "failure", {
+          bucket: "response_too_repetitive",
+          detail: `repetition_score=${repScore.toFixed(2)}`,
+          transcriptSnippet: cleanResponse.slice(0, 80),
+        });
+      }
+      // Log per-turn quality metrics for analysis
+      traceEvent(callId, "quality_turn_metrics", {
+        repetitionScore: repScore,
+        momentum: conversationQuality.momentum,
+        engagementScore: conversationQuality.engagementScore,
+        frustrationCount: conversationQuality.frustrationCount,
+      });
+      // Track this response for future repetition detection
+      conversationQuality = trackAssistantPhrase(conversationQuality, cleanResponse);
+
       appendHistory("assistant", cleanResponse);
       apexState = markBlueprintAnswered(apexState, cleanResponse);
       policyState = markQuestionAnswered(policyState);
@@ -1501,6 +1583,8 @@ export function createCallEngine(opts: EngineOptions): void {
     const line = speakableLine(text);
     cartesiaSend(line, false);
     appendHistory("assistant", line);
+    // Track phrase for repetition detection (deterministic responses too)
+    conversationQuality = trackAssistantPhrase(conversationQuality, line);
   }
 
   // ── Tool execution ────────────────────────────────────────────────────────
