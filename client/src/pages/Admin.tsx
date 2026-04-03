@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Activity, AlertTriangle, BarChart3, CheckCircle, Database, Pencil, Save, Settings, Shield, Users, X } from "lucide-react";
+import { Activity, AlertTriangle, BarChart3, CheckCircle, Database, Mic, Pencil, Save, Settings, Shield, Users, X } from "lucide-react";
 import { useLocation } from "wouter";
 
 const DEFAULT_CONFIG = [
@@ -64,6 +64,8 @@ export default function Admin() {
   const { data: logs } = trpc.admin.activityLogs.useQuery({ limit: 100 });
   const { data: campaigns } = trpc.campaigns.list.useQuery({});
   const { data: savedConfig } = trpc.admin.getConfig.useQuery();
+  const { data: voiceMetrics } = trpc.admin.voiceMetricEvents.useQuery({ limit: 200 });
+  const { data: voiceLatency } = trpc.admin.voiceMetricLatencySummary.useQuery({ sampleLimit: 500 });
 
   const promoteUserMutation = trpc.admin.updateUserRole.useMutation({
     onSuccess: () => { utils.admin.users.invalidate(); toast.success("User role updated"); },
@@ -132,6 +134,7 @@ export default function Admin() {
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="campaigns">Campaigns</TabsTrigger>
           <TabsTrigger value="logs">Activity Logs</TabsTrigger>
+          <TabsTrigger value="voice-metrics">Voice traces</TabsTrigger>
           <TabsTrigger value="config">System Config</TabsTrigger>
         </TabsList>
 
@@ -307,6 +310,81 @@ export default function Admin() {
                 })}
                 {!logs?.length && (
                   <div className="text-center py-8 text-muted-foreground text-sm">No activity logs yet</div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Voice pipeline traces (DB-backed) */}
+        <TabsContent value="voice-metrics" className="mt-4">
+          <Card className="bg-card border-border">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Mic className="w-4 h-4 text-primary" /> Voice pipeline traces
+                <span className="ml-auto text-xs text-muted-foreground font-normal">{voiceMetrics?.length ?? 0} rows</span>
+              </CardTitle>
+              <p className="text-xs text-muted-foreground font-normal">
+                Latency phases from the live engine (SignalWire → Deepgram → Grok → Cartesia). Requires the{" "}
+                <code className="text-[10px]">voice_metric_events</code> table and{" "}
+                <code className="text-[10px]">VOICE_METRICS_PERSIST</code> not set to{" "}
+                <code className="text-[10px]">false</code>.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+                {[
+                  { label: "STT→TTS samples", value: voiceLatency?.count ?? 0 },
+                  { label: "p50 (ms)", value: voiceLatency?.p50 ?? "—" },
+                  { label: "p95 (ms)", value: voiceLatency?.p95 ?? "—" },
+                  { label: "avg (ms)", value: voiceLatency?.avg ?? "—" },
+                ].map((cell) => (
+                  <div key={cell.label} className="rounded-lg border border-border bg-secondary/20 px-3 py-2">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{cell.label}</div>
+                    <div className="text-lg font-semibold tabular-nums">{cell.value}</div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground mb-2">
+                Percentiles use persisted <code className="text-[10px]">latency_stt_final_to_tts_first</code> rows (after calls produce audio).
+              </p>
+              <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-card z-[1]">
+                    <tr className="border-b border-border">
+                      {["Time", "Phase", "+ms", "Session", "Call", "Extra"].map((h) => (
+                        <th key={h} className="text-left px-2 py-2 text-xs text-muted-foreground font-medium whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(voiceMetrics ?? []).map((row) => (
+                      <tr key={row.id} className="border-b border-border/50 hover:bg-secondary/30 align-top">
+                        <td className="px-2 py-1.5 text-[11px] text-muted-foreground whitespace-nowrap">
+                          {row.createdAt
+                            ? (row.createdAt instanceof Date
+                                ? row.createdAt
+                                : new Date(row.createdAt as string)
+                              ).toLocaleString()
+                            : "—"}
+                        </td>
+                        <td className="px-2 py-1.5 font-mono text-[11px]">{row.phase}</td>
+                        <td className="px-2 py-1.5 text-muted-foreground tabular-nums">{row.msSinceCallStart ?? "—"}</td>
+                        <td className="px-2 py-1.5 font-mono text-[10px] max-w-[140px] truncate" title={row.sessionId ?? ""}>
+                          {row.sessionId ?? "—"}
+                        </td>
+                        <td className="px-2 py-1.5 font-mono text-[10px] max-w-[120px] truncate" title={row.callId ?? ""}>
+                          {row.callId ?? "—"}
+                        </td>
+                        <td className="px-2 py-1.5 text-[10px] text-muted-foreground max-w-md break-all">
+                          {row.extra != null ? JSON.stringify(row.extra) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!voiceMetrics?.length && (
+                  <div className="text-center py-8 text-muted-foreground text-sm">No trace rows yet (or table not migrated)</div>
                 )}
               </div>
             </CardContent>

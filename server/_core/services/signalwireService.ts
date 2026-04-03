@@ -7,6 +7,9 @@
 
 import { ENV } from "../env";
 import { normalizeToE164US } from "../phoneE164";
+import { stashOutboundCallContext } from "../../realtime/outboundCallContext";
+import { assertOutboundDialAllowed } from "../../realtime/outboundCompliance";
+import { assertOutboundNotOnTenantBlocklist } from "../../realtime/outboundBlocklist";
 
 // ── SignalWire client (Twilio-compatible REST API) ─────────────────────────
 function getSignalWireClient() {
@@ -53,11 +56,26 @@ export async function initiateCall(data: {
   phoneNumber: string;
   campaignId?: number;
   sessionId?: string;
+  /** Opening line for outbound AI voice — stashed server-side; not sent in TwiML URL. */
+  script?: string;
+  /** Tenant owner — when set, outbound destination is checked against `blocked_phone_numbers`. */
+  blocklistUserId?: number;
 }): Promise<{ callSid: string; status: string }> {
   const client = getSignalWireClient();
   if (!ENV.signalwirePhoneNumber) throw new Error("SIGNALWIRE_PHONE_NUMBER is required");
 
+  assertOutboundDialAllowed(ENV.voiceOutboundAllowHours);
+  await assertOutboundNotOnTenantBlocklist(
+    data.blocklistUserId,
+    data.phoneNumber,
+    ENV.voiceOutboundBlocklistCheck
+  );
+
   const sessionId = data.sessionId || `session_${Date.now()}`;
+  stashOutboundCallContext(sessionId, {
+    script: data.script,
+    campaignId: data.campaignId,
+  });
   const toNumber = normalizeToE164US(data.phoneNumber) || data.phoneNumber.trim();
   const callerNumber = await getOptimalCallerNumber(toNumber);
 
@@ -134,13 +152,23 @@ export async function initiateCallWithAMD(data: {
   leadId: number;
   phoneNumber: string;
   campaignId?: number;
+  sessionId?: string;
+  script?: string;
+  blocklistUserId?: number;
   voicemailMessage?: string; // if set, leaves VM instead of hanging up
 }): Promise<{ callSid: string; status: string }> {
   const client = getSignalWireClient();
   if (!ENV.signalwirePhoneNumber) throw new Error("SIGNALWIRE_PHONE_NUMBER required");
 
+  assertOutboundDialAllowed(ENV.voiceOutboundAllowHours);
+  await assertOutboundNotOnTenantBlocklist(data.blocklistUserId, data.phoneNumber, ENV.voiceOutboundBlocklistCheck);
+
   const baseUrl = ENV.publicUrl;
-  const sessionId = `session_${Date.now()}`;
+  const sessionId = data.sessionId || `session_${Date.now()}`;
+  stashOutboundCallContext(sessionId, {
+    script: data.script,
+    campaignId: data.campaignId,
+  });
   const callerNumber = await getOptimalCallerNumber(data.phoneNumber);
 
   const call = await client.calls.create({

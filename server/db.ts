@@ -32,6 +32,7 @@ import {
   webchatWidgets,
   rcsRegistrations,
   userPhoneNumbers,
+  voiceMetricEvents,
   type InsertUserPhoneNumber,
   type UserPhoneNumber,
 } from "../drizzle/schema";
@@ -532,6 +533,71 @@ export async function getActivityLogs(opts?: { limit?: number; userId?: number }
   if (opts?.userId != null) conditions.push(eq(activityLogs.userId, opts.userId));
   const where = conditions.length ? and(...conditions) : undefined;
   return db.select().from(activityLogs).where(where).orderBy(desc(activityLogs.createdAt)).limit(limit);
+}
+
+/** Persisted voice trace (requires `voice_metric_events` table — see drizzle/voice_metric_events.sql). */
+export async function insertVoiceMetricEvent(data: {
+  sessionId?: string | null;
+  callId?: string | null;
+  phase: string;
+  msSinceCallStart?: number | null;
+  extra?: Record<string, unknown> | null;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.insert(voiceMetricEvents).values({
+      sessionId: data.sessionId ?? null,
+      callId: data.callId ?? null,
+      phase: data.phase,
+      msSinceCallStart: data.msSinceCallStart ?? null,
+      extra: data.extra ?? null,
+    });
+  } catch (e) {
+    console.warn("[DB] voice_metric_events insert skipped (table missing or error):", (e as Error).message);
+  }
+}
+
+export async function listVoiceMetricEvents(limit = 200): Promise<typeof voiceMetricEvents.$inferSelect[]> {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    return db.select().from(voiceMetricEvents).orderBy(desc(voiceMetricEvents.id)).limit(Math.min(500, Math.max(1, limit)));
+  } catch {
+    return [];
+  }
+}
+
+/** Percentiles for stt_final→first TTS audio (phase `latency_stt_final_to_tts_first`, extra.ms). */
+export async function getVoiceMetricLatencyStats(sampleLimit = 500): Promise<{
+  count: number;
+  p50: number | null;
+  p95: number | null;
+  avg: number | null;
+}> {
+  const db = await getDb();
+  if (!db) return { count: 0, p50: null, p95: null, avg: null };
+  try {
+    const rows = await db
+      .select()
+      .from(voiceMetricEvents)
+      .where(eq(voiceMetricEvents.phase, "latency_stt_final_to_tts_first"))
+      .orderBy(desc(voiceMetricEvents.id))
+      .limit(Math.min(2000, Math.max(1, sampleLimit)));
+    const msList: number[] = [];
+    for (const r of rows) {
+      const ex = r.extra as { ms?: unknown } | null;
+      if (ex && typeof ex.ms === "number" && Number.isFinite(ex.ms)) msList.push(ex.ms);
+    }
+    if (msList.length === 0) return { count: 0, p50: null, p95: null, avg: null };
+    const sorted = [...msList].sort((a, b) => a - b);
+    const p50 = sorted[Math.floor((sorted.length - 1) * 0.5)] ?? null;
+    const p95 = sorted[Math.floor((sorted.length - 1) * 0.95)] ?? null;
+    const avg = Math.round(msList.reduce((a, b) => a + b, 0) / msList.length);
+    return { count: msList.length, p50, p95, avg };
+  } catch {
+    return { count: 0, p50: null, p95: null, avg: null };
+  }
 }
 
 // ─── System Config ────────────────────────────────────────────────────────────

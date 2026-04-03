@@ -16,6 +16,10 @@
 
 **Live voice compliance (locked stack, evidence tiers):** [`VOICE_COMPLIANCE_MATRIX.md`](./VOICE_COMPLIANCE_MATRIX.md) — maps requirements → code → tests → logs → manual recordings.
 
+**Voice orchestration roadmap (sections A–G, workstreams WS1–WS12, phases 0–9, Done/Partial/Open crosswalk):** [`internal/VOICE_ORCHESTRATION_ROADMAP.md`](../internal/VOICE_ORCHESTRATION_ROADMAP.md)
+
+**Voice ops runbook (env, smoke, rollback):** [`internal/VOICE_OPS_RUNBOOK.md`](../internal/VOICE_OPS_RUNBOOK.md)
+
 ---
 
 ## Where this file lives (your “20 features” crosswalk)

@@ -35,7 +35,13 @@ import {
   traceTurnTiming,
   markSttFinalForLatency,
   logSttFinalToTtsLatencyIfPending,
+  registerCallSessionForMetrics,
 } from "./voiceMetrics";
+import { fastIntentFromInterim, optOutFromFinal } from "./fastIntentRouter";
+import { patchOrchestrationSnapshot } from "./callOrchestrationTypes";
+import { speakableLine } from "./speakability";
+import { floorAfterAgentStops, floorAfterUserBargeIn } from "./turnManager";
+import { tryExtractJsonSpokenText } from "./voiceResponseEnvelope";
 import {
   createTurnController,
   onUserSpeechStart,
@@ -126,6 +132,13 @@ export async function notifyVoiceCallTerminalFromHttp(
 function mapCoreCartesiaToRt(core: CoreVoiceProfile): VoiceProfile {
   const base = getVoiceProfile("professional-female");
   const cartesiaId = core.externalVoiceId?.trim() || "694f9389-aac1-45b6-b726-9d9369183238";
+  const ttsEmotion =
+    (core as { ttsEmotion?: string }).ttsEmotion?.trim() ||
+    (core.useCase === "sales"
+      ? "content"
+      : core.useCase === "support"
+        ? "calm"
+        : "neutral");
   return {
     ...base,
     id: core.id,
@@ -133,6 +146,7 @@ function mapCoreCartesiaToRt(core: CoreVoiceProfile): VoiceProfile {
     description: core.style ?? base.description,
     cartesiaId,
     speed: typeof core.speed === "number" ? core.speed : base.speed,
+    ttsEmotion,
   };
 }
 
@@ -199,6 +213,7 @@ export function createCallEngine(opts: EngineOptions): void {
 
   const callId = `call_${Date.now()}`;
   traceStart(callId);
+  registerCallSessionForMetrics(callId, sessionId);
   traceEvent(callId, "engine_init");
   const log = (msg: string) => console.log(`[${callId}] ${msg}`);
 
@@ -254,6 +269,8 @@ export function createCallEngine(opts: EngineOptions): void {
   /** Deepgram: wait for true end-of-utterance (debounce finals — ignore rapid partial finals). */
   let deepgramFinalDebounceTimer: NodeJS.Timeout | null = null;
   let pendingDeepgramFinalText = "";
+  /** Optional μ-law jitter buffer before Deepgram (WS11). */
+  let inboundJitterQueue: Buffer[] = [];
   /** APEX strict blueprint state (intent lock, escalation, recovery). */
   let apexState: ApexControllerState = createApexControllerState();
   /** Last Deepgram final confidence (0–1) for interrupt-ack heuristics. */
@@ -603,6 +620,13 @@ export function createCallEngine(opts: EngineOptions): void {
           // continue:false already closed the context; clearing here races with in-flight audio chunks → silence.
         } else if (msg.type === "done") {
           isSpeaking = false;
+          if (activeSessionId) {
+            try {
+              voiceSessionManager.updateSession(activeSessionId, {
+                orchestrationFloor: floorAfterAgentStops(),
+              });
+            } catch {}
+          }
           // Cartesia closes the WS context when a segment finishes; further sends with the same
           // context_id + continue:true get "Context has closed". Clearing here is safe because
           // cartesiaSend() mints a new id and coerces continue=false when starting a new context.
@@ -645,8 +669,9 @@ export function createCallEngine(opts: EngineOptions): void {
     }
 
     const voiceId = voiceProfile.cartesiaId?.trim() || "694f9389-aac1-45b6-b726-9d9369183238";
-    // voice must be ONLY { mode, id } — nesting __experimental_controls breaks validation (400 invalid voice spec).
-    cartesiaWs.send(JSON.stringify({
+    const emo =
+      ENV.voiceCartesiaEmotion && voiceProfile.ttsEmotion?.trim() ? voiceProfile.ttsEmotion.trim() : undefined;
+    const payload: Record<string, unknown> = {
       context_id: cartesiaContextId,
       model_id: "sonic-english",
       voice: {
@@ -661,7 +686,9 @@ export function createCallEngine(opts: EngineOptions): void {
         sample_rate: 8000,
       },
       continue: continueFlag,
-    }));
+    };
+    if (emo) payload.generation_config = { emotion: emo };
+    cartesiaWs.send(JSON.stringify(payload));
   }
 
   function cartesiaFlushExplicit(contextId: string | undefined) {
@@ -772,6 +799,40 @@ export function createCallEngine(opts: EngineOptions): void {
           const speechFinal: boolean = msg.speech_final;
 
           if (!transcript.trim()) return;
+
+          // Interim: phrase-level semantic interrupt (e.g. "wait", "stop") — faster than waiting for speech_final.
+          if (
+            !isFinal &&
+            isSpeaking &&
+            greetingDone &&
+            transcript.trim().length >= 4 &&
+            !turnCtl.interruptRequested
+          ) {
+            const fast = fastIntentFromInterim(transcript);
+            if (fast.semanticInterrupt) {
+              log(`[BARGE-IN] fast intent (interim): "${transcript.slice(0, 80)}"`);
+              traceEvent(callId, "fast_intent_interim", { hints: fast.hints });
+              clearDeepgramFinalDebounce("fast_intent_interim");
+              const ackSpeechMs = assistantPlaybackStartAt ? Date.now() - assistantPlaybackStartAt : 0;
+              const ackInProgress = assistantResponseInProgress;
+              turnCtl = onUserSpeechStart(turnCtl);
+              generationEpoch++;
+              stopSpeaking();
+              scheduleBlueprintInterruptAck(lastFinalSttConfidence, ackSpeechMs, ackInProgress);
+              if (activeSessionId) {
+                const s = voiceSessionManager.getSession(activeSessionId);
+                if (s) {
+                  voiceSessionManager.updateSession(activeSessionId, {
+                    interruptCount: (s.interruptCount ?? 0) + 1,
+                    orchestrationFloor: floorAfterUserBargeIn(),
+                    orchestrationSnapshot: patchOrchestrationSnapshot(s.orchestrationSnapshot, {
+                      lastFastIntentHints: fast.hints,
+                    }),
+                  });
+                }
+              }
+            }
+          }
 
           /**
            * STT backup barge-in only on **finalized** text chunks.
@@ -886,6 +947,22 @@ export function createCallEngine(opts: EngineOptions): void {
     turnCtl = onProcessing(turnCtl);
     const epoch = ++generationEpoch;
     turnStartedAt = Date.now();
+
+    if (optOutFromFinal(transcript) && activeSessionId) {
+      const s = voiceSessionManager.getSession(activeSessionId);
+      voiceSessionManager.updateSession(activeSessionId, {
+        orchestrationSnapshot: patchOrchestrationSnapshot(s?.orchestrationSnapshot, {
+          optOutRequested: true,
+        }),
+      });
+      traceEvent(callId, "compliance_opt_out");
+      appendHistory("user", transcript);
+      await speak("Understood — I won't call again. Goodbye.", epoch);
+      setTimeout(() => void finalizeHard({ reason: "user_opt_out", outcome: "not_interested" }), 1200);
+      traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+      return;
+    }
+
     policyState = updateCallState(policyState, transcript);
     mergeExtractedFactsFromTurn(transcript);
     const mergedStrict = mergeStrictTurnState(transcript, strictFacts, policyState);
@@ -1096,6 +1173,14 @@ export function createCallEngine(opts: EngineOptions): void {
         }
         try {
           await speak(reprompt, epoch);
+          if (activeSessionId) {
+            const s = voiceSessionManager.getSession(activeSessionId);
+            voiceSessionManager.updateSession(activeSessionId, {
+              orchestrationSnapshot: patchOrchestrationSnapshot(s?.orchestrationSnapshot, {
+                repairTurnCount: (s?.orchestrationSnapshot?.repairTurnCount ?? 0) + 1,
+              }),
+            });
+          }
         } catch {}
       }
     }
@@ -1310,10 +1395,11 @@ export function createCallEngine(opts: EngineOptions): void {
         .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
         .replace(/\s+/g, " ")
         .trim();
-      if (!clean) return;
+      const speakable = speakableLine(clean);
+      if (!speakable) return;
       const continueCtx = !firstTtsClause;
       if (continueCtx) cartesiaNeedsEndFlush = true;
-      cartesiaSend(clean, continueCtx);
+      cartesiaSend(speakable, continueCtx);
       firstTtsClause = false;
     };
 
@@ -1344,6 +1430,14 @@ export function createCallEngine(opts: EngineOptions): void {
       assistantResponseInProgress = false;
       disarmOutboundSilenceWatch();
       return { clean: "", full: fullText };
+    }
+
+    if (ENV.voiceGrokJsonEnvelope) {
+      const extracted = tryExtractJsonSpokenText(fullText);
+      if (extracted) {
+        fullText = extracted;
+        traceEvent(callId, "llm_json_envelope_applied", { len: extracted.length });
+      }
     }
 
     let cleanResponse = fullText.replace(/TOOL:\s*\w+\s*\{[^}]*\}/g, "").trim();
@@ -1399,8 +1493,9 @@ export function createCallEngine(opts: EngineOptions): void {
     cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     // Single utterance with continue:false completes and closes the Cartesia context — do NOT flush.
     // Flushing immediately hits "Context has closed" and can prevent any audio from playing.
-    cartesiaSend(text, false);
-    appendHistory("assistant", text);
+    const line = speakableLine(text);
+    cartesiaSend(line, false);
+    appendHistory("assistant", line);
   }
 
   // ── Tool execution ────────────────────────────────────────────────────────
@@ -1590,7 +1685,10 @@ export function createCallEngine(opts: EngineOptions): void {
       clearStreamRecoveryTimer();
       if (callSid) registerEngineForCallSid(callSid);
       const params = msg.start?.customParameters || msg.customParameters || {};
-      if (params.sessionId) activeSessionId = String(params.sessionId);
+      if (params.sessionId) {
+        activeSessionId = String(params.sessionId);
+        registerCallSessionForMetrics(callId, activeSessionId);
+      }
       if (params.leadId !== undefined && params.leadId !== "")
         activeLeadId = parseInt(String(params.leadId), 10);
       if (sigWs) (sigWs as any)._callSid = callSid;
@@ -1648,8 +1746,36 @@ export function createCallEngine(opts: EngineOptions): void {
         await new Promise((r) => setTimeout(r, 200));
         if (!isEnded && !greetingPlayed) {
           greetingPlayed = true;
-          const bname = clientConfig.businessName.replace("ApexAI","Apex A I").replace("Apex AI","Apex A I"); const greeting = `Hi, thanks for calling ${bname}. How can I help you today?`;
+          const sessGreet = activeSessionId ? voiceSessionManager.getSession(activeSessionId) : null;
+          const outboundScript = sessGreet?.outboundScript?.trim();
+          const isOutbound = sessGreet?.callDirection === "outbound";
+          let greeting: string;
+          const bname = clientConfig.businessName.replace("ApexAI", "Apex A I").replace("Apex AI", "Apex A I");
+          if (isOutbound && outboundScript) {
+            const scriptLine = speakableLine(outboundScript);
+            greeting = sessGreet?.complianceRecordingPending
+              ? `This call may be recorded for quality assurance. ${scriptLine}`
+              : scriptLine;
+          } else if (isOutbound) {
+            greeting = sessGreet?.complianceRecordingPending
+              ? `This call may be recorded for quality assurance. Hi, this is ${bname} — do you have a quick moment?`
+              : `Hi, this is ${bname} — do you have a quick moment?`;
+          } else {
+            greeting = `Hi, thanks for calling ${bname}. How can I help you today?`;
+          }
           await speak(greeting, generationEpoch);
+          if (
+            activeSessionId &&
+            sessGreet?.complianceRecordingPending &&
+            greeting.includes("recorded")
+          ) {
+            const s = voiceSessionManager.getSession(activeSessionId);
+            voiceSessionManager.updateSession(activeSessionId, {
+              orchestrationSnapshot: patchOrchestrationSnapshot(s?.orchestrationSnapshot, {
+                recordingDisclosureGiven: true,
+              }),
+            });
+          }
           traceEvent(callId, "greeting_sent");
           log("[GREETING] Sent");
           setTimeout(() => {
@@ -1702,7 +1828,16 @@ export function createCallEngine(opts: EngineOptions): void {
       }
 
       if (dgReady && dgWs && dgWs.readyState === WebSocket.OPEN) {
-        dgWs.send(audio);
+        const jf = ENV.voiceJitterBufferFrames;
+        if (jf <= 0) {
+          dgWs.send(audio);
+        } else {
+          inboundJitterQueue.push(audio);
+          while (inboundJitterQueue.length > jf) {
+            const chunk = inboundJitterQueue.shift()!;
+            dgWs.send(chunk);
+          }
+        }
       }
     }
 

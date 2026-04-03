@@ -101,6 +101,25 @@ export const ENV = {
   voiceLlmMaxTokens: Math.min(1200, Math.max(400, parseInt(process.env.VOICE_LLM_MAX_TOKENS ?? "800", 10) || 800)),
   /** Voice LLM temperature. */
   voiceLlmTemperature: Math.min(0.85, Math.max(0.2, parseFloat(process.env.VOICE_LLM_TEMPERATURE ?? "0.40") || 0.4)),
+  /**
+   * Ops / compliance (read in voice webhooks + engine, not all mirrored here):
+   * - VOICE_METRICS_PERSIST=false — skip DB inserts for voice_metric_events (see server/realtime/voiceMetrics.ts).
+   * - VOICE_COMPLIANCE_RECORDING_NOTICE=true — new voice sessions get complianceRecordingPending; outbound/inbound greeting may prepend a recording line.
+   * - VOICE_OUTBOUND_ALLOW_HOURS=8-21 — block outbound dials outside window (server local TZ).
+   * - VOICE_JITTER_BUFFER_FRAMES=N — queue N inbound μ-law frames before Deepgram (0=off).
+   * - VOICE_GROK_JSON_ENVELOPE=true — accept JSON `{"spoken_text":"..."}` from Grok and speak that only.
+   */
+
+  /** Inbound audio: buffer N frames (~20ms each) before Deepgram to reduce underrun (0 = disabled). */
+  voiceJitterBufferFrames: Math.max(0, Math.min(24, parseInt(process.env.VOICE_JITTER_BUFFER_FRAMES ?? "0", 10) || 0)),
+  /** Outbound dial allowed hours `8-21` or overnight `22-6` — empty = always allow. Server `TZ` should match market. */
+  voiceOutboundAllowHours: (process.env.VOICE_OUTBOUND_ALLOW_HOURS ?? "").trim(),
+  /** When true (default), block outbound dials to numbers on tenant `blocked_phone_numbers`. */
+  voiceOutboundBlocklistCheck: process.env.VOICE_OUTBOUND_BLOCKLIST_CHECK !== "false",
+  /** Parse JSON envelope from LLM output for TTS (see voiceResponseEnvelope.ts). */
+  voiceGrokJsonEnvelope: process.env.VOICE_GROK_JSON_ENVELOPE === "true",
+  /** Send Cartesia `generation_config.emotion` when profile has `ttsEmotion` (disable if API rejects). */
+  voiceCartesiaEmotion: process.env.VOICE_CARTESIA_EMOTION !== "false",
 
   // ── GROK ONLY — xAI is the sole LLM provider for live voice ──
   xaiApiKey: (process.env.XAI_API_KEY ?? "").trim(),

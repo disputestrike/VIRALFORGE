@@ -10,6 +10,7 @@
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:voice": "vitest run server/realtime",
     "verify": "pnpm run check && pnpm run test && pnpm run build && node scripts/verify-integrations.mjs",
     "verify:quick": "pnpm run check && pnpm run test",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"

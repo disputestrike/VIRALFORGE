@@ -14,6 +14,8 @@ export type VoiceProfile = {
   latencyProfile?: "fast" | "balanced" | "premium";
   speed?: number;
   stability?: number;
+  /** Cartesia Sonic generation_config.emotion override; else derived from useCase. */
+  ttsEmotion?: string;
 };
 
 export const VOICE_PROFILES: VoiceProfile[] = [

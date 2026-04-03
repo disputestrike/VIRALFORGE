@@ -1,6 +1,16 @@
 /**
  * voiceMetrics.ts — structured latency + phase tracing for Fin-style debugging
+ *
+ * Production path (canonical): SignalWire bidirectional stream → realtimeVoiceEngine.ts
+ * (Deepgram STT → Grok → Cartesia TTS). deepgramVoiceAgent.ts is not wired on the live WS path.
  */
+
+const callIdToSessionId = new Map<string, string>();
+
+/** Binds internal callId to SignalWire session for DB persistence. */
+export function registerCallSessionForMetrics(callId: string, sessionId: string | undefined): void {
+  if (sessionId) callIdToSessionId.set(callId, sessionId);
+}
 
 export type VoiceTracePhase =
   | "engine_init"
@@ -26,7 +36,11 @@ export type VoiceTracePhase =
   | "failsafe_silence_2s_outbound"
   | "user_silence_reengage"
   | "strict_classify"
-  | "date_authority_short_circuit";
+  | "date_authority_short_circuit"
+  | "fast_intent_interim"
+  | "latency_stt_final_to_tts_first"
+  | "compliance_opt_out"
+  | "llm_json_envelope_applied";
 
 const starts = new Map<string, number>();
 
@@ -43,6 +57,20 @@ export function traceEvent(
   const elapsed = Date.now() - t0;
   const payload = { phase, msSinceCallStart: elapsed, ...extra };
   console.log(`[VOICE-TRACE] ${callId} | ${phase} | +${elapsed}ms`, JSON.stringify(payload));
+
+  if (process.env.VOICE_METRICS_PERSIST === "false") return;
+  const sessionId = callIdToSessionId.get(callId);
+  setImmediate(() => {
+    void import("../db").then(({ insertVoiceMetricEvent }) =>
+      insertVoiceMetricEvent({
+        callId,
+        sessionId: sessionId ?? null,
+        phase,
+        msSinceCallStart: elapsed,
+        extra: extra ?? null,
+      })
+    );
+  });
 }
 
 export function traceTurnTiming(
@@ -61,6 +89,7 @@ export function traceTurnTiming(
 export function traceEnd(callId: string): void {
   starts.delete(callId);
   sttFinalWallClock.delete(callId);
+  callIdToSessionId.delete(callId);
 }
 
 /** Wall-clock anchor when Deepgram emitted speech_final (user stop). */
@@ -82,4 +111,8 @@ export function logSttFinalToTtsLatencyIfPending(callId: string): void {
   const ms = Date.now() - t0;
   const warn = ms > 800 ? " | ⚠ target <800ms (try VOICE_DEEPGRAM_ENDPOINTING_MS=250, VOICE_RESPONSE_MICRO_PAUSE_MS=120)" : "";
   console.log(`[VOICE-LATENCY] ${callId} | stt_final→tts_first_audio | ${ms}ms${warn}`);
+  traceEvent(callId, "latency_stt_final_to_tts_first", {
+    ms,
+    warnSlow: ms > 800,
+  });
 }

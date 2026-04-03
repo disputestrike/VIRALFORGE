@@ -10,6 +10,8 @@ export interface VoiceProfile {
   cartesiaId: string;
   speed: number;
   gender: "female" | "male";
+  /** Cartesia `generation_config.emotion` (Sonic); set from dashboard profile when present. */
+  ttsEmotion?: string;
 }
 
 // Cartesia's best production voices for phone agents

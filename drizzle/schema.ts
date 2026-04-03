@@ -584,3 +584,17 @@ export const rcsRegistrations = mysqlTable("rcs_registrations", {
 
 export type RcsRegistration = typeof rcsRegistrations.$inferSelect;
 export type InsertRcsRegistration = typeof rcsRegistrations.$inferInsert;
+
+// ─── Voice orchestration telemetry (run `voice_metric_events.sql` if table missing) ─
+export const voiceMetricEvents = mysqlTable("voice_metric_events", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: varchar("sessionId", { length: 128 }),
+  callId: varchar("callId", { length: 128 }),
+  phase: varchar("phase", { length: 64 }).notNull(),
+  msSinceCallStart: int("msSinceCallStart"),
+  extra: json("extra"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type VoiceMetricEvent = typeof voiceMetricEvents.$inferSelect;
+export type InsertVoiceMetricEvent = typeof voiceMetricEvents.$inferInsert;

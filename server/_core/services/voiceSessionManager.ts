@@ -4,6 +4,8 @@
  */
 
 import * as db from "../../db";
+import type { CallOrchestrationSnapshot } from "../../realtime/callOrchestrationTypes";
+import { emptyOrchestrationSnapshot } from "../../realtime/callOrchestrationTypes";
 
 /** SignalWire call lifecycle — NOT the same as media WebSocket / stream. */
 export type VoiceCallLifecycleState =
@@ -89,6 +91,17 @@ export interface VoiceSession {
   lastStrictIntent?: string;
   /** Last controller-chosen conversation mode written on policy sync. */
   lastStrictMode?: string;
+
+  /** inbound = they called you; outbound = campaign/queue dial — drives opening script. */
+  callDirection?: "inbound" | "outbound";
+  /** Opening line for outbound (from campaign / AI script) — consumed by realtimeVoiceEngine greeting. */
+  outboundScript?: string | null;
+  /** Orchestration: who should have the floor (telemetry / debugging). */
+  orchestrationFloor?: "user" | "agent" | "none";
+  /** When true, policy may require a recording disclosure line before substantive sales content. */
+  complianceRecordingPending?: boolean;
+  /** Unified orchestration flags (roadmap WS4) — repair, compliance, opt-out. */
+  orchestrationSnapshot?: CallOrchestrationSnapshot;
 }
 
 // In-memory session store (keyed by sessionId OR callSid)
@@ -103,6 +116,9 @@ export function createSession(
     language?: string;
     voiceProfileId?: string;
     callerPhone?: string | null;
+    callDirection?: "inbound" | "outbound";
+    outboundScript?: string | null;
+    complianceRecordingPending?: boolean;
   }
 ): VoiceSession {
   const sessionId = callSid || `session_${leadId}_${Date.now()}`;
@@ -135,6 +151,11 @@ export function createSession(
     interruptCount: 0,
     fallbackCount: 0,
     bookingAllowed: false,
+    callDirection: options?.callDirection ?? "inbound",
+    outboundScript: options?.outboundScript ?? null,
+    orchestrationFloor: "none",
+    complianceRecordingPending: options?.complianceRecordingPending ?? false,
+    orchestrationSnapshot: emptyOrchestrationSnapshot(),
   };
   sessions.set(sessionId, session);
   if (callSid && callSid !== sessionId) {

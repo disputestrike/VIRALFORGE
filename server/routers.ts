@@ -1134,6 +1134,16 @@ const adminRouter = router({
       await db.logActivity({ userId: ctx.user.id, entityType: "config", action: "config_updated", description: `${input.key} set to ${input.value}` });
       return { success: true };
     }),
+
+  /** Recent voice pipeline traces (requires `voice_metric_events` table + VOICE_METRICS_PERSIST). */
+  voiceMetricEvents: adminProcedure
+    .input(z.object({ limit: z.number().min(1).max(500).optional() }).optional())
+    .query(async ({ input }) => db.listVoiceMetricEvents(input?.limit ?? 200)),
+
+  /** p50/p95 for stt_final→first TTS chunk (latency rows in `voice_metric_events`). */
+  voiceMetricLatencySummary: adminProcedure
+    .input(z.object({ sampleLimit: z.number().min(10).max(2000).optional() }).optional())
+    .query(async ({ input }) => db.getVoiceMetricLatencyStats(input?.sampleLimit ?? 500)),
 });
 
 // INTEGRATION: Import webhooks router

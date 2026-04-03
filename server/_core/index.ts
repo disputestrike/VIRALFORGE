@@ -215,7 +215,7 @@ async function startServer() {
 
     if (redisConnection) {
     // Call worker
-    type CallJobPayload = { leadId: number; campaignId?: number };
+    type CallJobPayload = { leadId: number; campaignId?: number; script?: string };
     const callWorker = new Worker(
       "calls",
       async (job) => {
@@ -229,10 +229,31 @@ async function startServer() {
           }
 
           const l = lead as any;
+          const sessionId = `sess_out_${data.leadId}_${String(job.id)}_${Date.now()}`;
+          let script: string | undefined = data.script;
+          if (!script && data.campaignId) {
+            const camp = await dbMod.getCampaignById(data.campaignId);
+            const raw = camp?.settings;
+            if (raw && typeof raw === "string") {
+              try {
+                const j = JSON.parse(raw) as Record<string, unknown>;
+                const pick =
+                  j.voiceOpeningScript ?? j.outboundScript ?? j.openingScript;
+                if (typeof pick === "string" && pick.trim()) script = pick.trim();
+              } catch {
+                /* ignore bad JSON */
+              }
+            }
+          }
+
           const result = await initiateCall({
             leadId: l.id as number,
             phoneNumber: l.phone as string,
             campaignId: data.campaignId,
+            sessionId,
+            script,
+            blocklistUserId:
+              typeof l.createdBy === "number" && Number.isFinite(l.createdBy) ? l.createdBy : undefined,
           });
 
           await dbMod.updateLead(l.id as number, { status: "contacted" });
@@ -563,7 +584,10 @@ async function startServer() {
     try {
       if (From) {
         const db = await import("../db");
+        const { takeOutboundCallContext } = await import("../realtime/outboundCallContext");
+        const stashedOutbound = takeOutboundCallContext(sessionId);
         const outboundLeadId = leadId ? parseInt(leadId, 10) : null;
+        const isOutboundDial = Boolean(stashedOutbound || outboundLeadId);
         let lead: any = outboundLeadId ? await db.getLeadById(outboundLeadId) : null;
         let ownerId = lead?.createdBy ?? null;
 
@@ -622,6 +646,9 @@ async function startServer() {
             language: ownerSettings.language || "en",
             voiceProfileId: voiceSettings.voiceProfileId,
             callerPhone: contactPhone || undefined,
+            callDirection: isOutboundDial ? "outbound" : "inbound",
+            outboundScript: stashedOutbound?.script ?? null,
+            complianceRecordingPending: process.env.VOICE_COMPLIANCE_RECORDING_NOTICE === "true",
           });
           vm.startSessionPersistenceInterval(sessionId);
         }
