@@ -78,10 +78,10 @@ export const ENV = {
    * Set VOICE_USER_SILENCE_REENGAGE_ENABLED=false to disable.
    */
   voiceUserSilenceReengageEnabled: process.env.VOICE_USER_SILENCE_REENGAGE_ENABLED !== "false",
-  /** Ms of user silence after assistant playback ends before auto check-in (2s–20s). Default ~4.5s. */
+  /** Ms of user silence after assistant playback ends before auto check-in (3s–30s). Default 12s — long enough for user to think. */
   voiceUserSilenceReengageMs: Math.max(
-    2000,
-    Math.min(20000, parseInt(process.env.VOICE_USER_SILENCE_REENGAGE_MS ?? "4500", 10) || 4500)
+    3000,
+    Math.min(30000, parseInt(process.env.VOICE_USER_SILENCE_REENGAGE_MS ?? "12000", 10) || 12000)
   ),
   /**
    * Mu-law barge-in threshold on the 0–127 scale used by estimateEnergy (avg distance from silence).

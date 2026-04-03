@@ -251,8 +251,8 @@ export const COPY_BLOCKS = {
   pressure_level_4: "Sounds like you're covered. No need to change anything.",
   /** Controlled recovery: acknowledge → reset frame → return control to caller. */
   recovery_controlled:
-    "Yeah — that didn't land right. Let me reset.\n\nWhat's the main thing you want answered?",
-  chaos: "No problem — take your time; say it again and I’ll capture it.",
+    "I hear you. Would you like me to end the call, or is there something specific I can help with?",
+  chaos: "Got it. Go ahead whenever you're ready.",
   /** After “why aren’t you talking” — bridge then LLM continues the real thread. */
   silence_complaint_bridge:
     "Hey — I'm right here with you. Let me pick back up on what we were talking about.",
@@ -485,6 +485,20 @@ export function routeBlueprintDeterministic(
         kind: "speak",
         text: COPY_BLOCKS.recovery_controlled,
         markAnswered: true,
+      },
+    };
+  }
+
+  // If ALREADY in recovery and user is still angry/frustrated → end call gracefully
+  if (detectUserAngry(t) && state.mode === "recovery") {
+    next = { ...next, mode: "normal" };
+    return {
+      next,
+      route: {
+        kind: "speak",
+        text: "No problem at all. Thanks for your time, have a great day.",
+        markAnswered: true,
+        endCall: true,
       },
     };
   }
