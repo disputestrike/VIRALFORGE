@@ -1,7 +1,7 @@
 /**
  * realtimeVoiceEngine.ts — THE CORE ORCHESTRATOR
  *
- * Pipeline: SignalWire → Deepgram STT → xAI Grok (LLM) → Cartesia TTS → SignalWire
+ * Pipeline: SignalWire → Deepgram STT → Cerebras LLM → Cartesia TTS → SignalWire
  *
  * Key principles:
  * 1. Telephony: mulaw 8kHz to/from SignalWire; Cartesia pcm_s16le → convert to mulaw outbound
@@ -1106,17 +1106,18 @@ export function createCallEngine(opts: EngineOptions): void {
 
     const reprompt =
       "I didn't quite catch that—could you say that again in a few words?";
-    const xaiKey = ENV.xaiApiKey;
+    const { getCerebrasKey, rotateCerebrasKey, getCerebrasKeyIndex } = await import("../_core/cerebrasKeyManager");
+    const cerebrasKey = getCerebrasKey();
     traceEvent(callId, "llm_route", {
-      path: "xai-grok",
-      model: ENV.grokModel,
+      path: "cerebras",
+      model: ENV.cerebrasModel,
     });
     log(
-      `[ROUTE] Voice LLM: xAI Grok model=${ENV.grokModel} key=${Boolean(xaiKey)}`
+      `[ROUTE] Voice LLM: Cerebras model=${ENV.cerebrasModel} key=${getCerebrasKeyIndex()}/${ENV.cerebrasKeys.length}`
     );
 
-    if (!xaiKey) {
-      log("[Voice] Missing XAI_API_KEY — configure it for live voice");
+    if (!cerebrasKey) {
+      log("[Voice] Missing CEREBRAS_API_KEY — configure at least one for live voice");
       try {
         await speak(
           "I'm sorry, this line isn't fully configured right now. Please try again later.",
@@ -1247,7 +1248,7 @@ export function createCallEngine(opts: EngineOptions): void {
     const silenceLlmCue =
       "Internal cue: The caller has been quiet. Ask ONE short follow-up question directly related to the last thing discussed. Maximum 15 words. Do NOT introduce new topics. Do NOT be enthusiastic. Do NOT say exciting, fantastic, or awesome. Just ask a simple, relevant question. FORBIDDEN phrases: still with me, still there, checking in, just wanted to make sure, can you hear me, on the line, are you there, exciting, fantastic.";
 
-    if (!ENV.xaiApiKey) {
+    if (!ENV.cerebrasApiKey) {
       try {
         await speak(
           "What questions do you have so far?",
@@ -1296,7 +1297,8 @@ export function createCallEngine(opts: EngineOptions): void {
       llmOnlyUserMessage?: string;
     }
   ): Promise<void> {
-    const xaiKey = ENV.xaiApiKey;
+    const { getCerebrasKey: getKey, rotateCerebrasKey: rotateKey, getCerebrasKeyIndex: getKeyIdx } = await import("../_core/cerebrasKeyManager");
+    const cerebrasKey = getKey();
 
     const blueprintIntent = opts?.blueprintIntentOverride ?? classifyIntent(userTranscript);
     const blueprintBlock = buildApexBlueprintPromptBlock(apexState, blueprintIntent);
@@ -1329,23 +1331,23 @@ export function createCallEngine(opts: EngineOptions): void {
 
     const textForGuard = cue ? "" : userTranscript;
 
-    // ── xAI Grok — SOLE LLM provider (OpenAI-compatible API) ──
-    if (!xaiKey) throw new Error("XAI_API_KEY not configured");
+    // ── Cerebras — SOLE LLM provider (OpenAI-compatible API, round-robin keys) ──
+    if (!cerebrasKey) throw new Error("CEREBRAS_API_KEY not configured");
     const { default: OpenAI } = await import("openai");
-    const client = new OpenAI({ apiKey: xaiKey, baseURL: "https://api.x.ai/v1" });
+    const client = new OpenAI({ apiKey: cerebrasKey, baseURL: "https://api.cerebras.ai/v1" });
     const stream = await client.chat.completions.create({
-      model: ENV.grokModel,
+      model: ENV.cerebrasModel,
       messages: [{ role: "system", content: prompt }, ...messages],
       max_tokens: ENV.voiceLlmMaxTokens,
       temperature: ENV.voiceLlmTemperature,
       stream: true,
     });
     traceEvent(callId, "llm_stream_start", {
-      provider: "xai-grok",
-      model: ENV.grokModel,
+      provider: "cerebras",
+      model: ENV.cerebrasModel,
     });
     const { clean, full } = await streamToCartesia(openAiTextDeltas(stream), epoch, textForGuard);
-    if (!clean.trim() && !full.trim()) throw new Error("Empty Grok response");
+    if (!clean.trim() && !full.trim()) throw new Error("Empty Cerebras response");
   }
 
   // ── Stream LLM → buffer → direct-answer guard → Cartesia sentence-by-sentence ────────────────────────

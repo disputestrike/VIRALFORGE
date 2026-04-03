@@ -1,5 +1,5 @@
 /**
- * LLM Router — xAI Grok (OpenAI-compatible). XAI_API_KEY required.
+ * LLM Router — Cerebras (OpenAI-compatible). CEREBRAS_API_KEY_1..5 required.
  * chooseRoute() is used for analytics / logging (fast vs smart intent), not provider selection.
  */
 
@@ -21,7 +21,7 @@ export interface LLMResponse {
 }
 
 function defaultRouterModel(): string {
-  return (process.env.GROK_MODEL || process.env.LLM_MODEL || "grok-3-fast").trim();
+  return (process.env.CEREBRAS_MODEL || process.env.LLM_MODEL || "llama-3.3-70b").trim();
 }
 
 // ── Routing Logic (semantic label only) ───────────────────────────────────────
@@ -62,10 +62,10 @@ export function chooseRoute(
 // ── Grok (xAI OpenAI-compatible) ───────────────────────────────────────────────
 
 async function callGrok(messages: RouterMessage[], maxTokens = 200): Promise<string> {
-  const apiKey = (process.env.XAI_API_KEY ?? "").trim();
-  if (!apiKey) throw new Error("XAI_API_KEY not set");
+  const { getCerebrasKey } = await import("../cerebrasKeyManager");
+  const apiKey = getCerebrasKey();
 
-  const client = new OpenAI({ apiKey, baseURL: "https://api.x.ai/v1" });
+  const client = new OpenAI({ apiKey, baseURL: "https://api.cerebras.ai/v1" });
   const systemMsg = messages.find((m) => m.role === "system")?.content ?? "";
   const chatMessages = messages
     .filter((m) => m.role !== "system")

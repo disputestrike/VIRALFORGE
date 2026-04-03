@@ -121,9 +121,17 @@ export const ENV = {
   /** Send Cartesia `generation_config.emotion` when profile has `ttsEmotion` (disable if API rejects). */
   voiceCartesiaEmotion: process.env.VOICE_CARTESIA_EMOTION !== "false",
 
-  // ── GROK ONLY — xAI is the sole LLM provider for live voice ──
-  xaiApiKey: (process.env.XAI_API_KEY ?? "").trim(),
-  grokModel: (process.env.GROK_MODEL ?? "grok-3-fast").trim(),
+  // ── CEREBRAS ONLY — sole LLM provider (5-key round-robin) ──
+  cerebrasKeys: [
+    (process.env.CEREBRAS_API_KEY ?? process.env.CEREBRAS_API_KEY_1 ?? "").trim(),
+    (process.env.CEREBRAS_API_KEY_2 ?? "").trim(),
+    (process.env.CEREBRAS_API_KEY_3 ?? "").trim(),
+    (process.env.CEREBRAS_API_KEY_4 ?? "").trim(),
+    (process.env.CEREBRAS_API_KEY_5 ?? "").trim(),
+  ].filter(k => k.length > 0),
+  cerebrasModel: (process.env.CEREBRAS_MODEL ?? "llama-3.3-70b").trim(),
+  /** Convenience: first valid key (for simple checks) */
+  get cerebrasApiKey(): string { return this.cerebrasKeys[0] ?? ""; },
 
   /** Barge-in: spoken ack only when enabled and heuristics pass (see realtimeVoiceEngine). */
   interruptAckEnabled: process.env.INTERRUPT_ACK_ENABLED !== "false",
@@ -161,7 +169,7 @@ export const ENV = {
     return (
       this.deepgramApiKey !== "" &&
       this.cartesiaApiKey !== "" &&
-      this.xaiApiKey !== ""
+      this.cerebrasApiKey !== ""
     );
   },
   /** When true and a transfer target exists (user profile or env), live voice may transfer via SignalWire. */
@@ -179,6 +187,6 @@ export const ENV = {
   },
   /** AI enabled — xAI Grok for all LLM tasks. */
   get aiEnabled() {
-    return this.xaiApiKey !== "";
+    return this.cerebrasApiKey !== "";
   },
 };

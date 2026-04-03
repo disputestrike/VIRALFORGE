@@ -13,7 +13,7 @@ import * as voiceSessionManager from "./services/voiceSessionManager";
 import { apiRateLimiter, aiRateLimiter, authRateLimiter, webhookRateLimiter } from "./middleware/rateLimiter";
 import * as voiceProcessingService from "./services/voiceProcessingService";
 import { startSessionPersistenceInterval } from "./services/voiceSessionManager";
-// Live calls: realtimeVoiceEngine — Deepgram STT → xAI Grok (LLM) → Cartesia TTS.
+// Live calls: realtimeVoiceEngine — Deepgram STT → Cerebras (LLM) → Cartesia TTS.
 import { createCallEngine, notifyVoiceCallTerminalFromHttp } from "../realtime/realtimeVoiceEngine";
 import { getUsRingtoneWav } from "./telephony/usRingtoneWav";
 import { registerWebchatPublicRoutes } from "./webchatPublicApi";
@@ -530,7 +530,7 @@ async function startServer() {
         redis:    ENV.redisUrl    ? "configured" : "missing — using in-memory fallback",
         voice:    ENV.voiceEnabled  ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         voiceRealtime: ENV.voiceRealtimeReady
-          ? "ready (deepgram+cartesia+grok)"
+          ? "ready (deepgram+cartesia+cerebras)"
           : "incomplete — set DEEPGRAM_API_KEY, CARTESIA_API_KEY, and ANTHROPIC_API_KEY (live voice uses Claude only)",
         sms:      ENV.smsEnabled    ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         email:    ENV.emailEnabled  ? "ready"  : "disabled — add RESEND_API_KEY",
@@ -538,7 +538,7 @@ async function startServer() {
         calendar: (process.env.GCAL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID) ? "ready (Google Calendar)" : "ready (add-to-calendar links)",
         stt:      ENV.sttEnabled    ? "ready"  : "disabled — add OPENAI_API_KEY or DEEPGRAM_API_KEY",
         tts:      ENV.ttsEnabled    ? "ready"  : "disabled — add CARTESIA_API_KEY",
-        ai:       ENV.aiEnabled     ? `ready (xAI Grok — ${ENV.grokModel})`  : "disabled — add XAI_API_KEY",
+        ai:       ENV.aiEnabled     ? `ready (Cerebras — ${ENV.cerebrasModel})`  : "disabled — add CEREBRAS_API_KEY",
       },
     });
   });
@@ -1365,7 +1365,7 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
         console.log("[VOICE-WS] connected", { sessionId, leadId, isInbound });
 
         // Live path: SignalWire audio ↔ createCallEngine (realtimeVoiceEngine.ts)
-        // Deepgram = streaming STT only. Cartesia = TTS. xAI Grok = LLM.
+        // Deepgram = streaming STT only. Cartesia = TTS. Cerebras = LLM.
         // (deepgramVoiceAgent.ts = alternate Deepgram Voice Agent API — not wired here.)
         let resolvedUserId: number | undefined;
         let resolvedLeadId: number | undefined;
@@ -1419,7 +1419,7 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
         }
 
         // ── NEW: Real-time voice engine ─────────────────────────────────
-        // Deepgram STT → xAI Grok → Cartesia TTS
+        // Deepgram STT → Cerebras → Cartesia TTS
         // Streaming end-to-end, instant barge-in, clean hangup
         createCallEngine({
           sigWs: ws as unknown as import("ws").WebSocket,

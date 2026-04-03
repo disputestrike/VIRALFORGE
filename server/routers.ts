@@ -1252,7 +1252,7 @@ const appointmentsRouter = router({
 
 // ─── User Settings Router ─────────────────────────────────────────────────────
 const settingsRouter = router({
-  /** Lightweight flags so the app can explain missing DATABASE_URL / XAI_API_KEY without exposing secrets. */
+  /** Lightweight flags so the app can explain missing DATABASE_URL / CEREBRAS_API_KEY without exposing secrets. */
   workspaceHealth: protectedProcedure.query(async () => {
     const inst = await db.getDb();
     return {

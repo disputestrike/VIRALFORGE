@@ -740,7 +740,7 @@ export class VoiceRealtimePipeline {
     ];
 
     const semantic = this.chooseRoute(transcript, this.customer.objectionHistory.length);
-    this.logger.log(`[PIPE] llm=xai-grok semantic=${semantic} epoch=${epoch}`);
+    this.logger.log(`[PIPE] llm=cerebras semantic=${semantic} epoch=${epoch}`);
 
     if (!(process.env.ANTHROPIC_API_KEY ?? "").trim()) {
       this.logger.error("[PIPE] ANTHROPIC_API_KEY missing — cannot run LLM");
@@ -762,14 +762,15 @@ export class VoiceRealtimePipeline {
     this.cartesiaNeedsNewContext = true;
     this.lastCartesiaContinueWasTrue = false;
     this.assistantResponseInProgress = true;
-    const xaiKey = ENV.xaiApiKey;
-    if (!xaiKey) {
-      this.logger.error("[PIPE] Missing XAI_API_KEY for Grok");
+    const { getCerebrasKey, rotateCerebrasKey } = await import("../cerebrasKeyManager");
+    const cerebrasKey = getCerebrasKey();
+    if (!cerebrasKey) {
+      this.logger.error("[PIPE] Missing CEREBRAS_API_KEY");
       this.assistantResponseInProgress = false;
       return;
     }
     const { default: OpenAI } = await import("openai");
-    const client = new OpenAI({ apiKey: xaiKey, baseURL: "https://api.x.ai/v1" });
+    const client = new OpenAI({ apiKey: cerebrasKey, baseURL: "https://api.cerebras.ai/v1" });
 
     const systemMsg = messages.find(m => m.role === "system")?.content ?? "";
     const chatMsgs = messages
@@ -777,7 +778,7 @@ export class VoiceRealtimePipeline {
       .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
 
     const stream = await client.chat.completions.create({
-      model: ENV.grokModel,
+      model: ENV.cerebrasModel,
       max_tokens: Math.min(1024, Math.max(400, ENV.voiceLlmMaxTokens * 2)),
       temperature: Math.min(0.75, Math.max(0.35, ENV.voiceLlmTemperature)),
       messages: [{ role: "system", content: systemMsg }, ...chatMsgs],
