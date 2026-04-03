@@ -31,6 +31,11 @@ export type InvokeResult = {
 
 let _xaiClient: OpenAI | null = null;
 
+/** True when Grok/xAI is configured (scripts, AI search, templates, etc.). */
+export function isLlmConfigured(): boolean {
+  return !!(process.env.XAI_API_KEY ?? "").trim();
+}
+
 function getXaiClient(): OpenAI {
   if (!_xaiClient) {
     const apiKey = (process.env.XAI_API_KEY ?? "").trim();
@@ -85,4 +90,4 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   };
 }
 
-export default { invokeLLM };
+export default { invokeLLM, isLlmConfigured };

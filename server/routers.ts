@@ -4,7 +4,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { invokeLLM } from "./_core/llm";
+import { invokeLLM, isLlmConfigured } from "./_core/llm";
 import * as db from "./db";
 import { sql } from "drizzle-orm";
 // INTEGRATION: Import new services
@@ -206,20 +206,57 @@ const leadsRouter = router({
   }),
 
   aiSearch: protectedProcedure.input(z.object({ query: z.string() })).mutation(async ({ input, ctx }) => {
-    const response = await invokeLLM({
-      messages: [
-        { role: "system", content: "You are a lead search assistant. Convert natural language queries into structured search filters. Respond with ONLY a JSON object, no other text: {\"search\":\"string or null\",\"segment\":\"hot|warm|cold|unqualified or null\",\"status\":\"new|contacted|qualified|converted|lost or null\",\"verificationStatus\":\"verified|unverified|bounced|pending or null\"}. Only include values clearly specified in the query." },
-        { role: "user", content: input.query },
-      ],
-      // json_object format handled via system prompt instruction
-    });
+    const q = input.query.trim();
+    const fallbackSearch = async () => {
+      const results = await db.getLeads({ search: q || undefined, userId: ctx.user.id });
+      return { filters: { search: q || null } as Record<string, string | null>, ...results, llmParsed: false as const };
+    };
+
+    if (!isLlmConfigured()) {
+      return fallbackSearch();
+    }
+
     try {
-      const filters = JSON.parse(response.choices[0].message.content as string);
-      const results = await db.getLeads({ search: filters.search || undefined, segment: filters.segment || undefined, status: filters.status || undefined, verificationStatus: filters.verificationStatus || undefined, userId: ctx.user.id });
-      return { filters, ...results };
+      const response = await invokeLLM({
+        messages: [
+          {
+            role: "system",
+            content:
+              'You are a lead search assistant. Convert natural language into filters. Reply with ONLY valid JSON (no markdown): {"search":"string or null","segment":"hot|warm|cold|unqualified or null","status":"new|contacted|qualified|converted|lost or null","verificationStatus":"verified|unverified|bounced|pending or null"}. Omit keys not implied by the user.',
+          },
+          { role: "user", content: q },
+        ],
+      });
+      const raw = String(response.choices[0]?.message?.content ?? "").trim();
+      const stripped = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+      const parsed = JSON.parse(stripped) as Record<string, unknown>;
+      const segments = new Set(["hot", "warm", "cold", "unqualified"]);
+      const statuses = new Set(["new", "contacted", "qualified", "converted", "lost"]);
+      const verifs = new Set(["verified", "unverified", "bounced", "pending"]);
+      const search = typeof parsed.search === "string" ? parsed.search : undefined;
+      const segment =
+        typeof parsed.segment === "string" && segments.has(parsed.segment) ? parsed.segment : undefined;
+      const status = typeof parsed.status === "string" && statuses.has(parsed.status) ? parsed.status : undefined;
+      const verificationStatus =
+        typeof parsed.verificationStatus === "string" && verifs.has(parsed.verificationStatus)
+          ? parsed.verificationStatus
+          : undefined;
+      const filters = {
+        search: search ?? null,
+        segment: segment ?? null,
+        status: status ?? null,
+        verificationStatus: verificationStatus ?? null,
+      };
+      const results = await db.getLeads({
+        search: search || undefined,
+        segment,
+        status,
+        verificationStatus,
+        userId: ctx.user.id,
+      });
+      return { filters, ...results, llmParsed: true as const };
     } catch {
-      const results = await db.getLeads({ search: input.query, userId: ctx.user.id });
-      return { filters: { search: input.query }, ...results };
+      return fallbackSearch();
     }
   }),
 
@@ -528,6 +565,12 @@ const messagesRouter = router({
       leadName: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
+      if (!isLlmConfigured()) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "AI compose requires AI to be configured for this workspace.",
+        });
+      }
       const channelGuide = input.channel === "sms"
         ? "Write a concise SMS under 160 characters. No subject needed."
         : input.channel === "email"
@@ -623,12 +666,18 @@ const voiceAIRouter = router({
       pageContext: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      if (!isLlmConfigured()) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "The in-app AI assistant is not available until AI is configured for this workspace.",
+        });
+      }
       // Pull real live data to ground the agent in actual account state
       const [leadsResult, campaignsResult, apptStats, recentActivity] = await Promise.allSettled([
-        db.getLeads({ limit: 1 }),
-        db.getCampaigns({ limit: 100 }),
-        db.getAppointments({ upcoming: true }),
-        db.getActivityLogs(5),
+        db.getLeads({ limit: 1, userId: ctx.user.id }),
+        db.getCampaigns({ limit: 100, userId: ctx.user.id }),
+        db.getAppointments({ upcoming: true, userId: ctx.user.id }),
+        db.getActivityLogs({ limit: 5, userId: ctx.user.id }),
       ]);
 
       const leads = leadsResult.status === "fulfilled" ? leadsResult.value : { total: 0, leads: [] };
@@ -643,7 +692,7 @@ const voiceAIRouter = router({
         email: !!(process.env.RESEND_API_KEY),
         stt: !!(process.env.DEEPGRAM_API_KEY),
         tts: !!(process.env.CARTESIA_API_KEY ?? "").trim(),
-        ai: !!(process.env.XAI_API_KEY),
+        ai: isLlmConfigured(),
         gcal: !!(process.env.VITE_GCAL_BOOKING_URL),
       };
 
@@ -692,25 +741,27 @@ YOUR JOB:
   getValuePropSuggestions: protectedProcedure
     .input(z.object({ industry: z.string(), prompt: z.string() }))
     .mutation(async ({ input }) => {
-      const response = await invokeLLM({
-        messages: [
-          {
-            role: "system",
-            content: "You are a sales expert. Return ONLY a JSON array of 6 short, punchy value proposition strings. No explanation, no markdown, just the JSON array. Each string should be under 15 words and highly specific to the industry.",
-          },
-          {
-            role: "user",
-            content: `Industry: ${input.industry}. ${input.prompt} Return 6 value propositions as a JSON array of strings.`,
-          },
-        ],
-      });
+      if (!isLlmConfigured()) return { suggestions: [] as string[] };
       try {
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a sales expert. Return ONLY a JSON array of 6 short, punchy value proposition strings. No explanation, no markdown, just the JSON array. Each string should be under 15 words and highly specific to the industry.",
+            },
+            {
+              role: "user",
+              content: `Industry: ${input.industry}. ${input.prompt} Return 6 value propositions as a JSON array of strings.`,
+            },
+          ],
+        });
         const text = response.choices[0].message.content as string;
         const clean = text.replace(/```json|```/g, "").trim();
         const suggestions = JSON.parse(clean);
         return { suggestions: Array.isArray(suggestions) ? suggestions : [] };
       } catch {
-        return { suggestions: [] };
+        return { suggestions: [] as string[] };
       }
     }),
 
@@ -729,6 +780,12 @@ YOUR JOB:
       callObjective: z.enum(["appointment", "qualification", "follow-up", "re-engagement"]).optional(),
     }))
     .mutation(async ({ input }) => {
+      if (!isLlmConfigured()) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Script generation requires AI to be configured for this workspace.",
+        });
+      }
       const callerName = input.callerName || "Alex";
       const companyName = input.companyName || "our company";
       const stateOrCity = input.stateOrCity || "your area";
@@ -812,6 +869,12 @@ const templatesRouter = router({
   generateWithAI: protectedProcedure
     .input(z.object({ channel: z.enum(["sms", "email", "voice", "social"]), industry: z.string(), goal: z.string(), tone: z.string().optional() }))
     .mutation(async ({ input }) => {
+      if (!isLlmConfigured()) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Template generation requires AI to be configured for this workspace.",
+        });
+      }
       const response = await invokeLLM({
         messages: [
           { role: "system", content: `You are an expert copywriter specializing in ${input.channel} outreach for sales. Create high-converting, personalized message templates.` },
@@ -1046,7 +1109,7 @@ const adminRouter = router({
       return { success: true };
     }),
 
-  activityLogs: adminProcedure.input(z.object({ limit: z.number().optional() }).optional()).query(async ({ input }) => db.getActivityLogs(input?.limit ?? 50)),
+  activityLogs: adminProcedure.input(z.object({ limit: z.number().optional() }).optional()).query(async ({ input }) => db.getActivityLogs({ limit: input?.limit ?? 50 })),
 
   systemStats: adminProcedure.query(async () => {
     const [metrics, users, campaigns, leads] = await Promise.all([
@@ -1179,6 +1242,15 @@ const appointmentsRouter = router({
 
 // ─── User Settings Router ─────────────────────────────────────────────────────
 const settingsRouter = router({
+  /** Lightweight flags so the app can explain missing DATABASE_URL / XAI_API_KEY without exposing secrets. */
+  workspaceHealth: protectedProcedure.query(async () => {
+    const inst = await db.getDb();
+    return {
+      database: !!inst,
+      llm: isLlmConfigured(),
+    };
+  }),
+
   get: protectedProcedure.query(async ({ ctx }) => {
     const db_mod = await import("./db");
     const { getUserVoiceSettings } = await import("./_core/services/voiceProfiles");

@@ -211,19 +211,30 @@ export default function LandingPage() {
 
       <MarketingNav />
 
-      {/* HERO — new shell: dark band, not full-page dark */}
-      <section className="relative overflow-hidden border-b border-white/20 bg-black px-6 py-24 text-center text-white md:py-28">
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:56px_56px]" />
-        <div className="pointer-events-none absolute left-1/2 top-[8%] h-[420px] w-[780px] -translate-x-1/2 bg-[radial-gradient(ellipse,rgba(29,111,244,0.12)_0%,transparent_65%)]" />
-        <div className="relative mx-auto max-w-3xl">
+      {/* HERO — headline on branded soundwave / neural background */}
+      <section className="relative min-h-[min(92vh,920px)] overflow-hidden border-b border-white/20 text-center text-white">
+        <div
+          className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: `url(${publicAsset("marketing/hero-background.png")})` }}
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/80 via-black/55 to-black/90"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_45%,transparent_0%,rgba(0,0,0,0.35)_70%,rgba(0,0,0,0.75)_100%)]"
+          aria-hidden
+        />
+        <div className="relative z-10 mx-auto max-w-3xl px-6 py-24 md:py-28">
           <div className="mb-6 flex justify-center sm:mb-8">
             <ApexLogo variant="mark" size="lg" imgClassName="rounded-md border border-white/10 px-3 py-1.5" />
           </div>
-          <h1 className="text-balance text-4xl font-black leading-[1.08] tracking-tight md:text-6xl md:leading-[1.05]">
+          <h1 className="text-balance text-4xl font-black leading-[1.08] tracking-tight drop-shadow-[0_2px_24px_rgba(0,0,0,0.75)] md:text-6xl md:leading-[1.05]">
             Turn every call into revenue.
-            <span className="block text-blue-400">On autopilot. 24/7. Zero effort.</span>
+            <span className="block text-blue-400 drop-shadow-[0_2px_20px_rgba(0,0,0,0.8)]">On autopilot. 24/7. Zero effort.</span>
           </h1>
-          <p className="mx-auto mt-6 max-w-xl text-pretty text-lg leading-relaxed text-zinc-400">
+          <p className="mx-auto mt-6 max-w-xl text-pretty text-lg leading-relaxed text-zinc-300 drop-shadow-md">
             Your AI answers every inbound call, runs outbound campaigns, qualifies leads, and books appointments — so your team only talks to buyers ready to close.
           </p>
           <div className="mt-10 flex flex-wrap justify-center gap-3">
@@ -251,23 +262,11 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
-          <p className="mx-auto mt-8 max-w-2xl text-pretty text-sm font-medium leading-relaxed text-blue-300/90">
+          <p className="mx-auto mt-8 max-w-2xl text-pretty text-sm font-medium leading-relaxed text-blue-200/95 drop-shadow-md">
             <span className="text-white">{CONVERSATION_LANGUAGE_COUNT} conversation languages</span>
-            <span className="text-zinc-500"> — </span>
+            <span className="text-zinc-400"> — </span>
             {SUPPORTED_LANGUAGES_MARKETING_LIST}.
           </p>
-
-          {/* Hero image */}
-          <div className="mx-auto mt-12 max-w-4xl">
-            <div className="rounded-2xl border border-white/10 overflow-hidden shadow-2xl shadow-blue-500/10">
-              <img
-                src="/marketing/hero-image.jpg"
-                alt="AI agent qualifying leads and booking appointments"
-                className="w-full h-auto"
-                loading="eager"
-              />
-            </div>
-          </div>
         </div>
       </section>
 

@@ -436,7 +436,8 @@ export function buildApexBlueprintPromptBlock(state: ApexControllerState, intent
   if (intent === "re_engagement") {
     lines.push(
       "",
-      "RE-ENGAGEMENT: Caller went quiet or challenged silence. Be warm and upbeat. Tie back to the LAST topic or their business — one concrete point, then optionally ONE short forward question. Never defensive; never a tautology (“I’m talking”)."
+      "RE-ENGAGEMENT: Caller went quiet or challenged silence. Be warm and upbeat. Tie back to the LAST topic or their business — one concrete point, then optionally ONE short forward question. Never defensive; never a tautology (“I’m talking”).",
+      "FORBIDDEN (sounds like a bad line check): still with me, still there, are you there, can you hear me, on the line, checking in, just wanted to make sure you’re there."
     );
   }
 

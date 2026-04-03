@@ -6,6 +6,7 @@ import { vi, beforeEach } from "vitest";
 
 // ─── Mock LLM (invokeLLM) ─────────────────────────────────────────────────────
 vi.mock("./_core/llm", () => ({
+  isLlmConfigured: vi.fn().mockReturnValue(true),
   invokeLLM: vi.fn().mockResolvedValue({
     choices: [
       {

@@ -262,6 +262,19 @@ export function createCallEngine(opts: EngineOptions): void {
   let assistantPlaybackStartAt: number | null = null;
   /** True from start of LLM/TTS response until all audio for this turn is sent. */
   let assistantResponseInProgress = false;
+  /** At most one pending barge-in ack utterance — cleared when superseded or call ends. */
+  let interruptAckTimer: NodeJS.Timeout | null = null;
+
+  function clearInterruptAckPending(): void {
+    if (interruptAckTimer) {
+      clearTimeout(interruptAckTimer);
+      interruptAckTimer = null;
+    }
+  }
+
+  function voiceStreamReady(): boolean {
+    return Boolean(streamSid && sigWs && sigWs.readyState === WebSocket.OPEN);
+  }
 
   function clearStreamRecoveryTimer(): void {
     if (streamRecoveryTimer) {
@@ -290,12 +303,14 @@ export function createCallEngine(opts: EngineOptions): void {
     if (!ENV.voiceUserSilenceReengageEnabled || isEnded) return;
     if (!greetingDone || !callerHasSpokenOnce) return;
     if (silenceReengageAlreadySent) return;
+    if (!voiceStreamReady()) return;
     const ms = ENV.voiceUserSilenceReengageMs;
     if (ms <= 0) return;
     const playbackDoneAt = Date.now();
     userSilenceReengageTimer = setTimeout(() => {
       userSilenceReengageTimer = null;
       if (isEnded) return;
+      if (!voiceStreamReady()) return;
       if (isSpeaking || assistantResponseInProgress || userTurnBusy) return;
       if (lastUserFinalAt > playbackDoneAt) return;
       void runSilenceReengageTurn();
@@ -326,6 +341,7 @@ export function createCallEngine(opts: EngineOptions): void {
     speechMsOverride?: number,
     responseInProgressOverride?: boolean
   ): void {
+    clearInterruptAckPending();
     const speechMs =
       speechMsOverride !== undefined
         ? speechMsOverride
@@ -355,7 +371,8 @@ export function createCallEngine(opts: EngineOptions): void {
       return;
     }
     const epochAfter = generationEpoch;
-    setTimeout(() => {
+    interruptAckTimer = setTimeout(() => {
+      interruptAckTimer = null;
       if (isEnded || epochAfter !== generationEpoch) return;
       void speak("Got it — go ahead.", generationEpoch);
     }, 180);
@@ -398,6 +415,8 @@ export function createCallEngine(opts: EngineOptions): void {
   /** SignalWire <Stream> stop — media leg only; call may still be in-progress. */
   function onMediaStreamStopped(): void {
     log("Stream stopped (media) — session not finalized; awaiting reconnect or HTTP terminal status");
+    clearUserSilenceReengageTimer();
+    clearInterruptAckPending();
     streamSid = "";
     traceEvent(callId, "media_stream_stopped");
     if (activeSessionId) {
@@ -414,6 +433,8 @@ export function createCallEngine(opts: EngineOptions): void {
   function onSignalWireSocketEnded(reason: string): void {
     if (isEnded) return;
     log(`SignalWire WebSocket ended (${reason}) — not finalizing immediately`);
+    clearUserSilenceReengageTimer();
+    clearInterruptAckPending();
     streamSid = "";
     traceEvent(callId, "sigws_ended", { reason });
     if (activeSessionId) {
@@ -670,6 +691,7 @@ export function createCallEngine(opts: EngineOptions): void {
   function stopSpeaking() {
     resetAssistantPlaybackClock();
     clearUserSilenceReengageTimer();
+    clearInterruptAckPending();
     assistantResponseInProgress = false;
     if (cartesiaWs && cartesiaWs.readyState === WebSocket.OPEN && cartesiaContextId) {
       cartesiaWs.send(JSON.stringify({ context_id: cartesiaContextId, cancel: true }));
@@ -820,6 +842,7 @@ export function createCallEngine(opts: EngineOptions): void {
     if (transcript.trim()) {
       callerHasSpokenOnce = true;
       clearUserSilenceReengageTimer();
+      clearInterruptAckPending();
       silenceReengageAlreadySent = false;
       lastUserFinalAt = Date.now();
     }
@@ -1113,6 +1136,7 @@ export function createCallEngine(opts: EngineOptions): void {
   async function runSilenceReengageTurn(): Promise<void> {
     if (isEnded || !greetingDone || !callerHasSpokenOnce) return;
     if (isSpeaking || assistantResponseInProgress || userTurnBusy) return;
+    if (!voiceStreamReady()) return;
 
     silenceReengageAlreadySent = true;
     const epoch = ++generationEpoch;
@@ -1120,26 +1144,28 @@ export function createCallEngine(opts: EngineOptions): void {
     traceEvent(callId, "user_silence_reengage");
     log("[VOICE] User silence re-engage");
 
-    const synthetic = "(Still there — no reply yet.)";
-    appendHistory("user", synthetic);
+    // Do NOT appendHistory — synthetic "user" lines were polluting email transcripts.
     turnCtl = onProcessing(turnCtl);
 
     const classified = classifyTurn("(silent)");
     const plan = planStrictLlmTurn({
       policyState,
       strictFacts,
-      transcript: synthetic,
+      transcript: "(silent)",
       lastAssistantQuestion,
       now: new Date(),
       classified,
     });
     policyState = plan.policyForPrompt;
-    syncPolicySnapshot(synthetic, plan.trace);
+    syncPolicySnapshot("silence_reengage", plan.trace);
+
+    const silenceLlmCue =
+      "Internal cue: No new speech was detected after your last reply. Respond in ONE or TWO short sentences. Continue the same business topic from the conversation. Sound like a senior sales rep. FORBIDDEN phrases: still with me, still there, checking in, just wanted to make sure, can you hear me, on the line, are you there.";
 
     if (!ENV.xaiApiKey) {
       try {
         await speak(
-          "You still with me? I want to make sure this is useful — what’s the biggest strain on your inbound calls, after hours or when you’re slammed?",
+          "When you have a second — is the bigger pain missed calls after hours, or getting swamped during the day?",
           epoch
         );
       } catch {}
@@ -1148,14 +1174,15 @@ export function createCallEngine(opts: EngineOptions): void {
     }
 
     try {
-      await respondVoiceLlm(epoch, synthetic, plan.strictBlock, false, {
+      await respondVoiceLlm(epoch, "", plan.strictBlock, false, {
         blueprintIntentOverride: "re_engagement",
+        llmOnlyUserMessage: silenceLlmCue,
       });
     } catch (e: any) {
       log(`[Silence re-engage] ${e?.message ?? e}`);
       try {
         await speak(
-          "Hey — you still with me? Quick one: are missed calls mostly nights and weekends, or busy daytime?",
+          "One quick question — are missed calls hitting you more after hours, or when you’re slammed during the day?",
           epoch
         );
       } catch {}
@@ -1178,7 +1205,11 @@ export function createCallEngine(opts: EngineOptions): void {
     userTranscript: string,
     strictBlock: string,
     recoveryPrefixDone: boolean,
-    opts?: { blueprintIntentOverride?: BlueprintIntent }
+    opts?: {
+      blueprintIntentOverride?: BlueprintIntent;
+      /** User message for this Grok request only — never written to call transcript. */
+      llmOnlyUserMessage?: string;
+    }
   ): Promise<void> {
     const xaiKey = ENV.xaiApiKey;
 
@@ -1194,14 +1225,24 @@ export function createCallEngine(opts: EngineOptions): void {
           "\n\n=== RECOVERY ===\nYou already delivered the reset lines. Now give ONE direct substantive answer to what they need — do not repeat the reset or ask what they want again.";
       }
     }
+    const tenantUserLine =
+      opts?.llmOnlyUserMessage?.trim()
+        ? "Caller has not spoken since your last message — continue professionally in one beat; no line-quality check-ins."
+        : userTranscript;
     const prompt = await buildSystemPromptWithTenant(
-      userTranscript,
+      tenantUserLine,
       `${strictBlock}\n\n${blueprintBlock}${recoveryHint}`
     );
     const messages = historyForLlm().map((m) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
     }));
+    const cue = opts?.llmOnlyUserMessage?.trim();
+    if (cue) {
+      messages.push({ role: "user" as const, content: cue });
+    }
+
+    const textForGuard = cue ? "" : userTranscript;
 
     // ── xAI Grok — SOLE LLM provider (OpenAI-compatible API) ──
     if (!xaiKey) throw new Error("XAI_API_KEY not configured");
@@ -1218,7 +1259,7 @@ export function createCallEngine(opts: EngineOptions): void {
       provider: "xai-grok",
       model: ENV.grokModel,
     });
-    const { clean, full } = await streamToCartesia(openAiTextDeltas(stream), epoch, userTranscript);
+    const { clean, full } = await streamToCartesia(openAiTextDeltas(stream), epoch, textForGuard);
     if (!clean.trim() && !full.trim()) throw new Error("Empty Grok response");
   }
 
@@ -1444,6 +1485,7 @@ export function createCallEngine(opts: EngineOptions): void {
     clearStreamRecoveryTimer();
     disarmOutboundSilenceWatch();
     clearUserSilenceReengageTimer();
+    clearInterruptAckPending();
     clearDeepgramFinalDebounce("finalize");
     unregisterEngineFromMap();
     log(`Call finalize: ${opts.reason}`);

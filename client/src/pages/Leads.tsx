@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
 import {
   Bot, Building2, CheckCircle2, FileSpreadsheet, Mail, Phone, Plus, Search,
@@ -94,6 +95,7 @@ export default function Leads() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const utils = trpc.useUtils();
+  const { data: workspaceHealth } = trpc.settings.workspaceHealth.useQuery();
   const { data, isLoading } = trpc.leads.list.useQuery({
     search: search || undefined,
     segment: segment && segment !== "all" ? segment : undefined,
@@ -115,7 +117,15 @@ export default function Leads() {
     onSuccess: (d) => { utils.leads.list.invalidate(); toast.success(`Verification: ${d.status}`); },
   });
   const aiSearchMutation = trpc.leads.aiSearch.useMutation({
-    onSuccess: (d) => toast.success(`AI found ${d.leads.length} leads`),
+    onSuccess: (d) => {
+      if (d.llmParsed) toast.success(`Found ${d.leads.length} leads (AI filters applied)`);
+      else
+        toast.message(`Found ${d.leads.length} leads`, {
+          description:
+            "Searched your text in names, email, and company. Enable workspace AI for natural-language filters.",
+        });
+    },
+    onError: (e) => toast.error(e.message || "Search failed"),
   });
   const importMutation = trpc.leads.importBulk.useMutation({
     onSuccess: (d) => {
@@ -184,6 +194,24 @@ export default function Leads() {
 
   return (
     <div className="p-6 space-y-5">
+      {workspaceHealth && !workspaceHealth.database && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Database not connected</AlertTitle>
+          <AlertDescription>
+            Leads and campaigns cannot load until <code className="text-xs">DATABASE_URL</code> is set and reachable on the server.
+          </AlertDescription>
+        </Alert>
+      )}
+      {workspaceHealth?.database && !workspaceHealth.llm && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Limited AI features</AlertTitle>
+          <AlertDescription>
+            Natural-language lead search falls back to plain text search until AI is configured. Script and template generation need the same setup.
+          </AlertDescription>
+        </Alert>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
