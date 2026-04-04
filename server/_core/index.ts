@@ -556,6 +556,78 @@ async function startServer() {
 
   registerWebchatPublicRoutes(app);
 
+  // ── E2E Test Endpoint (protected by secret — safe to keep) ───────────────────
+  app.post("/api/e2e-test", async (req, res) => {
+    try {
+      const secret = req.headers["x-e2e-secret"];
+      if (secret !== (process.env.E2E_TEST_SECRET || "apexai-e2e-2026")) {
+        return res.status(403).json({ error: "forbidden" });
+      }
+      const { action, leadId, userId, callId, testName } = req.body as Record<string, any>;
+      const db = await import("../db");
+      const results: Record<string, any> = {};
+
+      if (action === "save_memory" || action === "all") {
+        await db.saveCallMemory(
+          userId ?? 1,
+          leadId ?? null,
+          `[E2E Test] Caller name: E2E SunwaveTest | Industry: solar | Pain points: missed calls, low conversion | Call outcome: interested`,
+          "call_auto"
+        );
+        const memories = await db.listCustomerMemories(userId ?? 1, leadId ?? undefined);
+        results.memory = { saved: true, count: memories.length, latest: memories[0]?.content?.slice(0, 100) };
+      }
+
+      if (action === "ab_test" || action === "all") {
+        const variant = await db.selectAbVariantForCall(userId ?? 1, callId ?? "e2e-test-call-001");
+        results.abVariant = variant ?? { note: "no active variants — create one in abTesting.create" };
+
+        if (variant) {
+          await db.recordAbTestResult({
+            variantId: variant.variantId,
+            callId: callId ?? "e2e-test-call-001",
+            sessionId: "sess_e2e_test",
+            leadId: leadId ?? undefined,
+            outcome: "interested",
+            converted: true,
+            durationSeconds: 185,
+            sentiment: "positive",
+          });
+          const summary = await db.getAbTestSummary(userId ?? 1, testName ?? "voice_prompt");
+          results.abSummary = summary;
+        }
+      }
+
+      if (action === "analytics" || action === "all") {
+        const [costStats, roiData, trend] = await Promise.all([
+          db.getCostPerCallStats(userId ?? 1),
+          db.getRoiPerCampaign(userId ?? 1),
+          db.getDailyCallTrend(userId ?? 1, 7),
+        ]);
+        results.analytics = { costStats, roiCampaigns: roiData.length, trend7Days: trend };
+      }
+
+      if (action === "crm_status" || action === "all") {
+        const connections = await db.listCrmConnections(userId ?? 1);
+        results.crmConnections = connections.map((c: any) => ({ provider: c.provider, status: c.status, displayName: c.displayName }));
+        const hubspotTokens = await db.getCrmTokens(userId ?? 1, "hubspot");
+        results.hubspotConnected = !!hubspotTokens;
+      }
+
+      if (action === "lead_check") {
+        const lead = await db.getLeadById(leadId);
+        results.lead = lead ? { id: lead.id, firstName: lead.firstName, lastName: lead.lastName, phone: lead.phone, industry: lead.industry } : null;
+        const memories = await db.listCustomerMemories(userId ?? 1, leadId);
+        results.memories = memories.map((m: any) => ({ id: m.id, source: m.source, content: m.content?.slice(0, 100), createdAt: m.createdAt }));
+      }
+
+      return res.json({ ok: true, results });
+    } catch (e) {
+      console.error("[E2E Test]", e);
+      return res.status(500).json({ error: (e as Error).message });
+    }
+  });
+
   // INTEGRATION: Voice webhook routes for SignalWire callbacks
   // ── SignalWire Webhook Signature Validation ───────────────────────────────────
   const validateTwilioSignature = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
