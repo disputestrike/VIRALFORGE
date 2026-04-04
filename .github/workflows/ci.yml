@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, dev, staging]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  # ─── Job 1: Type check + full test suite (including 44 guardrail scenarios) ───
+  test:
+    name: Typecheck & Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10.4.1'
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript check
+        run: pnpm check
+        # Fails build if any type errors exist anywhere in server/ or shared/
+
+      - name: Unit tests — full suite
+        run: pnpm test
+        # Runs ALL *.test.ts files under server/
+        # Includes the 44 guardrail scenarios in guardrails.test.ts
+        # Any regression in small talk policy, hallucination detection,
+        # pitch placement, loop detection, or QA tagger will FAIL the build here.
+        env:
+          # No real DB/LLM needed — vitest.setup.ts mocks them
+          NODE_ENV: test
+
+      - name: Guardrail regression gate (explicit)
+        run: pnpm vitest run server/realtime/guardrails.test.ts --reporter=verbose
+        # Runs the 44 guardrail scenarios as a standalone, clearly-labelled step.
+        # This makes it immediately obvious in the GitHub Actions UI if a guardrail
+        # specifically regresses — not buried in a wall of other test output.
+        env:
+          NODE_ENV: test
+
+  # ─── Job 2: Build verification (catches broken imports, missing exports) ───
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    # Only run build on main/master pushes to save CI minutes on PRs
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10.4.1'
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Production build
+        run: pnpm build
+        env:
+          NODE_ENV: production
+          # Build needs these to not error on missing env — real values from Railway
+          VITE_API_URL: https://apexai-production-d567.up.railway.app

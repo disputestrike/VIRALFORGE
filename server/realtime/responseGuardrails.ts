@@ -42,6 +42,8 @@ const NEGATIVE_SELF_AGREEMENT_PATTERNS = [
   /you'?re? right (about|that) (me|i)/i,
   /i must (be|seem|sound) (sad|tired|off|broken|negative|down)/i,
   /i (sound|seem|appear) (negative|sad|tired|off|broken|down|not positive|not good)/i,
+  /i guess i'?m? not (doing great|positive|good|well|okay|happy|fine)/i,
+  /i'?m? not doing (that )?(great|well|good|fine|okay)/i,
 ];
 
 /**

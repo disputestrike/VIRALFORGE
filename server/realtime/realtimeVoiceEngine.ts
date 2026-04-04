@@ -97,6 +97,7 @@ import {
   type ConversationContext,
 } from "./responseGuardrails";
 import { tagCallFailureModes, formatFailureModes, isCallHealthy } from "./callQualityTagger";
+import { postCallQualityToMetrics } from "./voiceMetrics";
 
 type VoiceOutcome = import("../_core/services/voiceSessionManager").VoiceSession["outcome"];
 
@@ -1904,6 +1905,10 @@ export function createCallEngine(opts: EngineOptions): void {
             summary,
             failures: failures.slice(0, 5).map(f => ({ code: f.code, severity: f.severity })),
           });
+          // ── Post to voice-metrics-service for dashboard aggregation ──
+          // Every flagged call appears in /metrics/quality with failure bucket codes.
+          // Phase "qa_result" = call summary. Phase "qa_failure:<code>" = per-violation.
+          postCallQualityToMetrics(cid, failures, healthy);
         } catch (e) { log(`[QA] Tagger failed: ${e instanceof Error ? e.message : String(e)}`); }
 
         // ── Persistent Memory: auto-save key facts extracted during this call ──

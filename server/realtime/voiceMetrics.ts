@@ -163,3 +163,78 @@ export function logSttFinalToTtsLatencyIfPending(callId: string): void {
     warnSlow: ms > 800,
   });
 }
+
+/**
+ * Post call quality / guardrail results to voice-metrics-service.
+ * Called from finalizeHard() after tagCallFailureModes() completes.
+ *
+ * Each failure mode is posted as a separate event with phase = "qa_failure:<code>"
+ * so the dashboard can aggregate them by bucket across calls.
+ * A synthetic "qa_result" event is also posted with the full summary.
+ */
+export function postCallQualityToMetrics(
+  callId: string,
+  failures: Array<{ code: string; severity: string; snippet?: string }>,
+  healthy: boolean
+): void {
+  let url: string;
+  try {
+    url = require("../_core/env").ENV.voiceMetricsServiceUrl as string;
+  } catch {
+    return;
+  }
+  if (!url) return;
+
+  const sessionId = callIdToSessionId.get(callId) ?? null;
+  const msSinceCallStart = starts.has(callId) ? Date.now() - (starts.get(callId) ?? Date.now()) : null;
+
+  setImmediate(async () => {
+    try {
+      // 1. One summary event for the whole call
+      await fetch(`${url}/metrics/event`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          callId,
+          sessionId,
+          phase: "qa_result",
+          msSinceCallStart,
+          extra: {
+            healthy,
+            failureCount: failures.length,
+            severity_breakdown: {
+              trust_killing: failures.filter(f => f.severity === "trust_killing").length,
+              conversion_killing: failures.filter(f => f.severity === "conversion_killing").length,
+              compliance_risk: failures.filter(f => f.severity === "compliance_risk").length,
+              polish_level: failures.filter(f => f.severity === "polish_level").length,
+            },
+            codes: failures.map(f => f.code),
+          },
+        }),
+        signal: AbortSignal.timeout(4000),
+      });
+
+      // 2. One event per individual failure so they're queryable by phase
+      for (const failure of failures) {
+        await fetch(`${url}/metrics/event`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            callId,
+            sessionId,
+            phase: `qa_failure:${failure.code}`,
+            msSinceCallStart,
+            extra: {
+              code: failure.code,
+              severity: failure.severity,
+              snippet: failure.snippet?.slice(0, 120) ?? null,
+            },
+          }),
+          signal: AbortSignal.timeout(4000),
+        });
+      }
+    } catch {
+      // Metrics must never impact call quality — silently drop
+    }
+  });
+}

@@ -33,7 +33,12 @@ export function classifySmallTalk(text: string): SmallTalkClass {
   const t = text.toLowerCase().trim();
 
   // Self-identity / AI disclosure (highest priority)
-  if (/\b(are you (a )?(robot|ai|bot|machine|computer|automated|artificial|virtual|real person|human|live person)|is this (a )?(robot|bot|ai|automated|computer)|am i (talking|speaking) to (a )?(robot|ai|bot|computer|machine)|is (this|that) a (robot|bot|ai|machine))\b/i.test(t)) {
+  if (
+    /\b(are you (a )?(robot|ai|bot|machine|computer|automated|artificial|virtual|real person|human|live person)|is this (a )?(robot|bot|ai|automated|computer)|am i (talking|speaking) to (a )?(robot|ai|bot|computer|machine)|is (this|that) a (robot|bot|ai|machine))\b/i.test(t) ||
+    /\bare you real\b/i.test(t) ||
+    /\bis this automated\b/i.test(t) ||
+    /\bare you (artificial|virtual|an? ai|an? bot)\b/i.test(t)
+  ) {
     return "are_you_ai";
   }
 
