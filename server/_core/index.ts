@@ -97,6 +97,13 @@ async function runMigrations() {
           "CREATE TABLE IF NOT EXISTS `knowledge_base_chunks` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `knowledgeBaseId` int NOT NULL, `sourceId` int, `content` text NOT NULL, `embedding` text, `metadata` text, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP)",
           "CREATE TABLE IF NOT EXISTS `workflows` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `name` varchar(200) NOT NULL, `trigger` varchar(100) DEFAULT 'manual', `description` text, `definition` json, `isActive` tinyint(1) DEFAULT 1, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
           "CREATE TABLE IF NOT EXISTS `customer_memories` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `leadId` int, `content` text NOT NULL, `source` varchar(64) DEFAULT 'manual', `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP)",
+          // Ensure customer_memories has content + source columns (old schema had key/value)
+          "ALTER TABLE `customer_memories` ADD COLUMN `content` text NOT NULL DEFAULT ''",
+          "ALTER TABLE `customer_memories` ADD COLUMN `source` varchar(64) DEFAULT 'manual'",
+          // Drop old columns if they exist (safe — error 1091 = doesn't exist, ignored)
+          "ALTER TABLE `customer_memories` DROP COLUMN `key`",
+          "ALTER TABLE `customer_memories` DROP COLUMN `value`",
+          "ALTER TABLE `customer_memories` DROP COLUMN `updatedAt`",
           "CREATE TABLE IF NOT EXISTS `support_tickets` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `leadId` int, `subject` varchar(500), `body` text, `status` varchar(50) DEFAULT 'open', `priority` varchar(20) DEFAULT 'medium', `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
           "CREATE TABLE IF NOT EXISTS `email_sequences` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `name` varchar(255) NOT NULL, `trigger` varchar(100) DEFAULT 'manual', `steps` json, `isActive` tinyint(1) DEFAULT 1, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
           "CREATE TABLE IF NOT EXISTS `mobile_devices` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `deviceToken` varchar(512), `platform` varchar(20), `isActive` tinyint(1) DEFAULT 1, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP)",
