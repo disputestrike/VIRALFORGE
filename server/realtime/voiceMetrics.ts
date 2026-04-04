@@ -61,6 +61,8 @@ export type VoiceTracePhase =
   | "cartesia_ready"
   | "greeting_sent"
   | "stt_final"
+  /** Fired after FINAL_SILENCE_DEBOUNCE_MS — user turn handed to LLM (hangover / merge boundary). VAQS-03/04. */
+  | "deepgram_turn_committed"
   | "response_pause"
   | "llm_route"
   | "llm_stream_start"

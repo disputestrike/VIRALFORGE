@@ -2,7 +2,7 @@
 
 **Purpose:** Map product requirements to **code**, **automated proof** (tests / typecheck), **observable logs**, and **manual proof** (recordings). *If it cannot be observed in one of these ways, it is not “done” for compliance.*
 
-**Companion:** [`CROSSWALK.md`](./CROSSWALK.md) — broader 20-feature integration table.
+**Companion:** [`CROSSWALK.md`](./CROSSWALK.md) — broader 20-feature integration table. **Quality rubric & scorecard:** [`../internal/VOICE_AGENT_QUALITY_SPEC_SHEET.md`](../internal/VOICE_AGENT_QUALITY_SPEC_SHEET.md) (VAQS checklist, rater, gates G1–G3).
 
 ---
 
@@ -49,7 +49,8 @@
 
 | Requirement | Implementation | A | B | C | D |
 |-------------|----------------|:-:|:-:|:--|:--|
-| Micro-pause 200–300ms default | `ENV.voiceResponseMicroPauseMs` default **250**; override `VOICE_RESPONSE_MICRO_PAUSE_MS` | ✅ | ⚠️ | `response_pause` in `[VOICE-TRACE]` | Call |
+| Micro-pause before LLM | `ENV.voiceResponseMicroPauseMs` default **80**; override `VOICE_RESPONSE_MICRO_PAUSE_MS` (lower = snappier TTFB) | ✅ | ⚠️ | `response_pause` in `[VOICE-TRACE]` | Call |
+| Deepgram final debounce (hangover) | `FINAL_SILENCE_DEBOUNCE_MS` (**600**) in `apexStrictBlueprint.ts` — merges rapid finals before `enqueueUserTurn` | ✅ | ⚠️ | `deepgram_turn_committed` in `[VOICE-TRACE]` | Call |
 | Stream first clause ASAP | `streamToCartesia` + `drainSpeakableToTts` | ✅ | ⚠️ | `llm_stream_start` → `tts_first_chunk` delta | Call |
 | Target &lt; ~800ms perceived | Depends on Deepgram endpointing + network; tune `VOICE_DEEPGRAM_ENDPOINTING_MS` | ✅ | ⚠️ | `VOICE-LATENCY` / `stt_final→tts_first_audio` | Call |
 
@@ -59,7 +60,7 @@
 
 | Requirement | Implementation | A | B | C | D |
 |-------------|----------------|:-:|:-:|:--|:--|
-| Stop TTS on speech | `stopSpeaking()` + `generationEpoch++` on energy barge-in; STT-final barge | ✅ | ⚠️ | `[BARGE-IN]`, `barge_in_energy` | Call |
+| Stop TTS on speech | `stopSpeaking()` + `generationEpoch++` on energy barge-in; STT-final barge (min transcript length) | ✅ | ⚠️ | `[BARGE-IN]`, `barge_in_energy` | Call |
 | Cancel stale LLM | Epoch checks in `streamToCartesia` / `sendClause` | ✅ | ⚠️ | N/A | Call |
 
 ---

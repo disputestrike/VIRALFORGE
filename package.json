@@ -11,6 +11,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:voice": "vitest run server/realtime",
+    "test:vaqs": "vitest run server/realtime/vaqsEngineering.test.ts",
     "verify": "pnpm run check && pnpm run test && pnpm run build && node scripts/verify-integrations.mjs",
     "verify:integrations": "node scripts/verify-integrations.mjs",
     "verify:integrations:strict": "node scripts/verify-integrations-strict.mjs",

@@ -72,6 +72,7 @@ import {
   classifyIntent,
   classifyDeterministicBucket,
   FINAL_SILENCE_DEBOUNCE_MS,
+  MAX_SENTENCES,
   splitIntoSentences,
   type ApexControllerState,
   type BlueprintIntent,
@@ -958,6 +959,10 @@ export function createCallEngine(opts: EngineOptions): void {
               const finalConf = lastFinalSttConfidence;
               pendingDeepgramFinalText = "";
               if (!text) return;
+              traceEvent(callId, "deepgram_turn_committed", {
+                debounceMs: FINAL_SILENCE_DEBOUNCE_MS,
+                textLen: text.length,
+              });
               void enqueueUserTurn(text, finalConf).catch((e) =>
                 log(`enqueueUserTurn failed: ${e instanceof Error ? e.message : String(e)}`)
               );
@@ -1707,7 +1712,7 @@ export function createCallEngine(opts: EngineOptions): void {
     }
     cleanResponse = guard.text;
     const parts = splitIntoSentences(cleanResponse);
-    if (parts.length > 3) {
+    if (parts.length > MAX_SENTENCES) {
       logVoiceControllerEvent(callId, "failure", { bucket: "spoke_too_long", detail: "sentence_count" });
     }
 

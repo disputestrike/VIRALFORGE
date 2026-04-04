@@ -22,6 +22,8 @@
 
 **CRM staging (OAuth + sync proof):** [`internal/CRM_STAGING_CHECKLIST.md`](../internal/CRM_STAGING_CHECKLIST.md)
 
+**Voice agent quality spec (engineering QA/QC checklist, weighted score, crosswalk to compliance matrix):** [`internal/VOICE_AGENT_QUALITY_SPEC_SHEET.md`](../internal/VOICE_AGENT_QUALITY_SPEC_SHEET.md)
+
 ---
 
 ## Where this file lives (your “20 features” crosswalk)

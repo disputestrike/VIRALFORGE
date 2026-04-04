@@ -24,4 +24,11 @@ describe("buildVoiceSystemPrompt", () => {
     expect(out).toContain("guide");
     expect(out).not.toContain("2-3 sentences MAX");
   });
+
+  it("VAQS-12: requires substantive spoken factual answers, not one-word replies", () => {
+    const out = buildVoiceSystemPrompt(createCallState(), "Acme", "solar", baseClient);
+    expect(out).toMatch(/FACTUAL QUESTIONS/i);
+    expect(out).toMatch(/single word/i);
+    expect(out).toMatch(/concrete detail/i);
+  });
 });

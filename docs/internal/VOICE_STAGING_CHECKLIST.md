@@ -2,7 +2,7 @@
 
 Use after deploy to **staging** or before a major **production** cut. Automated proof does not replace a real PSTN call.
 
-**Companion docs:** [`VOICE_OPS_RUNBOOK.md`](./VOICE_OPS_RUNBOOK.md) · [`VOICE_ORCHESTRATION_ROADMAP.md`](./VOICE_ORCHESTRATION_ROADMAP.md) · [`../integration/VOICE_COMPLIANCE_MATRIX.md`](../integration/VOICE_COMPLIANCE_MATRIX.md) (manual scenarios §12)
+**Companion docs:** [`VOICE_OPS_RUNBOOK.md`](./VOICE_OPS_RUNBOOK.md) · [`VOICE_ORCHESTRATION_ROADMAP.md`](./VOICE_ORCHESTRATION_ROADMAP.md) · [`../integration/VOICE_COMPLIANCE_MATRIX.md`](../integration/VOICE_COMPLIANCE_MATRIX.md) (manual scenarios §12) · [`VOICE_AGENT_QUALITY_SPEC_SHEET.md`](./VOICE_AGENT_QUALITY_SPEC_SHEET.md) (weighted QA/QC rubric + competitive scorecard)
 
 ---
 
@@ -12,6 +12,7 @@ Use after deploy to **staging** or before a major **production** cut. Automated 
 |------|---------|------|
 | Types | `pnpm run check` | Exit 0 |
 | Tests | `pnpm run test` | All green |
+| VAQS crosswalk | `pnpm run test:vaqs` | All green ([`VOICE_AGENT_QUALITY_SPEC_SHEET.md`](./VOICE_AGENT_QUALITY_SPEC_SHEET.md) §11) |
 | Voice slice | `pnpm run test:voice` | All green |
 | Full gate | `pnpm run verify` | check + test + build + `verify-integrations.mjs` |
 | Strict integrations only | `pnpm run verify:integrations:strict` | Fails if any integration env **group** is incomplete (run locally with Railway `.env`) |

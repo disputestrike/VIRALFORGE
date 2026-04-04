@@ -58,11 +58,19 @@ export function isAnswerSufficient(
   intent: BlueprintIntent
 ): boolean {
   if (!looksLikeQuestion(userQuestion)) return true;
-  return (
-    answeredDirectly(userQuestion, response) &&
-    answersCoreQuestion(response, userQuestion, intent) &&
-    includesConcreteOutcome(response)
-  );
+  const coreOk = answersCoreQuestion(response, userQuestion, intent);
+  const direct = answeredDirectly(userQuestion, response) && coreOk;
+
+  if (isGeneralKnowledgeStyleQuestion(userQuestion)) {
+    if (direct) return true;
+    // Model may paraphrase without repeating the user's keywords — don't force a one-sentence chop.
+    const sents = splitIntoSentences(response);
+    if (sents.length >= 2 && response.trim().length >= 80 && coreOk) return true;
+    return false;
+  }
+
+  if (!direct) return false;
+  return includesConcreteOutcome(response);
 }
 
 /** Extract topic tokens from user text (question or statement). */
@@ -94,6 +102,19 @@ export function looksLikeQuestion(userText: string): boolean {
   const t = userText.trim();
   if (/\?/.test(t)) return true;
   return /\b(what|when|where|why|how|who|which|price|cost|much)\b/i.test(t);
+}
+
+/**
+ * World-fact / general-knowledge style questions — NOT product-pricing leads.
+ * These must not be forced through `includesConcreteOutcome` (dollar signs, booking verbs), or we
+ * collapse good answers to one thin sentence and sound "dumb" on the phone.
+ */
+export function isGeneralKnowledgeStyleQuestion(userText: string): boolean {
+  const u = userText.toLowerCase().trim();
+  if (/\b(how much|price|cost|fee|plan|charge|per month|subscription)\b/i.test(u)) return false;
+  return /\b(who is|who was|who are|what is|what was|what are|when did|when was|where is|where was|how many)\b/i.test(
+    u
+  );
 }
 
 /**
@@ -182,10 +203,14 @@ export function postProcessAssistantResponse(
   if (looksLikeQuestion(userQuestion) && !isAnswerSufficient(text, userQuestion, intent)) {
     answerInsufficient = true;
     text = stripFollowUpQuestion(text).replace(META_ANSWER_PREFIX, "").trim();
-    const sents = splitIntoSentences(text);
-    const first = (sents[0] ?? text).replace(META_ANSWER_PREFIX, "").trim();
-    // One tight sentence — no template suffix like "concrete outcome" (sounds scripted).
-    text = clampSentences(first, MAX_SENTENCES);
+    if (isGeneralKnowledgeStyleQuestion(userQuestion)) {
+      // Keep the model’s substance — only clamp length; do not reduce to sentence one.
+      text = clampSentences(text, MAX_SENTENCES);
+    } else {
+      const sents = splitIntoSentences(text);
+      const first = (sents[0] ?? text).replace(META_ANSWER_PREFIX, "").trim();
+      text = clampSentences(first, MAX_SENTENCES);
+    }
   }
 
   text = clampSentences(text, MAX_SENTENCES);
