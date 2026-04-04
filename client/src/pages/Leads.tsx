@@ -11,9 +11,15 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
 import {
-  Bot, Building2, CheckCircle2, FileSpreadsheet, Mail, Phone, Plus, Search,
+  Bot, Building2, CheckCircle2, Cloud, FileSpreadsheet, Mail, Phone, Plus, Search,
   Shield, Trash2, Upload, User, XCircle, AlertCircle, ArrowRight,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import * as XLSX from "xlsx";
 
 const segmentBadge = (s: string) => {
@@ -139,6 +145,12 @@ export default function Leads() {
       toast.success(`Imported ${d.created} leads successfully`);
     },
     onError: (e) => toast.error(e.message),
+  });
+
+  const { data: crmConnections } = trpc.crm.list.useQuery();
+  const crmSyncLead = trpc.crm.syncLead.useMutation({
+    onSuccess: (d) => toast.success(`Synced to ${d.provider} (record ${d.externalId})`),
+    onError: (e) => toast.error(e.message || "CRM sync failed"),
   });
 
   const handleAiSearch = () => {
@@ -371,6 +383,37 @@ export default function Leads() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
+                                title="Push to CRM"
+                                type="button"
+                              >
+                                <Cloud className="w-3.5 h-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="bg-card border-border">
+                              {(["hubspot", "salesforce"] as const).map((prov) => {
+                                const conn = crmConnections?.find((c) => c.provider === prov);
+                                const connected = conn?.status === "connected";
+                                const label = prov === "hubspot" ? "HubSpot" : "Salesforce";
+                                return (
+                                  <DropdownMenuItem
+                                    key={prov}
+                                    className="text-sm"
+                                    disabled={!connected || crmSyncLead.isPending}
+                                    onClick={() => crmSyncLead.mutate({ provider: prov, leadId: lead.id })}
+                                  >
+                                    {label}
+                                    {!connected ? " — connect in Settings" : ""}
+                                  </DropdownMenuItem>
+                                );
+                              })}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                           <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary" onClick={() => verifyMutation.mutate({ id: lead.id })} title="Verify">
                             <Shield className="w-3.5 h-3.5" />
                           </Button>

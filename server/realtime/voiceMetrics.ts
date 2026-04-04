@@ -83,7 +83,8 @@ export type VoiceTracePhase =
   | "llm_json_envelope_applied"
   | "tts_first_clause_streaming"
   | "tts_clause"
-  | "latency_budget_exceeded";
+  | "latency_budget_exceeded"
+  | "ab_variant";
 
 const starts = new Map<string, number>();
 

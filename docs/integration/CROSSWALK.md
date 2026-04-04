@@ -69,7 +69,7 @@ The **Part 1 table below** (rows **1–20**) is the same numbering as your **“
 | 7 | Spam filtering | 2 | ✅ `blocked_phone_numbers` (0013) | ✅ `phoneBlocklist.*` | ✅ Settings | Inbound reject + toll-free heuristics (`index.ts`) |
 | 8 | Intelligent escalation | 2 | ✅ `escalation_rules` (0013) | ✅ `escalationRules.*` | ✅ Settings | Keyword match → `transferCallToHuman` in `voiceRealtimePipeline` |
 | 9 | Zapier | 2 | ✅ `zapier_webhooks` (0012) | ✅ `zapier.*` + `zapierEmit` on lead create & call persist | ✅ Settings | `call.completed`, `lead.created` POST to hook |
-| 10 | CRM sync (SF/HubSpot/Pipedrive) | 2 | ✅ `crm_connections` (0014) | ✅ `crm.*` — OAuth + vendor routes (`crmRouter.ts`; expanded on `main`) | ✅ Settings | Staging: connect flow per vendor; full two-way sync — validate in CRM UI + logs |
+| 10 | CRM sync (SF/HubSpot/Pipedrive) | 2 | ✅ `crm_connections` (0014) | ✅ `crm.*` — OAuth + `syncLead` / `syncAll` (`crmRouter.ts`) | ✅ Settings + **Leads** (cloud → HubSpot/Salesforce) | Pipedrive OAuth TBD; staging: [`CRM_STAGING_CHECKLIST.md`](../internal/CRM_STAGING_CHECKLIST.md) |
 | 11 | Workflow builder | 3 | ✅ `workflows` (0015) | ✅ `workflows.*` | ✅ Settings | JSON draft graph; runner TBD |
 | 12 | Persistent memory | 3 | ✅ `customer_memories` (0015) | ✅ `memory.*` | ✅ Settings | Optional `leadId`; RAG workers TBD |
 | 13 | Sentiment (product) | 3 | ✅ `call_recordings.sentiment` | ✅ `analytics.sentimentSummary` | ✅ Analytics | On persist: `inferSentimentFromTranscript` if session unset (`sentimentInfer.test.ts`); optional future real-time API |
@@ -102,7 +102,7 @@ Use this table to prove **DB + API + UI** for each shipped row. Paths are relati
 | 7 | `blocked_phone_numbers` (`0013`) | `server/routers/phoneBlocklistRouter.ts` | `Settings.tsx` (Blocklist) | Inbound filter `server/_core/index.ts` |
 | 8 | `escalation_rules` (`0013`) | `server/routers/escalationRouter.ts` | `Settings.tsx` (Escalation) | `server/_core/services/voiceRealtimePipeline.ts` transfer |
 | 9 | `zapier_webhooks` (`0012`) | `server/routers/zapierRouter.ts`, `server/_core/services/zapierEmit.ts` | `Settings.tsx` (Zapier) | Emitted on lead + call persist |
-| 10 | `crm_connections` (`0014`) | `server/routers/crmRouter.ts` | `Settings.tsx` (CRM connections) | Connection rows; OAuth per vendor |
+| 10 | `crm_connections` (`0014`) | `server/routers/crmRouter.ts` | `Settings.tsx` + `Leads.tsx` (CRM push menu) | OAuth + `syncLead` |
 | 11 | `workflows` (`0015`) | `workflowRouter.ts` + `workflowEngine.ts` (`lead.created`) | `Settings.tsx` (Workflows) | `http_post` steps |
 | 12 | `customer_memories` (`0015`) | `memoryRouter.ts` + `tenantContextForVoice.ts` | `Settings.tsx` (Memory) | Voice context |
 | 13 | `call_recordings.sentiment` | `analytics.sentimentSummary`, `server/_core/services/sentimentInfer.ts` | `client/src/pages/Analytics.tsx` | `server/sentimentInfer.test.ts` |
@@ -205,3 +205,4 @@ Landing lists **platform capabilities** (Part 1 mirror) at anchor `#capabilities
 | 2026-04-01 | Stripe: `stripeBilling.ts` + `POST /api/stripe/webhook` + `saas.billing.*` + Settings billing card; users stripe columns; CROSSWALK evidence index + Part 1 file map | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` |
 | 2026-04-02 | Repo aligned to `main`: guardrails, `llmRouter` / Cerebras keys, `0021` A/B tables, expanded `crmRouter`, `.github/workflows/ci.yml`. CROSSWALK + `VOICE_COMPLIANCE_MATRIX` stack text synced to `ARCHITECTURE.md`. | `pnpm run verify` — **309** tests; `pnpm run build`; `docs/internal/VOICE_STAGING_CHECKLIST.md` added |
 | 2026-04-04 | Settings UI for voice prompt A/B (`abTesting.*`); `verify:integrations` / `verify:integrations:strict`; CI informational integration report; `CRM_STAGING_CHECKLIST.md`. | `pnpm run verify:quick` — **309** tests; `pnpm run check` |
+| 2026-04-04 | A/B: select variant by **SignalWire callSid** before greeting; `recordAbTestResult` with duration + dedupe; CRM **Connect** opens OAuth; **Leads** cloud menu → `crm.syncLead`; workflow `release-verify.yml` (manual strict). | `pnpm run verify:quick` |

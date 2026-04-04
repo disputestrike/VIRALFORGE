@@ -302,6 +302,8 @@ export function createCallEngine(opts: EngineOptions): void {
   let bargeInEnergyFrameCount = 0;
   /** A/B test variant selected for this call (null = no active test) */
   let activeAbVariant: { variantId: number; variantKey: string; promptOverride?: string | null; promptSuffix?: string | null } | null = null;
+  /** Prevent duplicate rows if finalize runs twice */
+  let abResultRecorded = false;
 
   // ── Guardrail state ───────────────────────────────────────────────────────
   /** Consecutive turns that were pure small talk (reset when business content appears). */
@@ -313,20 +315,7 @@ export function createCallEngine(opts: EngineOptions): void {
   /** Recent assistant response texts for loop detection (last 3). */
   const recentAssistantTexts: string[] = [];
 
-  // ── A/B variant selection (fire-and-forget at call init) ──
-  if (callId && activeUserId) {
-    const capturedUid = activeUserId;
-    const capturedCid = callId;
-    void (async () => {
-      try {
-        const { selectAbVariantForCall } = await import("../db");
-        activeAbVariant = await selectAbVariantForCall(capturedUid, capturedCid);
-        if (activeAbVariant) log(`[AB] Variant selected: ${activeAbVariant.variantKey} (id=${activeAbVariant.variantId})`);
-      } catch {
-        // Non-critical — continue with default prompt
-      }
-    })();
-  }
+  // A/B variant is selected in waitForCartesia() once SignalWire callSid + tenant userId are known (stable hash per real call).
 
   function clearInterruptAckPending(): void {
     if (interruptAckTimer) {
@@ -2020,21 +2009,33 @@ export function createCallEngine(opts: EngineOptions): void {
       } catch {}
     }
 
-    // ── A/B Testing: record result for this call's variant ──
-    if (activeAbVariant) {
+    // ── A/B Testing: one row per call leg when a variant was active ──
+    if (activeAbVariant && !abResultRecorded) {
+      abResultRecorded = true;
       const variant = activeAbVariant;
       const outcome = opts.outcome ?? "no_answer";
+      const session = activeSessionId ? voiceSessionManager.getSession(activeSessionId) : null;
+      const durationSeconds = session?.startTime
+        ? Math.max(0, Math.round((Date.now() - session.startTime) / 1000))
+        : 0;
+      const converted =
+        outcome === "interested" ||
+        outcome === "scheduled" ||
+        Boolean(session?.appointmentBooked);
+      const sentimentForRow =
+        session?.sentiment && session.sentiment !== "neutral" ? session.sentiment : undefined;
       void (async () => {
         try {
           const { recordAbTestResult } = await import("../db");
           await recordAbTestResult({
             variantId: variant.variantId,
-            callId,
+            callId: callSid || callId,
             sessionId: activeSessionId ?? undefined,
             leadId: activeLeadId ?? undefined,
             outcome,
-            converted: outcome === "interested" || outcome === "scheduled" ? true : false,
-            sentiment: currentSentiment !== "neutral" ? currentSentiment : undefined,
+            converted,
+            durationSeconds,
+            sentiment: sentimentForRow ?? (currentSentiment !== "neutral" ? currentSentiment : undefined),
           });
         } catch {
           // Non-critical
@@ -2139,6 +2140,23 @@ export function createCallEngine(opts: EngineOptions): void {
               }
             } catch (e) {
               log(`[MEMORY] Phone lookup failed: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          }
+          if (activeUserId && callSid) {
+            try {
+              const { selectAbVariantForCall } = await import("../db");
+              activeAbVariant = await selectAbVariantForCall(activeUserId, callSid);
+              if (activeAbVariant) {
+                log(
+                  `[AB] Variant ${activeAbVariant.variantKey} (id=${activeAbVariant.variantId}) callSid=${callSid}`
+                );
+                traceEvent(callId, "ab_variant", {
+                  variantKey: activeAbVariant.variantKey,
+                  variantId: activeAbVariant.variantId,
+                });
+              }
+            } catch (e) {
+              log(`[AB] select failed: ${e instanceof Error ? e.message : String(e)}`);
             }
           }
           if (activeSessionId && callSid) {

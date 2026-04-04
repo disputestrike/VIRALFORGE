@@ -1,0 +1,68 @@
+# Manual release gate: full test + build + strict integration env check.
+# Add repository secrets (DATABASE_URL, SignalWire, etc.) in GitHub → Settings → Secrets
+# before expecting the strict step to pass.
+name: Release verify (manual)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Check, test, build, strict integrations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "10.4.1"
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run check
+
+      - run: pnpm run test
+        env:
+          NODE_ENV: test
+
+      - run: pnpm run build
+        env:
+          NODE_ENV: production
+          VITE_API_URL: https://apexai-production-d567.up.railway.app
+
+      - name: Strict integration env (requires repo secrets to pass)
+        run: node scripts/verify-integrations-strict.mjs
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SIGNALWIRE_PROJECT_ID: ${{ secrets.SIGNALWIRE_PROJECT_ID }}
+          SIGNALWIRE_TOKEN: ${{ secrets.SIGNALWIRE_TOKEN }}
+          SIGNALWIRE_SPACE_URL: ${{ secrets.SIGNALWIRE_SPACE_URL }}
+          SIGNALWIRE_PHONE_NUMBER: ${{ secrets.SIGNALWIRE_PHONE_NUMBER }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
+          RESEND_FROM_NAME: ${{ secrets.RESEND_FROM_NAME }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          STRIPE_PRICE_STARTER: ${{ secrets.STRIPE_PRICE_STARTER }}
+          STRIPE_PRICE_GROWTH: ${{ secrets.STRIPE_PRICE_GROWTH }}
+          STRIPE_PRICE_ENTERPRISE: ${{ secrets.STRIPE_PRICE_ENTERPRISE }}

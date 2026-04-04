@@ -262,7 +262,6 @@ export default function Settings() {
   const crmStart = trpc.crm.startConnect.useMutation({
     onSuccess: () => {
       utils.crm.list.invalidate();
-      toast.success("CRM connection queued — OAuth coming soon");
     },
     onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
   });
@@ -1294,7 +1293,7 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Register Salesforce, HubSpot, or Pipedrive. Full OAuth and bi-directional sync are on the roadmap — this stores your intent and status.
+            HubSpot and Salesforce: OAuth opens in a new tab after the connection stub is created. Push individual leads from the Leads page (cloud menu). Pipedrive OAuth is not wired yet.
           </p>
           <div className="space-y-2">
             {(["salesforce", "hubspot", "pipedrive"] as const).map((p) => {
@@ -1317,10 +1316,27 @@ export default function Settings() {
                       type="button"
                       size="sm"
                       disabled={crmStart.isPending}
-                      onClick={() => crmStart.mutate({ provider: p })}
+                      onClick={async () => {
+                        try {
+                          await crmStart.mutateAsync({ provider: p });
+                          const auth = await utils.crm.getAuthUrl.fetch({ provider: p });
+                          if (auth.configured && auth.url) {
+                            window.open(auth.url, "_blank", "noopener,noreferrer");
+                            toast.success(`Complete ${label} sign-in in the new tab`);
+                          } else if (p === "pipedrive") {
+                            toast.message("Pipedrive OAuth is not configured in this deployment yet.");
+                          } else {
+                            toast.error(
+                              `${label} OAuth is not configured on the server (set client id/secret env vars).`
+                            );
+                          }
+                        } catch (e) {
+                          toast.error((e as Error).message ?? "CRM error");
+                        }
+                      }}
                       style={{ backgroundColor: "#1d6ff4" }}
                     >
-                      {crmStart.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Register"}
+                      {crmStart.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Connect"}
                     </Button>
                     {row && row.status !== "disconnected" && (
                       <Button
