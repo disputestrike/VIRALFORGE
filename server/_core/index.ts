@@ -660,9 +660,12 @@ async function startServer() {
               fixResults.push(`OK: ${sql.slice(0, 70)}`);
             }
           } catch (e: any) {
-            const errno = e.errno || e.cause?.errno || "?";
-            const msg = e.message?.slice(0, 80) || String(e);
-            fixResults.push(`SKIP(${errno}): ${msg}`);
+            const errno = e.errno || e.cause?.errno || e.code || "?";
+            const msg = (e.sqlMessage || e.message || String(e)).slice(0, 80);
+            // errno 1060 = duplicate column (already exists = OK)
+            // errno 1091 = column doesn't exist (DROP of non-existent = OK)
+            const isOk = e.errno === 1060 || e.errno === 1091 || e.code === "ER_DUP_FIELDNAME" || e.code === "ER_CANT_DROP_FIELD_OR_KEY";
+            fixResults.push(`${isOk ? 'ALREADY_OK' : 'FAIL'}(${errno}|${e.code || '?'}): ${msg}`);
           }
         }
         await conn.end();
