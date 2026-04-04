@@ -20,6 +20,8 @@
 
 **Voice ops runbook (env, smoke, rollback):** [`internal/VOICE_OPS_RUNBOOK.md`](../internal/VOICE_OPS_RUNBOOK.md)
 
+**CRM staging (OAuth + sync proof):** [`internal/CRM_STAGING_CHECKLIST.md`](../internal/CRM_STAGING_CHECKLIST.md)
+
 ---
 
 ## Where this file lives (your “20 features” crosswalk)
@@ -83,7 +85,7 @@ The **Part 1 table below** (rows **1–20**) is the same numbering as your **“
 
 | Add-on | DB | API | Runtime | App UI |
 |--------|-----|-----|---------|--------|
-| Prompt variants & results | ✅ `prompt_variants`, `ab_test_results` — `drizzle/0021_ab_testing.sql` (startup migration mirrors in `server/_core/index.ts`) | ✅ `appRouter.abTesting` → `abTestingRouter.ts` | ✅ `realtimeVoiceEngine.ts` — `selectAbVariantForCall`; log line `[AB] Variant selected` | 🟡 **No Settings card yet** — create variants via `abTesting.create` / API |
+| Prompt variants & results | ✅ `prompt_variants`, `ab_test_results` — `drizzle/0021_ab_testing.sql` (startup migration mirrors in `server/_core/index.ts`) | ✅ `appRouter.abTesting` → `abTestingRouter.ts` | ✅ `realtimeVoiceEngine.ts` — `selectAbVariantForCall`; log line `[AB] Variant selected` | ✅ **Settings** — “Voice prompt A/B testing” card (`Settings.tsx`) |
 
 ### Part 1 — Evidence index (where to look in the repo)
 
@@ -111,7 +113,7 @@ Use this table to prove **DB + API + UI** for each shipped row. Paths are relati
 | 18 | `rcs_registrations` (`0017`) | `server/routers/rcsRouter.ts` | `Settings.tsx` (RCS) | — |
 | 19 | `webchat_widgets` (`0017`) | `server/routers/webchatRouter.ts`, `server/_core/webchatPublicApi.ts` | `Settings.tsx` (Webchat) | `server/webchatPublicApi.test.ts` |
 | 20 | `analytics_snapshots`, aggregates | `analytics.dashboardBreakdown`, `recordSnapshot` | `client/src/pages/Analytics.tsx` | Charts from tRPC |
-| A/B | `0021_ab_testing.sql`, `db.ts` `selectAbVariantForCall` / `upsertPromptVariant` | `server/routers/abTestingRouter.ts` | — | `realtimeVoiceEngine.ts`; `server/realtime/guardrails.test.ts` (quality system) |
+| A/B | `0021_ab_testing.sql`, `db.ts` `selectAbVariantForCall` / `upsertPromptVariant` | `server/routers/abTestingRouter.ts` | `Settings.tsx` — Voice prompt A/B testing | `realtimeVoiceEngine.ts`; `guardrails.test.ts` |
 
 ### Billing (Stripe) — go-live wiring
 
@@ -202,3 +204,4 @@ Landing lists **platform capabilities** (Part 1 mirror) at anchor `#capabilities
 | 2026-04-01 | `webhooksRouter.test.ts` — `omniAiLead` open vs `WEBHOOK_SECRET` + `x-webhook-secret`; Part 3 Webhooks row cites test file | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` (209 tests) |
 | 2026-04-01 | Stripe: `stripeBilling.ts` + `POST /api/stripe/webhook` + `saas.billing.*` + Settings billing card; users stripe columns; CROSSWALK evidence index + Part 1 file map | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` |
 | 2026-04-02 | Repo aligned to `main`: guardrails, `llmRouter` / Cerebras keys, `0021` A/B tables, expanded `crmRouter`, `.github/workflows/ci.yml`. CROSSWALK + `VOICE_COMPLIANCE_MATRIX` stack text synced to `ARCHITECTURE.md`. | `pnpm run verify` — **309** tests; `pnpm run build`; `docs/internal/VOICE_STAGING_CHECKLIST.md` added |
+| 2026-04-04 | Settings UI for voice prompt A/B (`abTesting.*`); `verify:integrations` / `verify:integrations:strict`; CI informational integration report; `CRM_STAGING_CHECKLIST.md`. | `pnpm run verify:quick` — **309** tests; `pnpm run check` |

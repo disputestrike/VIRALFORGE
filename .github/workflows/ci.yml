@@ -42,6 +42,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Integration env report (informational)
+        run: node scripts/verify-integrations.mjs
+        # Non-blocking: prints ○/✓ groups; use `pnpm run verify:integrations:strict` locally with full .env for release gates.
+
       - name: TypeScript check
         run: pnpm check
         # Fails build if any type errors exist anywhere in server/ or shared/

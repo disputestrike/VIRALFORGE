@@ -14,7 +14,8 @@ Use after deploy to **staging** or before a major **production** cut. Automated 
 | Tests | `pnpm run test` | All green |
 | Voice slice | `pnpm run test:voice` | All green |
 | Full gate | `pnpm run verify` | check + test + build + `verify-integrations.mjs` |
-| Strict env (optional CI) | `VERIFY_STRICT=1 pnpm run verify` | Fails if required integration env missing |
+| Strict integrations only | `pnpm run verify:integrations:strict` | Fails if any integration env **group** is incomplete (run locally with Railway `.env`) |
+| Strict env (full) | Set `VERIFY_STRICT=1` then run `node scripts/verify-integrations.mjs` before release | Same as above |
 
 Record counts in [`CROSSWALK.md`](../integration/CROSSWALK.md) verification log when you cut a release.
 

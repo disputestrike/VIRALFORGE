@@ -30,6 +30,7 @@ import {
   MessageCircle,
   Radio,
   CreditCard,
+  Split,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -270,6 +271,39 @@ export default function Settings() {
       utils.crm.list.invalidate();
       toast.success("CRM disconnected");
     },
+  });
+
+  const [abTestName, setAbTestName] = useState("voice_prompt");
+  const [abVariantKey, setAbVariantKey] = useState("");
+  const [abWeight, setAbWeight] = useState("50");
+  const [abPromptSuffix, setAbPromptSuffix] = useState("");
+  const [abPromptOverride, setAbPromptOverride] = useState("");
+  const [abPreviewCallId, setAbPreviewCallId] = useState("");
+  const [abPreviewResult, setAbPreviewResult] = useState<string | null>(null);
+
+  const abTestNameTrim = abTestName.trim() || "voice_prompt";
+  const { data: abVariants } = trpc.abTesting.list.useQuery({
+    testName: abTestName.trim() ? abTestNameTrim : undefined,
+  });
+  const { data: abSummary } = trpc.abTesting.summary.useQuery({ testName: abTestNameTrim });
+  const abCreate = trpc.abTesting.create.useMutation({
+    onSuccess: () => {
+      utils.abTesting.list.invalidate();
+      utils.abTesting.summary.invalidate();
+      setAbVariantKey("");
+      setAbPromptSuffix("");
+      setAbPromptOverride("");
+      toast.success("Variant saved — live calls will log [AB] Variant selected");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+  const abDelete = trpc.abTesting.delete.useMutation({
+    onSuccess: () => {
+      utils.abTesting.list.invalidate();
+      utils.abTesting.summary.invalidate();
+      toast.success("Variant deactivated");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
   });
 
   const { data: wfList } = trpc.workflows.list.useQuery();
@@ -1303,6 +1337,195 @@ export default function Settings() {
                 </div>
               );
             })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── VOICE PROMPT A/B — engine + abTesting router ─────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Split className="w-4 h-4 text-primary" />
+            Voice prompt A/B testing
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Traffic splits by hash(callId): weights should sum to ~100 per test name. Override replaces the full system
+            prompt; suffix appends to the default prompt. The realtime engine selects a variant when the call starts.
+          </p>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Test name</Label>
+            <Input
+              placeholder="voice_prompt"
+              value={abTestName}
+              onChange={(e) => setAbTestName(e.target.value)}
+              className="bg-secondary border-border font-mono text-sm"
+            />
+          </div>
+          {!abVariants?.length ? (
+            <p className="text-xs text-muted-foreground">No active variants for this filter.</p>
+          ) : (
+            <ul className="space-y-2">
+              {abVariants.map(
+                (v: {
+                  id: number;
+                  testName: string;
+                  variantKey: string;
+                  weight: number;
+                  promptSuffix: string | null;
+                  promptOverride: string | null;
+                }) => (
+                  <li
+                    key={v.id}
+                    className="flex flex-col gap-1 p-2 rounded-lg bg-secondary/50 text-xs border border-border/60"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span>
+                        <span className="font-medium">{v.variantKey}</span>
+                        <span className="text-muted-foreground"> · weight {v.weight}</span>
+                        <span className="text-muted-foreground"> · {v.testName}</span>
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 shrink-0"
+                        disabled={abDelete.isPending}
+                        onClick={() => abDelete.mutate({ id: v.id })}
+                      >
+                        Deactivate
+                      </Button>
+                    </div>
+                    {(v.promptOverride || v.promptSuffix) && (
+                      <p className="text-[11px] text-muted-foreground line-clamp-2 font-mono">
+                        {v.promptOverride ? `override: ${v.promptOverride.slice(0, 120)}…` : `suffix: ${(v.promptSuffix ?? "").slice(0, 120)}…`}
+                      </p>
+                    )}
+                  </li>
+                )
+              )}
+            </ul>
+          )}
+          {abSummary && abSummary.length > 0 && (
+            <div className="rounded-lg border border-border/60 bg-secondary/30 p-3 space-y-1">
+              <p className="text-xs font-medium text-foreground">Results (all variants for test)</p>
+              <ul className="text-[11px] text-muted-foreground space-y-1">
+                {abSummary.map(
+                  (s: {
+                    variantKey: string;
+                    total: number;
+                    converted: number;
+                    conversionRate: number;
+                    avgDurationSeconds: number;
+                  }) => (
+                    <li key={s.variantKey}>
+                      <span className="font-medium text-foreground">{s.variantKey}</span>: {s.total} calls ·{" "}
+                      {s.conversionRate}% converted · ~{s.avgDurationSeconds}s avg
+                    </li>
+                  )
+                )}
+              </ul>
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label className="text-xs">New variant key</Label>
+            <Input
+              placeholder="e.g. control, variant_warm"
+              value={abVariantKey}
+              onChange={(e) => setAbVariantKey(e.target.value)}
+              className="bg-secondary border-border"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Weight (0–100)</Label>
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              value={abWeight}
+              onChange={(e) => setAbWeight(e.target.value)}
+              className="bg-secondary border-border w-28"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Prompt suffix (optional)</Label>
+            <textarea
+              className="w-full min-h-[72px] px-3 py-2 rounded-lg text-sm bg-secondary border border-border"
+              placeholder="Appended after the default tenant + policy prompt…"
+              value={abPromptSuffix}
+              onChange={(e) => setAbPromptSuffix(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Full prompt override (optional — wins over suffix)</Label>
+            <textarea
+              className="w-full min-h-[72px] px-3 py-2 rounded-lg text-sm bg-secondary border border-border"
+              placeholder="Rare: replaces entire system prompt for this variant"
+              value={abPromptOverride}
+              onChange={(e) => setAbPromptOverride(e.target.value)}
+            />
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!abVariantKey.trim() || abCreate.isPending}
+            onClick={() => {
+              const w = Math.min(100, Math.max(0, parseInt(abWeight, 10) || 0));
+              abCreate.mutate({
+                testName: abTestNameTrim,
+                variantKey: abVariantKey.trim(),
+                weight: w,
+                promptSuffix: abPromptSuffix.trim() || undefined,
+                promptOverride: abPromptOverride.trim() || undefined,
+              });
+            }}
+            style={{ backgroundColor: "#1d6ff4" }}
+          >
+            {abCreate.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save variant"}
+          </Button>
+          <div className="pt-2 border-t border-border/60 space-y-2">
+            <Label className="text-xs">Preview assignment for call ID</Label>
+            <div className="flex flex-wrap gap-2 items-center">
+              <Input
+                placeholder="e.g. CAxxxxxxxx signalwire call sid"
+                value={abPreviewCallId}
+                onChange={(e) => setAbPreviewCallId(e.target.value)}
+                className="bg-secondary border-border flex-1 min-w-[200px] font-mono text-xs"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  if (!abPreviewCallId.trim()) {
+                    toast.error("Enter a call ID");
+                    return;
+                  }
+                  try {
+                    const r = await utils.abTesting.selectVariant.fetch({
+                      callId: abPreviewCallId.trim(),
+                      testName: abTestNameTrim,
+                    });
+                    setAbPreviewResult(
+                      r
+                        ? `${r.variantKey} (variant id ${r.variantId})`
+                        : "No variant — default prompt (no active rows or weights)"
+                    );
+                  } catch (e) {
+                    setAbPreviewResult(null);
+                    toast.error((e as Error).message ?? "Preview failed");
+                  }
+                }}
+              >
+                Preview
+              </Button>
+            </div>
+            {abPreviewResult !== null && (
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">Assignment:</span> {abPreviewResult}
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
