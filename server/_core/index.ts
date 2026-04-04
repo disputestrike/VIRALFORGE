@@ -634,6 +634,29 @@ async function startServer() {
         }
       }
 
+      if (action === "create_ab_variant") {
+        // Create control + variant A for e2e testing
+        const control = await db.upsertPromptVariant(userId ?? 1, {
+          testName: testName ?? "voice_prompt",
+          variantKey: "control",
+          promptOverride: null,
+          promptSuffix: null,
+          weight: 50,
+          isActive: true,
+        });
+        const variantA = await db.upsertPromptVariant(userId ?? 1, {
+          testName: testName ?? "voice_prompt",
+          variantKey: "variant_a",
+          promptOverride: null,
+          promptSuffix: "\n\nVARIANT A: Lead with urgency. Mention that slots are filling up fast. Ask qualifying questions faster.",
+          weight: 50,
+          isActive: true,
+        });
+        results.variantsCreated = { control: control.insertId, variantA: variantA.insertId };
+        const all = await db.listPromptVariants(userId ?? 1, testName ?? "voice_prompt");
+        results.variants = all.map((v: any) => ({ id: v.id, key: v.variantKey, weight: v.weight }));
+      }
+
       if (action === "fix_schema") {
         // Fix customer_memories table schema live via raw mysql2 connection
         const mysql2 = await import("mysql2/promise");
