@@ -28,6 +28,7 @@ import { mobileRouter } from "./routers/mobileRouter";
 import { socialRouter } from "./routers/socialRouter";
 import { webchatRouter } from "./routers/webchatRouter";
 import { rcsRouter } from "./routers/rcsRouter";
+import { abTestingRouter } from "./routers/abTestingRouter";
 import { ENV } from "./_core/env";
 import { scoreFromRules, type RuleEntry } from "./_core/services/leadScoringApply";
 
@@ -938,6 +939,17 @@ const analyticsRouter = router({
       });
       return { success: true };
     }),
+
+  /** Cost per call based on call duration × $0.04/min (STT+TTS+LLM combined estimate) */
+  costPerCall: protectedProcedure.query(async ({ ctx }) => db.getCostPerCallStats(ctx.user.id)),
+
+  /** ROI per campaign = (revenue − estimated cost) / estimated cost */
+  roiPerCampaign: protectedProcedure.query(async ({ ctx }) => db.getRoiPerCampaign(ctx.user.id)),
+
+  /** Day-by-day call volume for last N days */
+  dailyTrend: protectedProcedure
+    .input(z.object({ days: z.number().int().min(1).max(365).default(30) }).optional())
+    .query(async ({ ctx, input }) => db.getDailyCallTrend(ctx.user.id, input?.days ?? 30)),
 });
 
 // ─── Testimonials Router ──────────────────────────────────────────────────────
@@ -1787,6 +1799,7 @@ export const appRouter = router({
   social: socialRouter,
   webchat: webchatRouter,
   rcs: rcsRouter,
+  abTesting: abTestingRouter,
 });
 
 export type AppRouter = typeof appRouter;

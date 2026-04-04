@@ -130,6 +130,19 @@ export const ENV = {
   /** External voice-metrics-service base URL (e.g. https://voice-metrics-production.up.railway.app). Events are POSTed fire-and-forget. Leave unset to disable. */
   voiceMetricsServiceUrl: (process.env.VOICE_METRICS_URL ?? "").replace(/\/$/, ""),
 
+  // ── HubSpot OAuth ─────────────────────────────────────────────────────────
+  hubspotClientId:     process.env.HUBSPOT_CLIENT_ID ?? "",
+  hubspotClientSecret: process.env.HUBSPOT_CLIENT_SECRET ?? "",
+  /** HubSpot redirect URI — must match app settings in HubSpot developer portal */
+  hubspotRedirectUri:  process.env.HUBSPOT_REDIRECT_URI ?? "",
+
+  // ── Salesforce OAuth ───────────────────────────────────────────────────────
+  salesforceClientId:     process.env.SALESFORCE_CLIENT_ID ?? "",
+  salesforceClientSecret: process.env.SALESFORCE_CLIENT_SECRET ?? "",
+  salesforceRedirectUri:  process.env.SALESFORCE_REDIRECT_URI ?? "",
+  /** Salesforce login URL — production: login.salesforce.com, sandbox: test.salesforce.com */
+  salesforceLoginUrl: process.env.SALESFORCE_LOGIN_URL ?? "login.salesforce.com",
+
   // ── Groq (optional ultra-low-latency LLM fallback) ──────────────────────────
   groqApiKey: (process.env.GROQ_API_KEY ?? "").trim(),
   groqModel: (process.env.GROQ_MODEL ?? "llama-3.1-8b-instant").trim(),

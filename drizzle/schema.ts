@@ -598,3 +598,37 @@ export const voiceMetricEvents = mysqlTable("voice_metric_events", {
 
 export type VoiceMetricEvent = typeof voiceMetricEvents.$inferSelect;
 export type InsertVoiceMetricEvent = typeof voiceMetricEvents.$inferInsert;
+
+// ─── A/B Testing ─────────────────────────────────────────────────────────────────
+export const promptVariants = mysqlTable("prompt_variants", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  testName: varchar("testName", { length: 200 }).notNull(),
+  variantKey: varchar("variantKey", { length: 64 }).notNull(),
+  promptOverride: text("promptOverride"),
+  promptSuffix: text("promptSuffix"),
+  /** Traffic weight 0–100; variants in same test should sum to 100 */
+  weight: int("weight").notNull().default(50),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PromptVariant = typeof promptVariants.$inferSelect;
+export type InsertPromptVariant = typeof promptVariants.$inferInsert;
+
+export const abTestResults = mysqlTable("ab_test_results", {
+  id: int("id").autoincrement().primaryKey(),
+  variantId: int("variantId").notNull(),
+  callId: varchar("callId", { length: 128 }),
+  sessionId: varchar("sessionId", { length: 128 }),
+  leadId: int("leadId"),
+  outcome: varchar("outcome", { length: 64 }),
+  converted: boolean("converted").default(false).notNull(),
+  durationSeconds: int("durationSeconds").default(0),
+  sentiment: varchar("sentiment", { length: 32 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AbTestResult = typeof abTestResults.$inferSelect;
+export type InsertAbTestResult = typeof abTestResults.$inferInsert;

@@ -33,6 +33,10 @@ import {
   rcsRegistrations,
   userPhoneNumbers,
   voiceMetricEvents,
+  promptVariants,
+  abTestResults,
+  type InsertPromptVariant,
+  type InsertAbTestResult,
   type InsertUserPhoneNumber,
   type UserPhoneNumber,
 } from "../drizzle/schema";
@@ -1432,4 +1436,276 @@ async function legacyLeadQuery(
   return Array.isArray(rows)
     ? rows.map((row: Record<string, unknown>) => ({ ...row, createdBy: null }))
     : [];
+}
+
+// ─── A/B Testing ─────────────────────────────────────────────────────────────
+
+export async function listPromptVariants(userId: number, testName?: string) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [eq(promptVariants.userId, userId), eq(promptVariants.isActive, true)];
+  if (testName) conditions.push(eq(promptVariants.testName, testName));
+  return db.select().from(promptVariants).where(and(...conditions)).orderBy(promptVariants.testName, promptVariants.weight);
+}
+
+export async function upsertPromptVariant(
+  userId: number,
+  data: Omit<InsertPromptVariant, "userId" | "createdAt" | "updatedAt">
+): Promise<{ insertId: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const insertId = await insertAndGetId(db, promptVariants, { ...data, userId });
+  return { insertId };
+}
+
+export async function deletePromptVariant(userId: number, id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(promptVariants).set({ isActive: false }).where(and(eq(promptVariants.id, id), eq(promptVariants.userId, userId)));
+}
+
+export async function recordAbTestResult(data: InsertAbTestResult): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(abTestResults).values(data);
+}
+
+export async function getAbTestSummary(userId: number, testName: string) {
+  const db = await getDb();
+  if (!db) return [];
+  // Join variants for this user + testName with results
+  const variants = await db
+    .select()
+    .from(promptVariants)
+    .where(and(eq(promptVariants.userId, userId), eq(promptVariants.testName, testName)));
+
+  const results = await Promise.all(
+    variants.map(async (v) => {
+      const [stats] = await db
+        .select({
+          total: sql<number>`count(*)`,
+          converted: sql<number>`sum(converted)`,
+          avgDuration: sql<number>`avg(durationSeconds)`,
+        })
+        .from(abTestResults)
+        .where(eq(abTestResults.variantId, v.id));
+      return {
+        variantId: v.id,
+        variantKey: v.variantKey,
+        weight: v.weight,
+        total: Number(stats?.total ?? 0),
+        converted: Number(stats?.converted ?? 0),
+        conversionRate: Number(stats?.total ?? 0) > 0
+          ? Math.round((Number(stats?.converted ?? 0) / Number(stats?.total ?? 1)) * 1000) / 10
+          : 0,
+        avgDurationSeconds: Math.round(Number(stats?.avgDuration ?? 0)),
+      };
+    })
+  );
+  return results;
+}
+
+/**
+ * Pick a prompt variant for a call using a deterministic hash of the callId.
+ * Falls back to null if no active variants are found.
+ */
+export async function selectAbVariantForCall(
+  userId: number,
+  callId: string,
+  testName = "voice_prompt"
+): Promise<{ variantId: number; variantKey: string; promptOverride?: string | null; promptSuffix?: string | null } | null> {
+  const variants = await listPromptVariants(userId, testName);
+  if (!variants.length) return null;
+  // Deterministic selection using hash of callId
+  let hash = 0;
+  for (let i = 0; i < callId.length; i++) {
+    hash = ((hash << 5) - hash + callId.charCodeAt(i)) | 0;
+  }
+  const bucket = Math.abs(hash) % 100;
+  let cumulative = 0;
+  for (const v of variants) {
+    cumulative += v.weight;
+    if (bucket < cumulative) {
+      return { variantId: v.id, variantKey: v.variantKey, promptOverride: v.promptOverride, promptSuffix: v.promptSuffix };
+    }
+  }
+  // Fallback to last variant
+  const last = variants[variants.length - 1];
+  return { variantId: last.id, variantKey: last.variantKey, promptOverride: last.promptOverride, promptSuffix: last.promptSuffix };
+}
+
+// ─── Analytics: Cost, ROI, Daily Trend ───────────────────────────────────────
+
+/** Cost per call based on duration × $0.04/min (STT+TTS+LLM estimate) */
+export async function getCostPerCallStats(userId: number) {
+  const db = await getDb();
+  if (!db) return { avgCostCents: 0, totalCostCents: 0, totalCalls: 0 };
+  const [stats] = await db
+    .select({
+      totalCalls: sql<number>`count(*)`,
+      totalSeconds: sql<number>`sum(duration)`,
+      avgSeconds: sql<number>`avg(duration)`,
+    })
+    .from(callRecordings)
+    .where(eq(callRecordings.createdBy, userId));
+  const totalSeconds = Number(stats?.totalSeconds ?? 0);
+  const totalCalls = Number(stats?.totalCalls ?? 0);
+  const avgSeconds = Number(stats?.avgSeconds ?? 0);
+  // $0.04/min = 0.04/60 per second = 0.000667 per second → in cents: 0.06667 per second
+  const COST_PER_SECOND_CENTS = (0.04 / 60) * 100;
+  return {
+    totalCalls,
+    totalCostCents: Math.round(totalSeconds * COST_PER_SECOND_CENTS),
+    avgCostCents: Math.round(avgSeconds * COST_PER_SECOND_CENTS),
+    avgCostDollars: parseFloat((avgSeconds * COST_PER_SECOND_CENTS / 100).toFixed(4)),
+    totalCostDollars: parseFloat((totalSeconds * COST_PER_SECOND_CENTS / 100).toFixed(2)),
+  };
+}
+
+/** ROI per campaign = revenueGenerated / estimated call cost */
+export async function getRoiPerCampaign(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const campaignList = await db
+    .select({
+      id: campaigns.id,
+      name: campaigns.name,
+      revenue: campaigns.revenueGenerated,
+      sentCount: campaigns.sentCount,
+      convertedCount: campaigns.convertedCount,
+      totalContacts: campaigns.totalContacts,
+    })
+    .from(campaigns)
+    .where(eq(campaigns.createdBy, userId));
+
+  return campaignList.map((c) => {
+    const revenue = Number(c.revenue ?? 0);
+    const calls = Number(c.sentCount ?? 0);
+    // Assume avg 3 min per call @ $0.04/min
+    const estimatedCostDollars = calls * 3 * 0.04;
+    const roi = estimatedCostDollars > 0
+      ? parseFloat(((revenue - estimatedCostDollars) / estimatedCostDollars * 100).toFixed(1))
+      : 0;
+    return {
+      campaignId: c.id,
+      campaignName: c.name,
+      revenueDollars: revenue,
+      estimatedCostDollars: parseFloat(estimatedCostDollars.toFixed(2)),
+      roiPercent: roi,
+      convertedCount: Number(c.convertedCount ?? 0),
+      totalContacts: Number(c.totalContacts ?? 0),
+    };
+  });
+}
+
+/** Day-by-day call volume for the last N days */
+export async function getDailyCallTrend(userId: number, days = 30) {
+  const db = await getDb();
+  if (!db) return [];
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const rows = await db
+    .select({
+      day: sql<string>`DATE(calledAt)`,
+      count: sql<number>`count(*)`,
+      converted: sql<number>`sum(case when outcome = 'interested' or outcome = 'scheduled' then 1 else 0 end)`,
+      avgDuration: sql<number>`avg(duration)`,
+    })
+    .from(callRecordings)
+    .where(and(eq(callRecordings.createdBy, userId), sql`calledAt >= ${since}`))
+    .groupBy(sql`DATE(calledAt)`)
+    .orderBy(sql`DATE(calledAt)`);
+
+  return rows.map((r) => ({
+    day: String(r.day),
+    calls: Number(r.count),
+    converted: Number(r.converted ?? 0),
+    avgDurationSeconds: Math.round(Number(r.avgDuration ?? 0)),
+  }));
+}
+
+// ─── CRM: Real HubSpot + Salesforce sync ─────────────────────────────────────
+
+/** Retrieve stored OAuth tokens from crm_connections.meta for a user+provider */
+export async function getCrmTokens(
+  userId: number,
+  provider: "salesforce" | "hubspot" | "pipedrive"
+): Promise<{ accessToken: string; refreshToken?: string; instanceUrl?: string } | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [conn] = await db
+    .select()
+    .from(crmConnections)
+    .where(and(eq(crmConnections.userId, userId), eq(crmConnections.provider, provider)));
+  if (!conn || conn.status !== "connected") return null;
+  try {
+    const meta = JSON.parse(conn.meta ?? "{}");
+    if (!meta.accessToken) return null;
+    return { accessToken: meta.accessToken, refreshToken: meta.refreshToken, instanceUrl: meta.instanceUrl };
+  } catch {
+    return null;
+  }
+}
+
+/** Store OAuth tokens after exchange */
+export async function saveCrmTokens(
+  userId: number,
+  provider: "salesforce" | "hubspot" | "pipedrive",
+  tokens: { accessToken: string; refreshToken?: string; instanceUrl?: string; portalId?: string; displayName?: string }
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(crmConnections)
+    .set({
+      status: "connected",
+      displayName: tokens.displayName ?? provider,
+      externalAccountId: tokens.portalId ?? tokens.instanceUrl ?? undefined,
+      lastSyncAt: new Date(),
+      meta: JSON.stringify({
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        instanceUrl: tokens.instanceUrl,
+        portalId: tokens.portalId,
+      }),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(crmConnections.userId, userId), eq(crmConnections.provider, provider)));
+}
+
+/** Auto-save a persistent memory from a call to customerMemories (bypasses lead ownership check) */
+export async function saveCallMemory(
+  userId: number,
+  leadId: number | null | undefined,
+  content: string,
+  source = "call"
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  if (!content.trim()) return;
+  await db.insert(customerMemories).values({
+    userId,
+    leadId: leadId ?? null,
+    content: content.trim(),
+    source,
+  });
+}
+
+/** Find lead by phone number for inbound caller lookup (userId-scoped variant) */
+export async function getLeadByPhoneForUser(userId: number, phone: string): Promise<{ id: number; firstName: string; lastName: string } | null> {
+  const db = await getDb();
+  if (!db) return null;
+  // Try exact match first, then with/without +1
+  const normalized = phone.replace(/\D/g, "");
+  const [row] = await db
+    .select({ id: leads.id, firstName: leads.firstName, lastName: leads.lastName })
+    .from(leads)
+    .where(and(
+      eq(leads.createdBy, userId),
+      or(
+        eq(leads.phone, phone),
+        like(leads.phone, `%${normalized.slice(-10)}`)
+      )
+    ))
+    .limit(1);
+  return row ?? null;
 }

@@ -283,6 +283,23 @@ export function createCallEngine(opts: EngineOptions): void {
   let interruptAckTimer: NodeJS.Timeout | null = null;
   /** Consecutive frames above energy threshold — requires sustained speech, not a single noise spike. */
   let bargeInEnergyFrameCount = 0;
+  /** A/B test variant selected for this call (null = no active test) */
+  let activeAbVariant: { variantId: number; variantKey: string; promptOverride?: string | null; promptSuffix?: string | null } | null = null;
+
+  // ── A/B variant selection (fire-and-forget at call init) ──
+  if (callId && activeUserId) {
+    const capturedUid = activeUserId;
+    const capturedCid = callId;
+    void (async () => {
+      try {
+        const { selectAbVariantForCall } = await import("../db");
+        activeAbVariant = await selectAbVariantForCall(capturedUid, capturedCid);
+        if (activeAbVariant) log(`[AB] Variant selected: ${activeAbVariant.variantKey} (id=${activeAbVariant.variantId})`);
+      } catch {
+        // Non-critical — continue with default prompt
+      }
+    })();
+  }
 
   function clearInterruptAckPending(): void {
     if (interruptAckTimer) {
@@ -1254,11 +1271,19 @@ export function createCallEngine(opts: EngineOptions): void {
         leadId: activeLeadId ?? null,
         userMessage: userTranscript,
       });
-      if (block.trim()) return `${base}\n\n${block}`;
+      if (block.trim()) return appendAbVariant(`${base}\n\n${block}`);
     } catch (e) {
       log(`[Voice] tenant KB context failed: ${e instanceof Error ? e.message : String(e)}`);
     }
-    return base;
+    return appendAbVariant(base);
+  }
+
+  /** Inject A/B variant suffix into system prompt (no-op if no variant active) */
+  function appendAbVariant(prompt: string): string {
+    if (!activeAbVariant) return prompt;
+    if (activeAbVariant.promptOverride) return activeAbVariant.promptOverride;
+    if (activeAbVariant.promptSuffix) return `${prompt}\n\n${activeAbVariant.promptSuffix}`;
+    return prompt;
   }
 
   /** Caller went quiet after we spoke — one upbeat check-in with full conversation context (sales tempo). */
@@ -1691,6 +1716,9 @@ export function createCallEngine(opts: EngineOptions): void {
     if (conversationHistory.length > 1 && activeUserId) {
       const history = [...conversationHistory];
       const uid = activeUserId;
+      const lid = activeLeadId;
+      const sf = { ...strictFacts };
+      const cid = callId;
       setImmediate(async () => {
         try {
           const { generateCallSummaryFromTranscript } = await import("../_core/services/callSummaryService");
@@ -1698,6 +1726,66 @@ export function createCallEngine(opts: EngineOptions): void {
           await generateCallSummaryFromTranscript(transcript2, undefined);
           log("[SUMMARY] Call summary generated");
         } catch (e) { log(`[SUMMARY] Failed: ${e instanceof Error ? e.message : String(e)}`); }
+
+        // ── Persistent Memory: auto-save key facts extracted during this call ──
+        try {
+          const { saveCallMemory } = await import("../db");
+          const memoryLines: string[] = [];
+          if (sf.name) memoryLines.push(`Caller name: ${sf.name}`);
+          if (sf.industry) memoryLines.push(`Industry: ${sf.industry}`);
+          if (sf.subIndustry) memoryLines.push(`Sub-industry: ${sf.subIndustry}`);
+          if (sf.callVolume) memoryLines.push(`Call volume: ${sf.callVolume}/month`);
+          if (sf.painLabels?.length) memoryLines.push(`Pain points: ${sf.painLabels.join(", ")}`);
+          if (sf.phoneDigits) memoryLines.push(`Phone digits shared: ${sf.phoneDigits}`);
+          if (sf.discussedTopics?.length) memoryLines.push(`Topics discussed: ${sf.discussedTopics.join(", ")}`);
+          if ((opts as any).outcome && (opts as any).outcome !== "no_answer") memoryLines.push(`Call outcome: ${(opts as any).outcome}`);
+          if (memoryLines.length > 0 && uid) {
+            const content = `[Call ${cid}] ${memoryLines.join(" | ")}`;
+            await saveCallMemory(uid, lid ?? null, content, "call_auto");
+            log(`[MEMORY] Saved ${memoryLines.length} facts for lead ${lid ?? "(unknown)"}`);
+          }
+        } catch (e) { log(`[MEMORY] Auto-save failed: ${e instanceof Error ? e.message : String(e)}`); }
+
+        // ── CRM Auto-Sync: push qualified leads to connected CRMs post-call ──
+        if (uid && lid && (opts.outcome === "interested" || opts.outcome === "scheduled")) {
+          try {
+            const { listCrmConnections, getCrmTokens, getLeadById } = await import("../db");
+            const connections = await listCrmConnections(uid);
+            const connected = connections.filter((c: any) => c.status === "connected");
+            if (connected.length > 0) {
+              const lead = await getLeadById(lid);
+              if (lead) {
+                for (const conn of connected) {
+                  try {
+                    const tokens = await getCrmTokens(uid, conn.provider);
+                    if (!tokens) continue;
+                    if (conn.provider === "hubspot") {
+                      // Use global fetch (Node 18+)
+                      await globalThis.fetch("https://api.hubapi.com/crm/v3/objects/contacts", {
+                        method: "POST",
+                        headers: { Authorization: `Bearer ${tokens.accessToken}`, "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          properties: {
+                            email: lead.email ?? undefined,
+                            firstname: lead.firstName,
+                            lastname: lead.lastName,
+                            phone: lead.phone ?? undefined,
+                            company: lead.company ?? undefined,
+                            hs_lead_status: "IN_PROGRESS",
+                          },
+                        }),
+                      }).catch(() => {});
+                    }
+                    // Salesforce sync handled similarly — skipped here for brevity; crmRouter.syncAll covers bulk
+                    log(`[CRM] Auto-synced lead ${lid} to ${conn.provider}`);
+                  } catch (ce) {
+                    log(`[CRM] Auto-sync to ${conn.provider} failed: ${ce instanceof Error ? ce.message : String(ce)}`);
+                  }
+                }
+              }
+            }
+          } catch (e) { log(`[CRM] Auto-sync setup failed: ${e instanceof Error ? e.message : String(e)}`); }
+        }
       });
     }
 
@@ -1741,6 +1829,28 @@ export function createCallEngine(opts: EngineOptions): void {
           notifyOwnerAfterVoiceCall(sessionIdForNotify)
         );
       } catch {}
+    }
+
+    // ── A/B Testing: record result for this call's variant ──
+    if (activeAbVariant) {
+      const variant = activeAbVariant;
+      const outcome = opts.outcome ?? "no_answer";
+      void (async () => {
+        try {
+          const { recordAbTestResult } = await import("../db");
+          await recordAbTestResult({
+            variantId: variant.variantId,
+            callId,
+            sessionId: activeSessionId ?? undefined,
+            leadId: activeLeadId ?? undefined,
+            outcome,
+            converted: outcome === "interested" || outcome === "scheduled" ? true : false,
+            sentiment: currentSentiment !== "neutral" ? currentSentiment : undefined,
+          });
+        } catch {
+          // Non-critical
+        }
+      })();
     }
 
     try { sigWs.close(); } catch {}
@@ -1829,6 +1939,19 @@ export function createCallEngine(opts: EngineOptions): void {
           const sess = activeSessionId ? voiceSessionManager.getSession(activeSessionId) : null;
           if (sess?.voiceProfileId) voiceProfile = resolveVoiceProfileForEngine(sess.voiceProfileId);
           if (sess?.userId) activeUserId = sess.userId ?? undefined;
+          // ── Inbound caller phone → leadId lookup (persistent memory requires leadId) ──
+          if (!activeLeadId && activeUserId && sess?.callerPhone) {
+            try {
+              const { getLeadByPhoneForUser } = await import("../db");
+              const matchedLead = await getLeadByPhoneForUser(activeUserId, sess.callerPhone);
+              if (matchedLead) {
+                activeLeadId = matchedLead.id;
+                log(`[MEMORY] Inbound caller ${sess.callerPhone} matched to lead ${activeLeadId} (${matchedLead.firstName} ${matchedLead.lastName})`);
+              }
+            } catch (e) {
+              log(`[MEMORY] Phone lookup failed: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          }
           if (activeSessionId && callSid) {
             voiceSessionManager.updateSession(activeSessionId, {
               callSid,

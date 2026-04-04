@@ -1160,6 +1160,77 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
 
+  // ── CRM OAuth callback (HubSpot + Salesforce) ──────────────────────────────
+  // After provider redirects to /api/crm/callback?code=...&state=userId:provider
+  app.get("/api/crm/callback", async (req, res) => {
+    try {
+      const code = req.query.code as string;
+      const state = req.query.state as string; // format: "userId:provider"
+      if (!code || !state) { res.redirect("/settings/integrations?crm=error&reason=missing_params"); return; }
+      const [userIdStr, provider] = state.split(":");
+      const userId = parseInt(userIdStr, 10);
+      if (!userId || !provider) { res.redirect("/settings/integrations?crm=error&reason=invalid_state"); return; }
+
+      const { saveCrmTokens, upsertCrmConnectionStub } = await import("../db");
+      const { ENV: env } = await import("./env");
+
+      if (provider === "hubspot") {
+        const tokenRes = await fetch("https://api.hubapi.com/oauth/v1/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            grant_type: "authorization_code",
+            client_id: env.hubspotClientId,
+            client_secret: env.hubspotClientSecret,
+            redirect_uri: env.hubspotRedirectUri || `${env.publicUrl}/api/crm/callback`,
+            code,
+          }),
+        });
+        if (!tokenRes.ok) throw new Error(`HubSpot token error: ${tokenRes.status}`);
+        const tokens = await tokenRes.json() as { access_token: string; refresh_token: string; hub_id: number };
+        await upsertCrmConnectionStub(userId, "hubspot");
+        await saveCrmTokens(userId, "hubspot", {
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token,
+          portalId: String(tokens.hub_id),
+          displayName: `HubSpot (Portal ${tokens.hub_id})`,
+        });
+        res.redirect("/settings/integrations?crm=connected&provider=hubspot");
+        return;
+      }
+
+      if (provider === "salesforce") {
+        const tokenRes = await fetch(`https://${env.salesforceLoginUrl}/services/oauth2/token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            grant_type: "authorization_code",
+            client_id: env.salesforceClientId,
+            client_secret: env.salesforceClientSecret,
+            redirect_uri: env.salesforceRedirectUri || `${env.publicUrl}/api/crm/callback`,
+            code,
+          }),
+        });
+        if (!tokenRes.ok) throw new Error(`Salesforce token error: ${tokenRes.status}`);
+        const tokens = await tokenRes.json() as { access_token: string; refresh_token: string; instance_url: string };
+        await upsertCrmConnectionStub(userId, "salesforce");
+        await saveCrmTokens(userId, "salesforce", {
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token,
+          instanceUrl: tokens.instance_url,
+          displayName: `Salesforce (${tokens.instance_url})`,
+        });
+        res.redirect("/settings/integrations?crm=connected&provider=salesforce");
+        return;
+      }
+
+      res.redirect(`/settings/integrations?crm=error&reason=unknown_provider_${provider}`);
+    } catch (e) {
+      console.error("[CRM OAuth] callback error:", e);
+      res.redirect("/settings/integrations?crm=error&reason=server_error");
+    }
+  });
+
   // ── Google Calendar OAuth callback ─────────────────────────────────────────
   app.get("/api/auth/gcal/callback", async (req, res) => {
     try {
