@@ -1,5 +1,7 @@
 # Voice ops runbook
 
+**Staging / release gate:** step-by-step checklist — [`VOICE_STAGING_CHECKLIST.md`](./VOICE_STAGING_CHECKLIST.md).
+
 ## Prerequisites
 
 - MySQL: apply `drizzle/voice_metric_events.sql` if `voice_metric_events` is missing.

@@ -23,13 +23,14 @@
 
 | Requirement | Implementation | A | B | C | D |
 |-------------|----------------|:-:|:-:|:--|:--|
-| Deepgram streaming STT | `realtimeVoiceEngine.ts` → `connectDeepgram`, `dgWs.send(audio)` | ✅ | ⚠️ integration env | Deepgram connect logs | Call |
-| Claude Haiku **only** (no Cerebras on live path) | `respondAnthropicVoice`, model `VOICE_CLAUDE_MODEL` / `CLAUDE_MODEL` / default `claude-3-5-haiku-20241022`; **no** `cerebrasPool` in engine | ✅ | ✅ unit + tsc | `[ROUTE] Anthropic Claude`, `llm_stream_start` with `provider: anthropic` | Call |
-| Cartesia streaming TTS | `cartesiaSend`, `streamToCartesia`, `speak` | ✅ | ⚠️ | `cartesiaSend`, `tts_first_chunk` | Call |
+| Deepgram streaming STT | `realtimeVoiceEngine.ts` → Nova-3 streaming (`connectDeepgram`, `dgWs.send(audio)`); **keyterm** API for boosting (not legacy `keywords`) | ✅ | ⚠️ integration env | Deepgram connect / `speech_final` logs | Call |
+| Cerebras streaming LLM (default voice turn) | `respondVoiceLlm` → OpenAI client @ `https://api.cerebras.ai/v1`, `ENV.cerebrasModel`; `cerebrasKeyManager` round-robin | ✅ | ✅ `guardrails.test.ts` + tsc | `llm_stream_start` `provider: cerebras`, `[ROUTE] Voice LLM: provider=` | Call |
+| Cartesia streaming TTS | `streamToCartesia`, `cartesiaSend`, `speak` | ✅ | ⚠️ | `tts_first_chunk` | Call |
+| ElevenLabs TTS fallback | `ttsService.ts` when Cartesia unavailable / `TTS_PROVIDER` | ✅ | ⚠️ | TTS provider logs | Call |
 | SignalWire telephony | `createCallEngine`, `_core/index.ts` WSS upgrade | ✅ | ⚠️ | SignalWire WS logs | Call |
-| Remove Cerebras / Qwen / Ollama **from this path** | Cerebras code removed from `realtimeVoiceEngine.ts`; `ENV.voiceRealtimeReady` = Deepgram + Cartesia + **Anthropic** | ✅ | ✅ | `/api/health` → `voiceRealtime` message | N/A |
+| Health: voice realtime ready | `ENV.voiceRealtimeReady` — Deepgram + **any** configured LLM (Cerebras / Anthropic / Groq) + Cartesia or ElevenLabs | ✅ | ⚠️ | `/api/health` → `voiceRealtime` | N/A |
 
-**Note:** `llmRouter.ts` Cerebras pool may remain for **non–live-voice** routes (SMS/helpers). Live voice is Claude-only per this matrix.
+**Note:** The **streaming** implementation in `respondVoiceLlm` requires **`CEREBRAS_API_KEY`** today. `ANTHROPIC_API_KEY` / `GROQ_API_KEY` still contribute to `aiEnabled` / readiness and other routes (`llmRouter.ts`, batch flows). Source of truth for diagrams: [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md).
 
 ---
 
@@ -79,6 +80,16 @@
 | Active question lock | `activeQuestion`, `questionAnswered`, `canOfferBooking` | ✅ | ✅ | `turn_policy.activeQuestion` | Call |
 | Booking guardrail | `canOfferBooking` + prompt `BOOKING POLICY` | ✅ | ✅ | `[TOOL] book_appointment blocked` | Call |
 | Tenant / industry context | `clientConfig`, `buildVoiceTenantContextBlock` | ✅ | ⚠️ | `[Voice] tenant KB` errors if any | Call |
+
+---
+
+## 8b. Response guardrails & conversation quality
+
+| Requirement | Implementation | A | B | C | D |
+|-------------|----------------|:-:|:-:|:--|:--|
+| Pre-TTS safety / quality gates | `responseGuardrails.ts` | ✅ | ✅ `guardrails.test.ts` | Trace on block / rewrite | Call |
+| Call outcome tagging | `callQualityTagger.ts` | ✅ | ⚠️ | Metrics / persist path | Call |
+| Small-talk & noise handling | `smallTalkPolicy.ts` | ✅ | ⚠️ | Policy traces | Call |
 
 ---
 
@@ -138,9 +149,11 @@ Run on **production** after deploy; save **raw audio** per row; attach **Deploy 
 ## 13. Commands (automated proof)
 
 ```bash
-pnpm exec tsc --noEmit
+pnpm run check
 pnpm run test
 pnpm run build
+pnpm run verify          # check + test + build + integration env script
+pnpm run test:voice      # server/realtime only
 ```
 
 ---
@@ -149,16 +162,19 @@ pnpm run build
 
 | Variable | Purpose |
 |----------|---------|
-| `DEEPGRAM_API_KEY` | Streaming STT |
-| `CARTESIA_API_KEY` | Streaming TTS |
-| `ANTHROPIC_API_KEY` | **Required** for live voice LLM |
-| `CLAUDE_MODEL` or `VOICE_CLAUDE_MODEL` | Default Haiku id if unset |
-| `VOICE_RESPONSE_MICRO_PAUSE_MS` | Default 250 |
+| `DEEPGRAM_API_KEY` | Streaming STT (Nova-3) |
+| `CARTESIA_API_KEY` | Primary streaming TTS |
+| `CEREBRAS_API_KEY` | **Default streaming LLM** for `respondVoiceLlm` (can use multiple keys; round-robin) |
+| `CEREBRAS_MODEL` | e.g. `llama3.1-8b` — see `ENV.cerebrasModel` |
+| `LLM_PROVIDER` | `cerebras` (default), `anthropic`, `groq` — routing / logging; streaming path still expects Cerebras key |
+| `ANTHROPIC_API_KEY` / `GROQ_API_KEY` | Readiness + non-voice / alternate routes |
+| `ELEVENLABS_API_KEY` | TTS fallback |
+| `VOICE_RESPONSE_MICRO_PAUSE_MS` | Pause after STT final before LLM |
 | `LIVE_TRANSFER_ENABLED` | `true` to allow transfer |
 | Owner **Settings** `transferNumber` | E.164 target for transfer |
 
-**Remove reliance on Cerebras for live voice:** `CEREBRAS_*` keys are optional for other features but **not** used by `realtimeVoiceEngine.ts`.
+**Staging checklist:** [`internal/VOICE_STAGING_CHECKLIST.md`](../internal/VOICE_STAGING_CHECKLIST.md)
 
 ---
 
-*Last updated: compliance matrix aligned with Claude-only live voice engine and policy traces.*
+*Last updated: 2026-04-02 — aligned with `docs/ARCHITECTURE.md` (Cerebras + Deepgram + Cartesia live path) and guardrail tests on `main`.*

@@ -14,7 +14,7 @@
 | `pnpm run test` | All tests pass (see count below) |
 | `pnpm run build` | Vite + esbuild `dist/` OK |
 
-**Latest automated check:** `pnpm run verify:quick` + `pnpm run build` — pass; **265** tests (full); `pnpm run test:voice` — **55** tests (`server/realtime/`).
+**Latest automated check:** After sync with `main`, run `pnpm run verify` — full suite **309** tests (includes guardrails); `pnpm run test:voice` — **55** tests (`server/realtime/`). Update this line when counts change.
 
 ---
 

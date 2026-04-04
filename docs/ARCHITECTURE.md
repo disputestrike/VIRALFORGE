@@ -163,3 +163,8 @@ Cartesia TTS:    ~80–150ms  (first audio chunk)
 Network + μ-law: ~50–100ms
 Total target:    ≤ 700ms
 ```
+
+## Release verification
+
+- **Automated:** `pnpm run verify` (Typecheck, full tests, production build, integration env script).
+- **Staging voice / DB / env:** [`internal/VOICE_STAGING_CHECKLIST.md`](internal/VOICE_STAGING_CHECKLIST.md) · compliance manual scenarios: [`integration/VOICE_COMPLIANCE_MATRIX.md`](integration/VOICE_COMPLIANCE_MATRIX.md) §12.
