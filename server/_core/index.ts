@@ -98,7 +98,8 @@ async function runMigrations() {
           "CREATE TABLE IF NOT EXISTS `workflows` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `name` varchar(200) NOT NULL, `trigger` varchar(100) DEFAULT 'manual', `description` text, `definition` json, `isActive` tinyint(1) DEFAULT 1, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
           "CREATE TABLE IF NOT EXISTS `customer_memories` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `leadId` int, `content` text NOT NULL, `source` varchar(64) DEFAULT 'manual', `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP)",
           // Ensure customer_memories has content + source columns (old schema had key/value)
-          "ALTER TABLE `customer_memories` ADD COLUMN `content` text NOT NULL DEFAULT ''",
+          // NOTE: TEXT columns cannot have DEFAULT in MySQL strict mode
+          "ALTER TABLE `customer_memories` ADD COLUMN `content` text NOT NULL",
           "ALTER TABLE `customer_memories` ADD COLUMN `source` varchar(64) DEFAULT 'manual'",
           // Drop old columns if they exist (safe — error 1091 = doesn't exist, ignored)
           "ALTER TABLE `customer_memories` DROP COLUMN `key`",
@@ -641,7 +642,8 @@ async function startServer() {
           ssl: { rejectUnauthorized: false },
         });
         const fixes = [
-          "ALTER TABLE `customer_memories` ADD COLUMN `content` text NOT NULL DEFAULT ''",
+          // TEXT columns can't have DEFAULT in MySQL strict mode
+          "ALTER TABLE `customer_memories` ADD COLUMN `content` text NOT NULL",
           "ALTER TABLE `customer_memories` ADD COLUMN `source` varchar(64) DEFAULT 'manual'",
           "ALTER TABLE `customer_memories` DROP COLUMN `key`",
           "ALTER TABLE `customer_memories` DROP COLUMN `value`",
