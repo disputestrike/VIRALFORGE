@@ -146,6 +146,11 @@ export const ENV = {
   /** Salesforce login URL — production: login.salesforce.com, sandbox: test.salesforce.com */
   salesforceLoginUrl: process.env.SALESFORCE_LOGIN_URL ?? "login.salesforce.com",
 
+  // ── Pipedrive OAuth ─────────────────────────────────────────────────────────
+  pipedriveClientId: process.env.PIPEDRIVE_CLIENT_ID ?? "",
+  pipedriveClientSecret: process.env.PIPEDRIVE_CLIENT_SECRET ?? "",
+  pipedriveRedirectUri: process.env.PIPEDRIVE_REDIRECT_URI ?? "",
+
   // ── Groq (optional ultra-low-latency LLM fallback) ──────────────────────────
   groqApiKey: (process.env.GROQ_API_KEY ?? "").trim(),
   groqModel: (process.env.GROQ_MODEL ?? "llama-3.1-8b-instant").trim(),

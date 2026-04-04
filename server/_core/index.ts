@@ -1321,7 +1321,7 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
 
-  // ── CRM OAuth callback (HubSpot + Salesforce) ──────────────────────────────
+  // ── CRM OAuth callback (HubSpot + Salesforce + Pipedrive) ───────────────────
   // After provider redirects to /api/crm/callback?code=...&state=userId:provider
   app.get("/api/crm/callback", async (req, res) => {
     try {
@@ -1382,6 +1382,40 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
           displayName: `Salesforce (${tokens.instance_url})`,
         });
         res.redirect("/settings/integrations?crm=connected&provider=salesforce");
+        return;
+      }
+
+      if (provider === "pipedrive") {
+        const redirectUri = env.pipedriveRedirectUri || `${env.publicUrl}/api/crm/callback`;
+        const tokenRes = await fetch("https://oauth.pipedrive.com/oauth/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            grant_type: "authorization_code",
+            client_id: env.pipedriveClientId,
+            client_secret: env.pipedriveClientSecret,
+            redirect_uri: redirectUri,
+            code,
+          }),
+        });
+        if (!tokenRes.ok) {
+          const errText = await tokenRes.text();
+          throw new Error(`Pipedrive token error: ${tokenRes.status} ${errText}`);
+        }
+        const tokens = (await tokenRes.json()) as {
+          access_token: string;
+          refresh_token: string;
+          api_domain: string;
+        };
+        const apiBase = `https://${String(tokens.api_domain).replace(/^https?:\/\//, "")}`;
+        await upsertCrmConnectionStub(userId, "pipedrive");
+        await saveCrmTokens(userId, "pipedrive", {
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token,
+          instanceUrl: apiBase,
+          displayName: `Pipedrive (${tokens.api_domain})`,
+        });
+        res.redirect("/settings/integrations?crm=connected&provider=pipedrive");
         return;
       }
 

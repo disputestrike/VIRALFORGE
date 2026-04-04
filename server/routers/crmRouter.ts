@@ -178,6 +178,107 @@ async function salesforceRefreshToken(
   return res.json();
 }
 
+// ── Pipedrive OAuth + Persons API ─────────────────────────────────────────────
+
+function pipedriveAuthUrl(state: string): string {
+  const redirect =
+    ENV.pipedriveRedirectUri || `${ENV.publicUrl}/api/crm/callback`;
+  const params = new URLSearchParams({
+    client_id: ENV.pipedriveClientId,
+    redirect_uri: redirect,
+    response_type: "code",
+    state,
+  });
+  return `https://oauth.pipedrive.com/oauth/authorize?${params}`;
+}
+
+async function pipedriveExchangeCode(code: string): Promise<{
+  access_token: string;
+  refresh_token: string;
+  api_domain: string;
+  expires_in?: number;
+}> {
+  const redirect =
+    ENV.pipedriveRedirectUri || `${ENV.publicUrl}/api/crm/callback`;
+  const res = await fetch("https://oauth.pipedrive.com/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirect,
+      client_id: ENV.pipedriveClientId,
+      client_secret: ENV.pipedriveClientSecret,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Pipedrive token exchange failed: ${res.status} — ${text}`);
+  }
+  return res.json();
+}
+
+async function pipedriveRefreshToken(refreshToken: string): Promise<{
+  access_token: string;
+  refresh_token?: string;
+  api_domain: string;
+}> {
+  const res = await fetch("https://oauth.pipedrive.com/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      client_id: ENV.pipedriveClientId,
+      client_secret: ENV.pipedriveClientSecret,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Pipedrive token refresh failed: ${res.status} — ${text}`);
+  }
+  return res.json();
+}
+
+/** `apiBase` e.g. https://mycompany.pipedrive.com */
+async function syncLeadToPipedrive(
+  accessToken: string,
+  apiBase: string,
+  lead: { email?: string | null; firstName: string; lastName: string; phone?: string | null; company?: string | null }
+): Promise<{ id: string }> {
+  const base = apiBase.replace(/\/$/, "");
+  const name = `${lead.firstName} ${lead.lastName}`.trim() || "Lead";
+  const body: Record<string, unknown> = { name };
+  if (lead.email?.trim()) {
+    body.email = [{ label: "work", value: lead.email.trim(), primary: true }];
+  }
+  if (lead.phone?.trim()) {
+    body.phone = [{ label: "work", value: lead.phone.trim(), primary: true }];
+  }
+  if (lead.company?.trim()) {
+    body.org_name = lead.company.trim();
+  }
+
+  const create = await fetch(`${base}/v1/persons`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!create.ok) {
+    const text = await create.text();
+    throw new Error(`Pipedrive create person failed: ${create.status} — ${text}`);
+  }
+  const created = (await create.json()) as { data?: { id?: number }; success?: boolean };
+  const id = created.data?.id;
+  if (id == null) {
+    throw new Error("Pipedrive: unexpected response (no person id)");
+  }
+  return { id: String(id) };
+}
+
 async function syncLeadToSalesforce(
   accessToken: string,
   instanceUrl: string,
@@ -246,6 +347,9 @@ export const crmRouter = router({
       } else if (input.provider === "salesforce") {
         if (!ENV.salesforceClientId) return { url: "", configured: false };
         url = salesforceAuthUrl(state);
+      } else if (input.provider === "pipedrive") {
+        if (!ENV.pipedriveClientId) return { url: "", configured: false };
+        url = pipedriveAuthUrl(state);
       } else {
         return { url: "", configured: false };
       }
@@ -296,6 +400,21 @@ export const crmRouter = router({
             displayName: `Salesforce (${tokens.instance_url})`,
           });
           return { ok: true as const, provider: "salesforce" };
+        }
+
+        if (input.provider === "pipedrive") {
+          if (!ENV.pipedriveClientId || !ENV.pipedriveClientSecret) {
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Pipedrive app credentials not configured" });
+          }
+          const tokens = await pipedriveExchangeCode(input.code);
+          const apiBase = `https://${tokens.api_domain.replace(/^https?:\/\//, "")}`;
+          await db.saveCrmTokens(ctx.user.id, "pipedrive", {
+            accessToken: tokens.access_token,
+            refreshToken: tokens.refresh_token,
+            instanceUrl: apiBase,
+            displayName: `Pipedrive (${tokens.api_domain})`,
+          });
+          return { ok: true as const, provider: "pipedrive" };
         }
 
         throw new TRPCError({ code: "BAD_REQUEST", message: "Provider OAuth not yet implemented for: " + input.provider });
@@ -379,6 +498,36 @@ export const crmRouter = router({
           return { ok: true as const, externalId: result.id, provider: "salesforce" };
         }
 
+        if (input.provider === "pipedrive") {
+          let accessToken = tokens.accessToken;
+          let refresh = tokens.refreshToken;
+          let apiBase = tokens.instanceUrl;
+          if (refresh) {
+            try {
+              const refreshed = await pipedriveRefreshToken(refresh);
+              accessToken = refreshed.access_token;
+              if (refreshed.refresh_token) refresh = refreshed.refresh_token;
+              apiBase = `https://${refreshed.api_domain.replace(/^https?:\/\//, "")}`;
+              await db.saveCrmTokens(ctx.user.id, "pipedrive", {
+                accessToken,
+                refreshToken: refresh,
+                instanceUrl: apiBase,
+                displayName: "Pipedrive",
+              });
+            } catch {
+              // use existing access token
+            }
+          }
+          if (!apiBase) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: "Pipedrive API domain missing — reconnect from Settings",
+            });
+          }
+          const result = await syncLeadToPipedrive(accessToken, apiBase, lead);
+          return { ok: true as const, externalId: result.id, provider: "pipedrive" };
+        }
+
         throw new TRPCError({ code: "BAD_REQUEST", message: "Sync not implemented for: " + input.provider });
       } catch (e) {
         if (e instanceof TRPCError) throw e;
@@ -404,6 +553,8 @@ export const crmRouter = router({
             await syncLeadToHubSpot(tokens.accessToken, lead);
           } else if (input.provider === "salesforce" && tokens.instanceUrl) {
             await syncLeadToSalesforce(tokens.accessToken, tokens.instanceUrl, lead);
+          } else if (input.provider === "pipedrive" && tokens.instanceUrl) {
+            await syncLeadToPipedrive(tokens.accessToken, tokens.instanceUrl, lead);
           }
           synced++;
         } catch (e) {

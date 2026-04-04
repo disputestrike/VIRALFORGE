@@ -69,7 +69,7 @@ The **Part 1 table below** (rows **1–20**) is the same numbering as your **“
 | 7 | Spam filtering | 2 | ✅ `blocked_phone_numbers` (0013) | ✅ `phoneBlocklist.*` | ✅ Settings | Inbound reject + toll-free heuristics (`index.ts`) |
 | 8 | Intelligent escalation | 2 | ✅ `escalation_rules` (0013) | ✅ `escalationRules.*` | ✅ Settings | Keyword match → `transferCallToHuman` in `voiceRealtimePipeline` |
 | 9 | Zapier | 2 | ✅ `zapier_webhooks` (0012) | ✅ `zapier.*` + `zapierEmit` on lead create & call persist | ✅ Settings | `call.completed`, `lead.created` POST to hook |
-| 10 | CRM sync (SF/HubSpot/Pipedrive) | 2 | ✅ `crm_connections` (0014) | ✅ `crm.*` — OAuth + `syncLead` / `syncAll` (`crmRouter.ts`) | ✅ Settings + **Leads** (cloud → HubSpot/Salesforce) | Pipedrive OAuth TBD; staging: [`CRM_STAGING_CHECKLIST.md`](../internal/CRM_STAGING_CHECKLIST.md) |
+| 10 | CRM sync (SF/HubSpot/Pipedrive) | 2 | ✅ `crm_connections` (0014) | ✅ `crm.*` — OAuth + `syncLead` / `syncAll` (`crmRouter.ts`; **Pipedrive** persons API) | ✅ Settings + **Leads** (cloud → all three) | Staging: [`CRM_STAGING_CHECKLIST.md`](../internal/CRM_STAGING_CHECKLIST.md) |
 | 11 | Workflow builder | 3 | ✅ `workflows` (0015) | ✅ `workflows.*` | ✅ Settings | JSON draft graph; runner TBD |
 | 12 | Persistent memory | 3 | ✅ `customer_memories` (0015) | ✅ `memory.*` | ✅ Settings | Optional `leadId`; RAG workers TBD |
 | 13 | Sentiment (product) | 3 | ✅ `call_recordings.sentiment` | ✅ `analytics.sentimentSummary` | ✅ Analytics | On persist: `inferSentimentFromTranscript` if session unset (`sentimentInfer.test.ts`); optional future real-time API |

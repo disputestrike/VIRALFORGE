@@ -396,10 +396,15 @@ export default function Leads() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="bg-card border-border">
-                              {(["hubspot", "salesforce"] as const).map((prov) => {
+                              {(["hubspot", "salesforce", "pipedrive"] as const).map((prov) => {
                                 const conn = crmConnections?.find((c) => c.provider === prov);
                                 const connected = conn?.status === "connected";
-                                const label = prov === "hubspot" ? "HubSpot" : "Salesforce";
+                                const label =
+                                  prov === "hubspot"
+                                    ? "HubSpot"
+                                    : prov === "salesforce"
+                                      ? "Salesforce"
+                                      : "Pipedrive";
                                 return (
                                   <DropdownMenuItem
                                     key={prov}

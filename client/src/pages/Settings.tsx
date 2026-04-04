@@ -1293,7 +1293,10 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            HubSpot and Salesforce: OAuth opens in a new tab after the connection stub is created. Push individual leads from the Leads page (cloud menu). Pipedrive OAuth is not wired yet.
+            HubSpot, Salesforce, and Pipedrive: OAuth opens in a new tab after the connection stub is created. Set{" "}
+            <code className="text-xs bg-secondary px-1 rounded">PIPEDRIVE_CLIENT_ID</code>,{" "}
+            <code className="text-xs bg-secondary px-1 rounded">PIPEDRIVE_CLIENT_SECRET</code> on the server for Pipedrive.
+            Push leads from the Leads page (cloud menu).
           </p>
           <div className="space-y-2">
             {(["salesforce", "hubspot", "pipedrive"] as const).map((p) => {
@@ -1323,8 +1326,8 @@ export default function Settings() {
                           if (auth.configured && auth.url) {
                             window.open(auth.url, "_blank", "noopener,noreferrer");
                             toast.success(`Complete ${label} sign-in in the new tab`);
-                          } else if (p === "pipedrive") {
-                            toast.message("Pipedrive OAuth is not configured in this deployment yet.");
+                          } else if (p === "pipedrive" && !auth.configured) {
+                            toast.message("Pipedrive OAuth is not configured (set PIPEDRIVE_CLIENT_ID / SECRET).");
                           } else {
                             toast.error(
                               `${label} OAuth is not configured on the server (set client id/secret env vars).`
