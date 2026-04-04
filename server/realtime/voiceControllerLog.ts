@@ -13,16 +13,27 @@ export type VoiceControllerFailureBucket =
   | "recovery_failed"
   | "repetition_loop"
   | "stale_final_fired"
-  | "tts_ack_too_talky";
+  | "tts_ack_too_talky"
+  // Guardrail buckets
+  | "small_talk_hardcode"
+  | "topic_drift"
+  | "low_stt_confidence"
+  | "clause_blocked"
+  | "clause_replaced"
+  | "full_response_guardrail"
+  | "loop_detected"
+  | "quality_pass"
+  | "quality_issues";
 
 export function logVoiceControllerEvent(
   callId: string,
-  event: "turn" | "failure" | "info",
+  event: "turn" | "failure" | "info" | "guardrail" | "quality_pass" | "quality_issues",
   payload: {
-    bucket?: VoiceControllerFailureBucket;
+    bucket?: VoiceControllerFailureBucket | string;
     detail?: string;
     transcriptSnippet?: string;
     extra?: Record<string, unknown>;
+    [key: string]: unknown;
   }
 ): void {
   const line = {

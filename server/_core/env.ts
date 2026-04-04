@@ -107,7 +107,10 @@ export const ENV = {
   /** Voice LLM max tokens per turn. */
   voiceLlmMaxTokens: Math.min(1200, Math.max(200, parseInt(process.env.VOICE_LLM_MAX_TOKENS ?? "600", 10) || 350)),
   /** Voice LLM temperature. */
-  voiceLlmTemperature: Math.min(0.85, Math.max(0.1, parseFloat(process.env.VOICE_LLM_TEMPERATURE ?? "0.25") || 0.25)),
+  // Lower temperature = more predictable, consistent responses.
+  // Production target is 0.1-0.2 for guardrail stability; 0.25 is acceptable.
+  // Raise VOICE_LLM_TEMPERATURE only for testing creative responses.
+  voiceLlmTemperature: Math.min(0.85, Math.max(0.05, parseFloat(process.env.VOICE_LLM_TEMPERATURE ?? "0.15") || 0.15)),
   /**
    * Ops / compliance (read in voice webhooks + engine, not all mirrored here):
    * - VOICE_METRICS_PERSIST=false — skip DB inserts for voice_metric_events (see server/realtime/voiceMetrics.ts).

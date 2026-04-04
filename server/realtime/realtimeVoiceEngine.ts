@@ -81,6 +81,22 @@ import { computeInterruptAck } from "./interruptAck";
 import { logVoiceControllerEvent } from "./voiceControllerLog";
 import { extractLastQuestion } from "./repeatGuard";
 import { emptyStrictFacts, HARD_RULES, type StrictFacts } from "./strictTypes";
+import {
+  classifySmallTalk,
+  getSmallTalkResponse,
+  MAX_SMALL_TALK_TURNS,
+} from "./smallTalkPolicy";
+import {
+  detectConversationContext,
+  checkClause,
+  applyFullResponseGuardrails,
+  isResponseLooping,
+  getLoopBreakResponse,
+  detectTopicDrift,
+  getDriftRedirectResponse,
+  type ConversationContext,
+} from "./responseGuardrails";
+import { tagCallFailureModes, formatFailureModes, isCallHealthy } from "./callQualityTagger";
 
 type VoiceOutcome = import("../_core/services/voiceSessionManager").VoiceSession["outcome"];
 
@@ -285,6 +301,16 @@ export function createCallEngine(opts: EngineOptions): void {
   let bargeInEnergyFrameCount = 0;
   /** A/B test variant selected for this call (null = no active test) */
   let activeAbVariant: { variantId: number; variantKey: string; promptOverride?: string | null; promptSuffix?: string | null } | null = null;
+
+  // ── Guardrail state ───────────────────────────────────────────────────────
+  /** Consecutive turns that were pure small talk (reset when business content appears). */
+  let smallTalkTurnCount = 0;
+  /** Current conversation context — updated each turn. */
+  let currentConversationContext: ConversationContext = "unknown";
+  /** Consecutive turns where the agent response was near-identical (loop detection). */
+  let loopTurnCount = 0;
+  /** Recent assistant response texts for loop detection (last 3). */
+  const recentAssistantTexts: string[] = [];
 
   // ── A/B variant selection (fire-and-forget at call init) ──
   if (callId && activeUserId) {
@@ -795,6 +821,38 @@ export function createCallEngine(opts: EngineOptions): void {
       params.set("redact", "pci");
     }
 
+    // ── Custom vocabulary: industry-specific terms for better STT accuracy ────────────
+    // These terms are commonly misrecognized by generic ASR models.
+    // Format: keyword:boost (1-5 scale; 2 is moderate, 5 is strong)
+    const INDUSTRY_KEYWORDS = [
+      // Sales/CRM terms
+      "ApexAI:3", "qualification:2", "qualified:2", "conversion:2", "convert:2",
+      "pipeline:2", "follow-up:2", "callback:2", "outbound:2", "inbound:2",
+      "appointment:2", "booking:2", "calendar:2", "demo:2", "proposal:2",
+      // Solar
+      "kilowatt:3", "kilowatt-hour:3", "solar panel:3", "photovoltaic:3", "PV:3",
+      "net metering:3", "utility bill:2", "solar installation:2", "inverter:3",
+      "federal tax credit:3", "ITC:3", "off-grid:2", "on-grid:2",
+      // HVAC
+      "HVAC:3", "air conditioning:2", "air handler:3", "heat pump:3", "furnace:2",
+      "ductwork:3", "thermostat:2", "SEER:3", "BTU:3", "refrigerant:3",
+      "compressor:2", "condenser:2", "evaporator:2",
+      // Roofing
+      "shingles:3", "roofing:2", "soffit:3", "fascia:3", "flashing:3",
+      "gutter:2", "downspout:3", "ridge cap:3", "underlayment:3", "TPO:3",
+      // Insurance
+      "premium:2", "deductible:2", "copay:2", "claim:2", "liability:2",
+      "underwriting:3", "policyholder:2", "beneficiary:2",
+      // Real estate
+      "escrow:2", "mortgage:2", "refinance:2", "appraisal:2", "HOA:3",
+      "listing:2", "closing costs:2", "down payment:2",
+    ];
+    // Only add keywords if not causing handshake issues (env gate)
+    if (process.env.VOICE_DEEPGRAM_KEYWORDS !== "false") {
+      INDUSTRY_KEYWORDS.forEach((kw) => params.append("keywords", kw));
+    }
+    // ── End custom vocabulary ─────────────────────────────────────────────────
+
     const url = `wss://api.deepgram.com/v1/listen?${params}`;
     const ws = new WebSocket(url, { headers: { Authorization: `Token ${apiKey}` } });
     dgWs = ws;
@@ -1006,6 +1064,49 @@ export function createCallEngine(opts: EngineOptions): void {
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
       return;
     }
+
+    // ── GUARDRAIL LAYER 1: Pre-generation checks (run BEFORE any LLM call) ────────────
+
+    // 1a. Update conversation context
+    currentConversationContext = detectConversationContext(transcript);
+
+    // 1b. Topic drift check (off-limits territory)
+    const driftResult = detectTopicDrift(transcript);
+    if (driftResult.isDrift && driftResult.driftClass !== "none") {
+      const driftResponse = getDriftRedirectResponse(driftResult.driftClass, businessName || "your business");
+      appendHistory("user", transcript);
+      await speak(driftResponse, epoch);
+      logVoiceControllerEvent(callId, "guardrail", { bucket: "topic_drift", driftClass: driftResult.driftClass });
+      traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+      return;
+    }
+
+    // 1c. Small-talk micro-policy (hardcoded — LLM never sees these turns)
+    const stClass = classifySmallTalk(transcript);
+    if (stClass !== "none") {
+      smallTalkTurnCount++;
+      const stResponse = getSmallTalkResponse(stClass, smallTalkTurnCount, businessName);
+      appendHistory("user", transcript);
+      appendHistory("assistant", stResponse);
+      await speak(stResponse, epoch);
+      logVoiceControllerEvent(callId, "guardrail", { bucket: "small_talk_hardcode", stClass, turn: smallTalkTurnCount });
+      traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+      return; // ← LLM is NEVER called for small talk
+    } else {
+      // Business content detected — reset small-talk counter
+      smallTalkTurnCount = 0;
+    }
+
+    // 1d. Low STT confidence — skip LLM, ask for clarification
+    if (_sttConfidence > 0 && _sttConfidence < 0.55 && transcript.length < 30) {
+      appendHistory("user", transcript);
+      await speak("I didn't quite catch that — could you say that again?", epoch);
+      logVoiceControllerEvent(callId, "guardrail", { bucket: "low_stt_confidence", confidence: _sttConfidence });
+      traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+      return;
+    }
+
+    // ── END GUARDRAIL LAYER 1 ─────────────────────────────────────────────────
 
     policyState = updateCallState(policyState, transcript);
     mergeExtractedFactsFromTurn(transcript);
@@ -1493,7 +1594,35 @@ export function createCallEngine(opts: EngineOptions): void {
         .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
         .replace(/\s+/g, " ")
         .trim();
-      const speakable = speakableLine(cleaned);
+
+      // ── GUARDRAIL LAYER 2: Clause-level interception (before Cartesia) ──────────
+      const clauseCheck = checkClause(
+        cleaned,
+        userTranscript,
+        conversationHistory,
+        currentConversationContext
+      );
+      if (clauseCheck.action === "block") {
+        logVoiceControllerEvent(callId, "guardrail", { bucket: "clause_blocked", reason: clauseCheck.reason, clause: cleaned.slice(0, 60) });
+        return; // Silently drop this clause — don't send to TTS
+      }
+      if (clauseCheck.action === "replace") {
+        logVoiceControllerEvent(callId, "guardrail", { bucket: "clause_replaced", reason: clauseCheck.reason, original: cleaned.slice(0, 60) });
+        // Only inject replacement on first clause to avoid duplicate safe responses
+        if (clausesSent === 0) {
+          const safeSpeak = speakableLine(clauseCheck.text);
+          if (safeSpeak) {
+            cartesiaContextId = "";
+            cartesiaSend(safeSpeak, false);
+            clausesSent++;
+            traceEvent(callId, "tts_first_clause_streaming", { clause: safeSpeak.slice(0, 60), guardrail: clauseCheck.reason });
+          }
+        }
+        return;
+      }
+      // ── END GUARDRAIL LAYER 2 ─────────────────────────────────────────────
+
+      const speakable = speakableLine(clauseCheck.text); // use guardrail-approved text
       if (!speakable) return;
       // Each clause gets its own fresh Cartesia context to avoid "Context has closed" errors.
       cartesiaContextId = "";
@@ -1586,6 +1715,38 @@ export function createCallEngine(opts: EngineOptions): void {
     if (parts.length > 3) {
       logVoiceControllerEvent(callId, "failure", { bucket: "spoke_too_long", detail: "sentence_count" });
     }
+
+    // ── GUARDRAIL LAYER 3: Post-LLM full-response checks ─────────────────────
+    // Apply full-response guardrails (catches things clause-level may miss)
+    const fullGuard = applyFullResponseGuardrails(
+      cleanResponse,
+      userTranscript,
+      conversationHistory,
+      currentConversationContext
+    );
+    if (fullGuard.wasModified) {
+      cleanResponse = fullGuard.text;
+      fullGuard.violations.forEach((v) => {
+        logVoiceControllerEvent(callId, "guardrail", { bucket: "full_response_guardrail", violation: v });
+      });
+      // Note: if the clause-level guardrail already caught this, the audio is already wrong.
+      // We log it here for post-call QA. In future: pre-stream the full text before TTS.
+    }
+
+    // Loop detection — if agent is saying the same thing repeatedly
+    if (isResponseLooping(cleanResponse, recentAssistantTexts)) {
+      loopTurnCount++;
+      const loopBreak = getLoopBreakResponse(loopTurnCount);
+      logVoiceControllerEvent(callId, "guardrail", { bucket: "loop_detected", count: loopTurnCount });
+      // We can't cancel audio already sent, but we can fix the history
+      cleanResponse = loopBreak;
+    } else {
+      loopTurnCount = 0;
+    }
+    // Track recent responses for loop detection
+    recentAssistantTexts.push(cleanResponse);
+    if (recentAssistantTexts.length > 5) recentAssistantTexts.shift();
+    // ── END GUARDRAIL LAYER 3 ─────────────────────────────────────────────
 
     // Note: we do NOT re-send clauses here — they were already sent during streaming above.
     // The sendClause loop above has already dispatched audio to Cartesia token-by-token.
@@ -1726,6 +1887,24 @@ export function createCallEngine(opts: EngineOptions): void {
           await generateCallSummaryFromTranscript(transcript2, undefined);
           log("[SUMMARY] Call summary generated");
         } catch (e) { log(`[SUMMARY] Failed: ${e instanceof Error ? e.message : String(e)}`); }
+
+        // ── Post-Call QA: tag all guardrail violations for analytics ──
+        try {
+          const failures = tagCallFailureModes(history);
+          const healthy = isCallHealthy(failures);
+          const summary = formatFailureModes(failures);
+          log(`[QA] Call quality: ${healthy ? "HEALTHY" : "ISSUES DETECTED"} | ${summary}`);
+          if (!healthy) {
+            log(`[QA] Trust/compliance failures: ${failures.filter(f => f.severity === "trust_killing" || f.severity === "compliance_risk").map(f => f.code).join(", ")}`);
+          }
+          // Store in voiceControllerLog for dashboard visibility
+          logVoiceControllerEvent(cid, failures.length === 0 ? "quality_pass" : "quality_issues", {
+            failureCount: failures.length,
+            healthy,
+            summary,
+            failures: failures.slice(0, 5).map(f => ({ code: f.code, severity: f.severity })),
+          });
+        } catch (e) { log(`[QA] Tagger failed: ${e instanceof Error ? e.message : String(e)}`); }
 
         // ── Persistent Memory: auto-save key facts extracted during this call ──
         try {
