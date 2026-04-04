@@ -8,7 +8,8 @@
 export const USER_ALWAYS_WINS_THE_TURN = true;
 
 /** After Deepgram speech_final, wait this long before treating utterance as final (true end-of-turn). */
-export const FINAL_SILENCE_DEBOUNCE_MS = 400;
+// Raised to 600ms (was 400ms) — gives more time to catch trailing words, reduces noise false-finals.
+export const FINAL_SILENCE_DEBOUNCE_MS = 600;
 
 export const MAX_SENTENCES = 3;
 export const MAX_FOLLOW_UP_QUESTIONS = 1;

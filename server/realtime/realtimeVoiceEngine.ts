@@ -281,6 +281,8 @@ export function createCallEngine(opts: EngineOptions): void {
   let assistantResponseInProgress = false;
   /** At most one pending barge-in ack utterance — cleared when superseded or call ends. */
   let interruptAckTimer: NodeJS.Timeout | null = null;
+  /** Consecutive frames above energy threshold — requires sustained speech, not a single noise spike. */
+  let bargeInEnergyFrameCount = 0;
 
   function clearInterruptAckPending(): void {
     if (interruptAckTimer) {
@@ -845,12 +847,13 @@ export function createCallEngine(opts: EngineOptions): void {
            * Interim results (interim_results=true) often contain noise, "uh", coughs, or 1–2 chars —
            * those were cancelling TTS and bumping generationEpoch, which felt like lost context and
            * "any small sound throws the AI off". Energy-based barge-in still handles fast interrupts.
+           * Min length raised to 8 chars (was 3) — filters out single noise words and filler sounds.
            */
           const sttBackupBarge =
             isSpeaking &&
             greetingDone &&
             isFinal &&
-            transcript.trim().length >= 3 &&
+            transcript.trim().length >= 8 &&
             !turnCtl.interruptRequested;
           const conf = Number(msg.channel?.alternatives?.[0]?.confidence ?? 0.92);
           if (isFinal && speechFinal) lastFinalSttConfidence = conf;
@@ -905,8 +908,26 @@ export function createCallEngine(opts: EngineOptions): void {
   }
 
   // ── LLM response ────────────────────────────────────────────────────────────
+  /** Noise words that should never trigger a full LLM turn on their own. */
+  const NOISE_ONLY_PATTERN = /^(uh+|um+|hmm+|hm+|mm+|ah+|oh+|eh+|mhm|ugh+|huh|[^a-z0-9\s]|\s)*$/i;
+
   async function enqueueUserTurn(transcript: string, sttConfidence?: number): Promise<void> {
-    if (transcript.trim()) {
+    const trimmed = transcript.trim();
+
+    // Confidence floor: drop very low confidence transcripts (likely noise, not speech)
+    const conf = sttConfidence ?? lastFinalSttConfidence;
+    if (conf < ENV.voiceSttMinConfidence && trimmed.length < 15) {
+      log(`[STT] Dropping low-confidence transcript (conf=${conf.toFixed(2)}, len=${trimmed.length}): "${trimmed.slice(0, 40)}"`);
+      return;
+    }
+
+    // Noise filter: single filler words / sounds with no real content
+    if (trimmed.length <= 6 && NOISE_ONLY_PATTERN.test(trimmed)) {
+      log(`[STT] Dropping noise-only transcript: "${trimmed}"`);
+      return;
+    }
+
+    if (trimmed) {
       callerHasSpokenOnce = true;
       clearUserSilenceReengageTimer();
       clearInterruptAckPending();
@@ -1877,12 +1898,22 @@ export function createCallEngine(opts: EngineOptions): void {
 
       // Instant barge-in: energy on raw mu-law (same strategy as VoiceRealtimePipeline).
       // While assistant audio plays, drop quiet frames so STT is not flooded with echo; loud speech = cut TTS immediately.
+      // Requires VOICE_BARGE_IN_SUSTAIN_FRAMES consecutive above-threshold frames to avoid false triggers
+      // from background noise, TV, coughs, or short sound bursts.
       if (greetingDone && isSpeaking) {
         const energy = estimateMulawEnergy(audio);
         const th = ENV.voiceBargeInEnergyThreshold;
-        if (energy > th && !turnCtl.interruptRequested) {
-          log(`[BARGE-IN] energy=${energy} (threshold=${th})`);
-          traceEvent(callId, "barge_in_energy", { energy, threshold: th });
+        const sustainRequired = ENV.voiceBargeInSustainFrames;
+        if (energy > th) {
+          bargeInEnergyFrameCount++;
+        } else {
+          bargeInEnergyFrameCount = 0;
+          if (!turnCtl.interruptRequested) return; // quiet frame while speaking — drop
+        }
+        if (bargeInEnergyFrameCount >= sustainRequired && !turnCtl.interruptRequested) {
+          bargeInEnergyFrameCount = 0;
+          log(`[BARGE-IN] energy=${energy} (threshold=${th}, sustained=${sustainRequired}f)`);
+          traceEvent(callId, "barge_in_energy", { energy, threshold: th, sustainFrames: sustainRequired });
           clearDeepgramFinalDebounce("energy_barge");
           const ackSpeechMs = assistantPlaybackStartAt ? Date.now() - assistantPlaybackStartAt : 0;
           const ackInProgress = assistantResponseInProgress;
@@ -1897,9 +1928,10 @@ export function createCallEngine(opts: EngineOptions): void {
                 interruptCount: (s.interruptCount ?? 0) + 1,
               });
           }
-        } else if (energy <= th && !turnCtl.interruptRequested) {
-          return;
         }
+      } else if (!isSpeaking) {
+        // Not speaking — reset frame counter
+        bargeInEnergyFrameCount = 0;
       }
 
       if (dgReady && dgWs && dgWs.readyState === WebSocket.OPEN) {

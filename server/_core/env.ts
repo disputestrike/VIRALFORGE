@@ -88,15 +88,22 @@ export const ENV = {
    * Lower = easier interrupt. Values above 127 are treated as legacy mis-scaled (e.g. 600) and mapped with /5 so they still work.
    */
   voiceBargeInEnergyThreshold: (() => {
+    // Default raised to 110 (was 75) — reduces false triggers from background noise, TV, coughs.
+    // Lower = easier interrupt; raise via VOICE_BARGE_IN_ENERGY_THRESHOLD if callers can't interrupt.
     const raw =
-      parseInt(process.env.VOICE_BARGE_IN_ENERGY_THRESHOLD || process.env.INTERRUPTION_ENERGY_THRESHOLD || "75", 10) || 75;
+      parseInt(process.env.VOICE_BARGE_IN_ENERGY_THRESHOLD || process.env.INTERRUPTION_ENERGY_THRESHOLD || "110", 10) || 110;
     const scaled = raw > 127 ? Math.round(raw / 5) : raw;
     return Math.max(12, Math.min(125, scaled));
   })(),
+  /** Frames of sustained energy required to trigger barge-in (prevents single-frame noise spikes). */
+  voiceBargeInSustainFrames: Math.max(1, Math.min(10, parseInt(process.env.VOICE_BARGE_IN_SUSTAIN_FRAMES ?? "3", 10) || 3)),
   /** Deepgram streaming: ms of silence before end-of-turn (lower = faster replies; too low may clip words). */
-  voiceDeepgramEndpointingMs: Math.max(100, Math.min(2000, parseInt(process.env.VOICE_DEEPGRAM_ENDPOINTING_MS ?? "250", 10) || 250)),
+  // Default raised to 400ms (was 250ms) — prevents noise bursts from prematurely ending speech detection.
+  voiceDeepgramEndpointingMs: Math.max(100, Math.min(2000, parseInt(process.env.VOICE_DEEPGRAM_ENDPOINTING_MS ?? "400", 10) || 400)),
   /** Deepgram utterance_end_ms — cap wait for utterance boundary. */
-  voiceDeepgramUtteranceEndMs: Math.max(300, Math.min(3000, parseInt(process.env.VOICE_DEEPGRAM_UTTERANCE_END_MS ?? "800", 10) || 800)),
+  voiceDeepgramUtteranceEndMs: Math.max(300, Math.min(3000, parseInt(process.env.VOICE_DEEPGRAM_UTTERANCE_END_MS ?? "1000", 10) || 1000)),
+  /** Minimum STT confidence to process a turn (below this = likely noise, ignored). */
+  voiceSttMinConfidence: Math.max(0, Math.min(1, parseFloat(process.env.VOICE_STT_MIN_CONFIDENCE ?? "0.55") || 0.55)),
   /** Voice LLM max tokens per turn. */
   voiceLlmMaxTokens: Math.min(1200, Math.max(200, parseInt(process.env.VOICE_LLM_MAX_TOKENS ?? "600", 10) || 350)),
   /** Voice LLM temperature. */
