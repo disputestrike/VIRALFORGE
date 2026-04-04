@@ -634,29 +634,38 @@ async function startServer() {
       }
 
       if (action === "fix_schema") {
-        // Fix customer_memories table schema live (ALTER TABLE on running DB)
-        const { getDb } = await import("../db");
-        const database = await getDb();
-        if (!database) throw new Error("DB not available");
+        // Fix customer_memories table schema live via raw mysql2 connection
+        const mysql2 = await import("mysql2/promise");
+        const conn = await mysql2.createConnection({
+          uri: process.env.DATABASE_URL,
+          ssl: { rejectUnauthorized: false },
+        });
         const fixes = [
           "ALTER TABLE `customer_memories` ADD COLUMN `content` text NOT NULL DEFAULT ''",
           "ALTER TABLE `customer_memories` ADD COLUMN `source` varchar(64) DEFAULT 'manual'",
           "ALTER TABLE `customer_memories` DROP COLUMN `key`",
           "ALTER TABLE `customer_memories` DROP COLUMN `value`",
           "ALTER TABLE `customer_memories` DROP COLUMN `updatedAt`",
-          "ALTER TABLE `prompt_variants` ADD COLUMN `id` int NOT NULL AUTO_INCREMENT PRIMARY KEY",
           "CREATE TABLE IF NOT EXISTS `prompt_variants` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `testName` varchar(200) NOT NULL, `variantKey` varchar(64) NOT NULL, `promptOverride` text, `promptSuffix` text, `weight` int NOT NULL DEFAULT 50, `isActive` tinyint(1) NOT NULL DEFAULT 1, `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
           "CREATE TABLE IF NOT EXISTS `ab_test_results` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `variantId` int NOT NULL, `callId` varchar(128), `sessionId` varchar(128), `leadId` int, `outcome` varchar(64), `converted` tinyint(1) NOT NULL DEFAULT 0, `durationSeconds` int DEFAULT 0, `sentiment` varchar(32), `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+          "SHOW COLUMNS FROM `customer_memories`",
         ];
         const fixResults: string[] = [];
         for (const sql of fixes) {
           try {
-            await (database as any).execute(sql);
-            fixResults.push(`OK: ${sql.slice(0, 60)}`);
+            const [rows] = await conn.execute(sql);
+            if (sql.startsWith("SHOW")) {
+              fixResults.push(`COLUMNS: ${JSON.stringify(rows).slice(0, 200)}`);
+            } else {
+              fixResults.push(`OK: ${sql.slice(0, 70)}`);
+            }
           } catch (e: any) {
-            fixResults.push(`SKIP (${e.errno}): ${sql.slice(0, 60)}`);
+            const errno = e.errno || e.cause?.errno || "?";
+            const msg = e.message?.slice(0, 80) || String(e);
+            fixResults.push(`SKIP(${errno}): ${msg}`);
           }
         }
+        await conn.end();
         results.fixResults = fixResults;
 
         // Verify
