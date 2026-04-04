@@ -848,9 +848,14 @@ export function createCallEngine(opts: EngineOptions): void {
       "escrow:2", "mortgage:2", "refinance:2", "appraisal:2", "HOA:3",
       "listing:2", "closing costs:2", "down payment:2",
     ];
-    // Only add keywords if not causing handshake issues (env gate)
+    // Nova-3 uses 'keyterm' (not 'keywords') for custom vocabulary boosting.
+    // Gate: set VOICE_DEEPGRAM_KEYWORDS=false to disable if causing issues.
     if (process.env.VOICE_DEEPGRAM_KEYWORDS !== "false") {
-      INDUSTRY_KEYWORDS.forEach((kw) => params.append("keywords", kw));
+      INDUSTRY_KEYWORDS.forEach((kw) => {
+        // keyterm format: "term:boost" — strip the boost value for keyterm (Nova-3 doesn't take it)
+        const term = kw.split(":")[0] ?? kw;
+        params.append("keyterm", term);
+      });
     }
     // ── End custom vocabulary ─────────────────────────────────────────────────
 
