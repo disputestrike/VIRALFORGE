@@ -1,7 +1,7 @@
 /**
  * realtimeVoiceEngine.ts — THE CORE ORCHESTRATOR
  *
- * Pipeline: SignalWire → Deepgram STT → Cerebras LLM → Cartesia TTS → SignalWire
+ * Pipeline: SignalWire → Deepgram STT → Groq LLM → Cartesia TTS → SignalWire
  *
  * Key principles:
  * 1. Telephony: mulaw 8kHz to/from SignalWire; Cartesia pcm_s16le → convert to mulaw outbound
@@ -50,6 +50,12 @@ import {
   type TurnControllerState,
 } from "./turnController";
 import { mergeClientConfig, type ClientConfig } from "./clientConfig";
+import type { TenantIndustryOverlay } from "../_core/services/domainPacks";
+import {
+  formatDomainPackForVoicePrompt,
+  resolveDomainPack,
+  tenantOverlayFromClientConfig,
+} from "../_core/services/domainPacks";
 import {
   extractZipFromTranscript,
   lookupDiscountsSpoken,
@@ -215,6 +221,8 @@ interface EngineOptions {
   industry?: string;
   voiceProfileId?: string;
   language?: string;
+  /** Merged from `users` voice domain columns at WS connect */
+  tenantIndustryOverlay?: TenantIndustryOverlay;
 }
 
 export function createCallEngine(opts: EngineOptions): void {
@@ -227,6 +235,7 @@ export function createCallEngine(opts: EngineOptions): void {
     industry: optIndustry = "business services",
     voiceProfileId,
     language: optLanguage = "en",
+    tenantIndustryOverlay,
   } = opts;
 
   const callId = `call_${Date.now()}`;
@@ -238,9 +247,23 @@ export function createCallEngine(opts: EngineOptions): void {
   let businessName = optBusinessName;
   let industry = optIndustry;
   const callLanguage = optLanguage;
+  const tenantPartial: Partial<ClientConfig> = {};
+  if (tenantIndustryOverlay?.primaryIndustryLabel?.trim()) {
+    tenantPartial.primaryIndustryLabel = tenantIndustryOverlay.primaryIndustryLabel.trim();
+  }
+  if (tenantIndustryOverlay?.customIndustryContext?.trim()) {
+    tenantPartial.voiceIndustryContext = tenantIndustryOverlay.customIndustryContext.trim();
+  }
+  if (tenantIndustryOverlay?.voiceKeyPhrases?.trim()) {
+    tenantPartial.voiceKeyPhrases = tenantIndustryOverlay.voiceKeyPhrases.trim();
+  }
+  if (tenantIndustryOverlay?.voiceRestrictionNotes?.trim()) {
+    tenantPartial.voiceRestrictionNotes = tenantIndustryOverlay.voiceRestrictionNotes.trim();
+  }
   let clientConfig: ClientConfig = mergeClientConfig({
     businessName,
     industry,
+    ...tenantPartial,
   });
 
   // State
@@ -1251,19 +1274,15 @@ export function createCallEngine(opts: EngineOptions): void {
 
     const reprompt =
       "I didn't quite catch that—could you say that again in a few words?";
-    const { getCerebrasKey, rotateCerebrasKey, getCerebrasKeyIndex } = await import("../_core/cerebrasKeyManager");
-    const cerebrasKey = getCerebrasKey();
-    const activeProvider = ENV.llmProvider || "cerebras";
+    const activeProvider = ENV.llmProvider || "groq";
     traceEvent(callId, "llm_route", {
       path: activeProvider,
-      model: ENV.cerebrasModel,
+      model: ENV.groqModel,
     });
-    log(
-      `[ROUTE] Voice LLM: provider=${activeProvider} model=${ENV.cerebrasModel} key=${getCerebrasKeyIndex()}/${ENV.cerebrasKeys.length}`
-    );
+    log(`[ROUTE] Voice LLM: provider=groq (streaming) model=${ENV.groqModel}`);
 
-    if (!ENV.aiEnabled) {
-      log("[Voice] No LLM provider configured — add CEREBRAS_API_KEY, ANTHROPIC_API_KEY, or GROQ_API_KEY");
+    if (!ENV.groqApiKey) {
+      log("[Voice] No Groq LLM configured — add GROQ_API_KEY for live voice");
       try {
         await speak(
           "I'm sorry, this line isn't fully configured right now. Please try again later.",
@@ -1307,8 +1326,6 @@ export function createCallEngine(opts: EngineOptions): void {
       clearLatencyTimer();
     } catch (e: any) {
       log(`[Voice LLM] Failed: ${e?.message ?? e}`);
-      // Rotate to next Cerebras key before retry
-      try { const { rotateCerebrasKey } = await import("../_core/cerebrasKeyManager"); rotateCerebrasKey(); } catch {}
       try {
         await new Promise((r) => setTimeout(r, 350));
         await respondVoiceLlm(epoch, transcript, plan.strictBlock, recoveryPrefixForLlm);
@@ -1359,9 +1376,12 @@ export function createCallEngine(opts: EngineOptions): void {
     const languageNote = callLanguage && callLanguage !== "en"
       ? `\n\nLANGUAGE: Conduct this ENTIRE conversation in ${callLanguage === "es" ? "Spanish" : callLanguage === "fr" ? "French" : callLanguage === "de" ? "German" : callLanguage === "pt" ? "Portuguese" : callLanguage === "it" ? "Italian" : callLanguage === "nl" ? "Dutch" : callLanguage === "pl" ? "Polish" : callLanguage === "ru" ? "Russian" : callLanguage === "zh" ? "Chinese" : callLanguage === "ja" ? "Japanese" : callLanguage === "ko" ? "Korean" : callLanguage}. Respond ONLY in that language.`
       : "";
+    const industryKey = clientConfig.primaryIndustryLabel?.trim() || industry;
+    const pack = resolveDomainPack(industryKey, tenantOverlayFromClientConfig(clientConfig));
+    const domainBlock = formatDomainPackForVoicePrompt(pack);
     const base =
       (strictPrefix ? strictPrefix + "\n\n" : "") +
-      buildVoiceSystemPrompt(policyState, businessName, industry, clientConfig) +
+      buildVoiceSystemPrompt(policyState, businessName, industry, clientConfig, domainBlock) +
       sentimentNote +
       languageNote;
     if (!activeUserId) return base;
@@ -1417,7 +1437,7 @@ export function createCallEngine(opts: EngineOptions): void {
     const silenceLlmCue =
       "Internal cue: The caller has been quiet. Ask ONE short follow-up question directly related to the last thing discussed. Maximum 15 words. Do NOT introduce new topics. Do NOT be enthusiastic. Do NOT say exciting, fantastic, or awesome. Just ask a simple, relevant question. FORBIDDEN phrases: still with me, still there, checking in, just wanted to make sure, can you hear me, on the line, are you there, exciting, fantastic.";
 
-    if (!ENV.cerebrasApiKey) {
+    if (!ENV.groqApiKey) {
       try {
         await speak(
           "What questions do you have so far?",
@@ -1466,9 +1486,6 @@ export function createCallEngine(opts: EngineOptions): void {
       llmOnlyUserMessage?: string;
     }
   ): Promise<void> {
-    const { getCerebrasKey: getKey, rotateCerebrasKey: rotateKey, getCerebrasKeyIndex: getKeyIdx } = await import("../_core/cerebrasKeyManager");
-    const cerebrasKey = getKey();
-
     const blueprintIntent = opts?.blueprintIntentOverride ?? classifyIntent(userTranscript);
     const blueprintBlock = buildApexBlueprintPromptBlock(apexState, blueprintIntent);
     let recoveryHint = "";
@@ -1500,23 +1517,24 @@ export function createCallEngine(opts: EngineOptions): void {
 
     const textForGuard = cue ? "" : userTranscript;
 
-    // ── Cerebras — SOLE LLM provider (OpenAI-compatible API, round-robin keys) ──
-    if (!cerebrasKey) throw new Error("CEREBRAS_API_KEY not configured");
+    // ── Groq — streaming LLM (OpenAI-compatible API) ──
+    const groqKey = ENV.groqApiKey;
+    if (!groqKey) throw new Error("GROQ_API_KEY not configured");
     const { default: OpenAI } = await import("openai");
-    const client = new OpenAI({ apiKey: cerebrasKey, baseURL: "https://api.cerebras.ai/v1" });
+    const client = new OpenAI({ apiKey: groqKey, baseURL: "https://api.groq.com/openai/v1" });
     const stream = await client.chat.completions.create({
-      model: ENV.cerebrasModel,
+      model: ENV.groqModel,
       messages: [{ role: "system", content: prompt }, ...messages],
       max_tokens: ENV.voiceLlmMaxTokens,
       temperature: ENV.voiceLlmTemperature,
       stream: true,
     });
     traceEvent(callId, "llm_stream_start", {
-      provider: "cerebras",
-      model: ENV.cerebrasModel,
+      provider: "groq",
+      model: ENV.groqModel,
     });
     const { clean, full } = await streamToCartesia(openAiTextDeltas(stream), epoch, textForGuard);
-    if (!clean.trim() && !full.trim()) throw new Error("Empty Cerebras response");
+    if (!clean.trim() && !full.trim()) throw new Error("Empty Groq response");
   }
 
   // ── True streaming LLM → TTS pipeline — research-compliant ──────────────────
@@ -2128,6 +2146,10 @@ export function createCallEngine(opts: EngineOptions): void {
               clientConfig = mergeClientConfig({
                 businessName,
                 industry,
+                primaryIndustryLabel: clientConfig.primaryIndustryLabel,
+                voiceIndustryContext: clientConfig.voiceIndustryContext,
+                voiceKeyPhrases: clientConfig.voiceKeyPhrases,
+                voiceRestrictionNotes: clientConfig.voiceRestrictionNotes,
               });
             }
           }

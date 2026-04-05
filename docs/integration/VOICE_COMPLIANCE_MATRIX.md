@@ -24,13 +24,13 @@
 | Requirement | Implementation | A | B | C | D |
 |-------------|----------------|:-:|:-:|:--|:--|
 | Deepgram streaming STT | `realtimeVoiceEngine.ts` → Nova-3 streaming (`connectDeepgram`, `dgWs.send(audio)`); **keyterm** API for boosting (not legacy `keywords`) | ✅ | ⚠️ integration env | Deepgram connect / `speech_final` logs | Call |
-| Cerebras streaming LLM (default voice turn) | `respondVoiceLlm` → OpenAI client @ `https://api.cerebras.ai/v1`, `ENV.cerebrasModel`; `cerebrasKeyManager` round-robin | ✅ | ✅ `guardrails.test.ts` + tsc | `llm_stream_start` `provider: cerebras`, `[ROUTE] Voice LLM: provider=` | Call |
+| Groq streaming LLM (voice turn) | `respondVoiceLlm` → OpenAI client @ `https://api.groq.com/openai/v1`, `ENV.groqModel`, `GROQ_API_KEY` | ✅ | ✅ `guardrails.test.ts` + tsc | `llm_stream_start` `provider: groq`, `[ROUTE] Voice LLM: provider=groq` | Call |
 | Cartesia streaming TTS | `streamToCartesia`, `cartesiaSend`, `speak` | ✅ | ⚠️ | `tts_first_chunk` | Call |
 | ElevenLabs TTS fallback | `ttsService.ts` when Cartesia unavailable / `TTS_PROVIDER` | ✅ | ⚠️ | TTS provider logs | Call |
 | SignalWire telephony | `createCallEngine`, `_core/index.ts` WSS upgrade | ✅ | ⚠️ | SignalWire WS logs | Call |
-| Health: voice realtime ready | `ENV.voiceRealtimeReady` — Deepgram + **any** configured LLM (Cerebras / Anthropic / Groq) + Cartesia or ElevenLabs | ✅ | ⚠️ | `/api/health` → `voiceRealtime` | N/A |
+| Health: voice realtime ready | `ENV.voiceRealtimeReady` — Deepgram + **`GROQ_API_KEY`** + Cartesia or ElevenLabs | ✅ | ⚠️ | `/api/health` → `voiceRealtime` | N/A |
 
-**Note:** The **streaming** implementation in `respondVoiceLlm` requires **`CEREBRAS_API_KEY`** today. `ANTHROPIC_API_KEY` / `GROQ_API_KEY` still contribute to `aiEnabled` / readiness and other routes (`llmRouter.ts`, batch flows). Source of truth for diagrams: [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md).
+**Note:** Live **`respondVoiceLlm`** streaming requires **`GROQ_API_KEY`**. `ANTHROPIC_API_KEY` is optional for `llmRouter` smart routes / fallback. Source of truth: [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md).
 
 ---
 
@@ -165,10 +165,10 @@ pnpm run test:voice      # server/realtime only
 |----------|---------|
 | `DEEPGRAM_API_KEY` | Streaming STT (Nova-3) |
 | `CARTESIA_API_KEY` | Primary streaming TTS |
-| `CEREBRAS_API_KEY` | **Default streaming LLM** for `respondVoiceLlm` (can use multiple keys; round-robin) |
-| `CEREBRAS_MODEL` | e.g. `llama3.1-8b` — see `ENV.cerebrasModel` |
-| `LLM_PROVIDER` | `cerebras` (default), `anthropic`, `groq` — routing / logging; streaming path still expects Cerebras key |
-| `ANTHROPIC_API_KEY` / `GROQ_API_KEY` | Readiness + non-voice / alternate routes |
+| `GROQ_API_KEY` | **Required** streaming LLM for `respondVoiceLlm` |
+| `GROQ_MODEL` | e.g. `llama-3.1-8b-instant` — see `ENV.groqModel` |
+| `LLM_PROVIDER` | `groq` (default), `anthropic` — legacy `cerebras` maps to groq |
+| `ANTHROPIC_API_KEY` | Optional: router smart route + fallback |
 | `ELEVENLABS_API_KEY` | TTS fallback |
 | `VOICE_RESPONSE_MICRO_PAUSE_MS` | Pause after STT final before LLM |
 | `LIVE_TRANSFER_ENABLED` | `true` to allow transfer |
@@ -178,4 +178,4 @@ pnpm run test:voice      # server/realtime only
 
 ---
 
-*Last updated: 2026-04-02 — aligned with `docs/ARCHITECTURE.md` (Cerebras + Deepgram + Cartesia live path) and guardrail tests on `main`.*
+*Last updated: 2026-04-04 — aligned with `docs/ARCHITECTURE.md` (Groq + Deepgram + Cartesia live path).*

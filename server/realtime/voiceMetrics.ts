@@ -2,7 +2,7 @@
  * voiceMetrics.ts — structured latency + phase tracing for Fin-style debugging
  *
  * Production path (canonical): SignalWire bidirectional stream → realtimeVoiceEngine.ts
- * (Deepgram STT → Grok → Cartesia TTS). deepgramVoiceAgent.ts is not wired on the live WS path.
+ * (Deepgram STT → Groq LLM → Cartesia TTS). deepgramVoiceAgent.ts is not wired on the live WS path.
  *
  * External metrics: set VOICE_METRICS_URL to post events to voice-metrics-service.
  */

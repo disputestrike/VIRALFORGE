@@ -23,9 +23,7 @@ Caller → SignalWire → ApexAI Server → WebSocket → AI Pipeline
               → Optional PII redaction (VOICE_DEEPGRAM_REDACT=true)
 
    PROCESSING (text → response text, streaming):
-   transcript → Cerebras llama3.1-8b (OpenAI-compatible, token streaming)
-              → Fallback: Anthropic Claude (ANTHROPIC_API_KEY)
-              → Fallback: Groq (GROQ_API_KEY)
+   transcript → Groq (OpenAI-compatible API, token streaming, GROQ_API_KEY / GROQ_MODEL)
               → Token stream → sentence splitter → clause-by-clause
 
    OUTBOUND (text → speech → caller):
@@ -44,16 +42,16 @@ Caller → SignalWire → ApexAI Server → WebSocket → AI Pipeline
 ## AI Voice Pipeline — Batch/Processing Path
 ```
 Audio buffer → Deepgram REST pre-recorded (nova-3)
-             → LLM Router (Cerebras/Claude/Groq)
+             → LLM Router (Groq / Claude)
              → Cartesia batch REST TTS (sonic-2, pcm_mulaw)
 ```
 
 ## LLM Provider Abstraction
 ```
 Provider selection: LLM_PROVIDER env var
-  cerebras  (default) — llama3.1-8b, 5-key round-robin
-  anthropic           — claude-3-5-haiku (complex reasoning, tool-heavy)
-  groq                — llama-3.1-8b-instant (ultra-low-latency fallback)
+  groq       (default) — llama-3.1-8b-instant (OpenAI-compatible Groq API)
+  anthropic  — claude-3-5-haiku (complex reasoning when ANTHROPIC_API_KEY set)
+  Legacy LLM_PROVIDER=cerebras is treated as groq.
 
 Routing heuristics (chooseRoute):
   "fast"  — short utterances, no objections
@@ -108,15 +106,18 @@ Inbound call to +1XXXXXXXXXX:
 
 ## Industry Pack System
 ```
+Canonical packs + universal fallback:
+  server/_core/services/domainPacks.ts — resolveDomainPack(), curated verticals + any unknown industry
+
+Per-tenant voice domain (Settings UI → users table):
+  primaryIndustryLabel, voiceIndustryContext, voiceKeyPhrases, voiceRestrictionNotes
+
 user_industry_packs:
   userId=1, industry=solar, isPrimary=true
   userId=1, industry=hvac, isPrimary=false (addon)
 
-Active industry drives:
-  - AI conversation context
-  - System prompt
-  - FAQ answers
-  - Booking triggers
+Blueprint mapping doc:
+  docs/integration/UNIVERSAL_BLUEPRINT_CROSSWALK.md
 ```
 
 ## Worker Queue Architecture
@@ -138,11 +139,10 @@ VOICE_DEEPGRAM_MODEL=nova-3           # nova-3 | nova-2-phonecall
 VOICE_DEEPGRAM_REDACT=true            # PII redaction
 
 # LLM
-CEREBRAS_API_KEY (+ _1 through _5)   # Primary: 5-key round-robin
-CEREBRAS_MODEL=llama3.1-8b
-ANTHROPIC_API_KEY                     # Secondary: Claude
-GROQ_API_KEY                          # Tertiary: Groq
-LLM_PROVIDER=cerebras                 # cerebras | anthropic | groq
+GROQ_API_KEY                          # Required for live voice + invokeLLM
+GROQ_MODEL=llama-3.1-8b-instant
+ANTHROPIC_API_KEY                     # Optional: router “smart” route + fallback
+LLM_PROVIDER=groq                     # groq | anthropic (cerebras → groq)
 
 # TTS
 CARTESIA_API_KEY                      # Primary TTS
@@ -158,7 +158,7 @@ RAILWAY_PUBLIC_DOMAIN                 # for SignalWire callbacks
 ## Latency Budget (Target: sub-700ms end-to-end)
 ```
 Deepgram STT:    ~100–200ms (streaming, speech_final)
-Cerebras LLM:    ~150–300ms (first token streaming)
+Groq LLM:        ~150–300ms (first token streaming, model-dependent)
 Cartesia TTS:    ~80–150ms  (first audio chunk)
 Network + μ-law: ~50–100ms
 Total target:    ≤ 700ms

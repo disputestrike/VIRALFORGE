@@ -1264,7 +1264,7 @@ const appointmentsRouter = router({
 
 // ─── User Settings Router ─────────────────────────────────────────────────────
 const settingsRouter = router({
-  /** Lightweight flags so the app can explain missing DATABASE_URL / CEREBRAS_API_KEY without exposing secrets. */
+  /** Lightweight flags so the app can explain missing DATABASE_URL / GROQ_API_KEY without exposing secrets. */
   workspaceHealth: protectedProcedure.query(async () => {
     const inst = await db.getDb();
     return {
@@ -1329,6 +1329,11 @@ const settingsRouter = router({
       voiceProfileId: z.string().optional(),
       gcalBookingUrl: z.string().optional(),
       businessName: z.string().optional(),
+      /** Voice: niche label for any vertical (curated or custom) */
+      primaryIndustryLabel: z.string().max(200).optional().nullable(),
+      voiceIndustryContext: z.string().max(20000).optional().nullable(),
+      voiceKeyPhrases: z.string().max(8000).optional().nullable(),
+      voiceRestrictionNotes: z.string().max(8000).optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db_mod = await import("./db");

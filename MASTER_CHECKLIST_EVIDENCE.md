@@ -26,7 +26,7 @@ Legend: **DB** = Drizzle + `drizzle/*.sql` | **API** = tRPC namespace | **UI** =
 | **1** | Dedicated phone number management | `user_phone_numbers` | `settings.listPhoneNumbers`, `setPhoneNumberActive`; `onboarding.provisionNumber` in `server/routers.ts` | **Settings** — “Dedicated phone numbers” card | **In app.** Live provisioning uses **SignalWire** (Railway env). |
 | **2** | Knowledge base (crawl + documents + embeddings + branding) | `knowledge_bases` (+ `brandProfile`), `knowledge_base_sources`, `knowledge_base_chunks` | `knowledgeBase.*` → `knowledgeBaseRouter.ts`; `knowledgeBaseIngestion.ts` | **Settings** — website, **PDF URL**, **text URL**, **PDF upload**, **brand panel**, search test | **In app:** website **+ og/meta branding** → `brandProfile`; `pdf`/`txt` URLs; **multipart** `/api/knowledge-base/upload`; chunks + voice RAG. **OPENAI_API_KEY** for embeddings. |
 | **3** | Built-in CRM / lead capture | `leads` (+ `createdBy`) | `leads.*` in `server/routers.ts` | **`/leads`** — `Leads.tsx` | **In app.** |
-| **4** | Call summaries | `call_recordings` + `aiSummary` | `callSummaryService` + voice session persist | Voice AI → recordings / summary dialog | **In app** when LLM + session end path runs (**Cerebras** / env). |
+| **4** | Call summaries | `call_recordings` + `aiSummary` | `callSummaryService` + voice session persist | Voice AI → recordings / summary dialog | **In app** when LLM + session end path runs (**Groq** / env). |
 | **5** | Lead scoring | `lead_scoring_rules` | `leadScoring.*` → `server/routers/leadScoringRouter.ts` | **Settings** — “Lead scoring (bonus)” | **In app** — rules on `leads.create`. |
 | **6** | Multiple voice options | `system_config` + `voiceProfiles` catalog | `settings.voiceProfiles`, `settings.update` (`voiceProfileId`) | **Settings** — voice profile selector | **In app** — **Cartesia**. |
 | **7** | Spam filtering | `blocked_phone_numbers` | `phoneBlocklist.*` → `phoneBlocklistRouter.ts` | **Settings** — blocklist | **In app** — inbound filter in `server/_core/index.ts`. |
@@ -88,7 +88,7 @@ Integration env sanity: `node scripts/verify-integrations.mjs`.
 
 ## Third-party credentials (required for *live* vendor features — not “optional features”)
 
-These are **external accounts** you must configure in **Railway** (or your host): SignalWire, `OPENAI_API_KEY`, Deepgram, Cartesia, Cerebras, Resend, Stripe, CRM OAuth apps, RCS carrier, FCM/APNs, social app keys. **The app code exposes the integration points**; keys are your deployment responsibility.
+These are **external accounts** you must configure in **Railway** (or your host): SignalWire, `OPENAI_API_KEY`, Deepgram, Cartesia, Groq, Resend, Stripe, CRM OAuth apps, RCS carrier, FCM/APNs, social app keys. **The app code exposes the integration points**; keys are your deployment responsibility.
 
 ---
 

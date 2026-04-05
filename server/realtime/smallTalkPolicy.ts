@@ -22,6 +22,7 @@ export type SmallTalkClass =
   | "how_are_you"         // "how are you?", "you okay?", "how's it going?"
   | "negative_label"      // "you're not positive", "you sound tired", "are you sad?"
   | "are_you_ai"          // "are you a robot?", "are you real?", "is this AI?"
+  | "meta_capability"     // "why are you so smart", "how do you know all this" — warm, brief, pivot (no lecture)
   | "where_from"          // "where are you from?", "what country?"
   | "your_name"           // "what's your name?", "who am I speaking to?"
   | "light_tease"         // "you're funny", "you sound weird", "interesting..."
@@ -40,6 +41,15 @@ export function classifySmallTalk(text: string): SmallTalkClass {
     /\bare you (artificial|virtual|an? ai|an? bot)\b/i.test(t)
   ) {
     return "are_you_ai";
+  }
+
+  // Meta curiosity about how smart / capable the agent is (before light tease)
+  if (
+    /\b(why (are you|do you) (so )?(smart|clever|good|fast)|how (are you|can you be) (so )?(smart|clever)|how do you know (all )?(this|that|so much)|where did you learn (all )?this|you know (a lot|everything)|that'?s? (really )?smart)\b/i.test(
+      t
+    )
+  ) {
+    return "meta_capability";
   }
 
   // Name questions
@@ -118,6 +128,12 @@ const LIGHT_TEASE_RESPONSES = [
   "You're too kind. What can I do for you?",
 ];
 
+const META_CAPABILITY_RESPONSES = [
+  "Fair question — I'm built to handle typical customer questions clearly and stay on track, kind of like a well-trained rep. What would you like to dig into next?",
+  "I appreciate that — I'm an AI assistant tuned for phone conversations, so I can walk through options and answer common questions smoothly. What's on your mind right now?",
+  "Thanks for asking — I'm here to sound natural and be useful on calls like this, not to show off. What can I help you with next?",
+];
+
 const WEATHER_RESPONSES = [
   "Doing great, thanks! What can I help you with today?",
   "All good! What's on your mind?",
@@ -136,7 +152,12 @@ export function getSmallTalkResponse(
   businessName?: string
 ): string {
   // If we've hit the small-talk limit, force a business pivot
-  if (consecutiveTurns >= MAX_SMALL_TALK_TURNS && stClass !== "are_you_ai" && stClass !== "your_name") {
+  if (
+    consecutiveTurns >= MAX_SMALL_TALK_TURNS &&
+    stClass !== "are_you_ai" &&
+    stClass !== "your_name" &&
+    stClass !== "meta_capability"
+  ) {
     const idx = consecutiveTurns % PIVOT_RESPONSES.length;
     return PIVOT_RESPONSES[idx]!;
   }
@@ -150,6 +171,7 @@ export function getSmallTalkResponse(
     case "your_name":      return pick(NAME_RESPONSES);
     case "where_from":     return pick(WHERE_FROM_RESPONSES);
     case "light_tease":    return pick(LIGHT_TEASE_RESPONSES);
+    case "meta_capability": return pick(META_CAPABILITY_RESPONSES);
     case "weather_day":    return pick(WEATHER_RESPONSES);
     default:               return pick(HOW_ARE_YOU_RESPONSES);
   }

@@ -1,4 +1,9 @@
 /**
+ * @deprecated Not wired on the production `/api/voice-stream` path.
+ * Live calls use `realtimeVoiceEngine.ts` (SignalWire → Deepgram STT → Groq → Cartesia).
+ * This file remains as a reference-only alternate (Deepgram Voice Agent all-in-one).
+ * Do not route new traffic here without an explicit product decision.
+ *
  * deepgramVoiceAgent.ts
  *
  * THE REAL-TIME VOICE ENGINE — replaces voiceRealtimePipeline.ts

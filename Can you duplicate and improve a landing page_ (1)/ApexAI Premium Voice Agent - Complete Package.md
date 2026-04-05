@@ -1,6 +1,6 @@
 # ApexAI Premium Voice Agent - Complete Package
 
-**Using: Cartesia (Audio), Cerebras (LLM), SignalWire (Voice)**
+**Using: Cartesia (Audio), Groq (LLM), SignalWire (Voice)**
 
 ## 🎯 What You're Getting
 

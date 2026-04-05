@@ -1,6 +1,6 @@
 # ApexAI Premium Voice Agent - Integration Guide
 
-**Updated for: Cartesia (Audio), Cerebras (LLM), SignalWire (Voice)**
+**Updated for: Cartesia (Audio), Groq (LLM), SignalWire (Voice)**
 
 ## Overview
 
@@ -74,8 +74,9 @@ OPENAI_API_KEY=sk-...
 CARTESIA_API_KEY=...
 CARTESIA_VOICE_ID=... # Your preferred voice ID
 
-# Cerebras
-CEREBRAS_API_KEY=...
+# Groq
+GROQ_API_KEY=...
+GROQ_MODEL=llama-3.1-8b-instant
 
 # SignalWire
 SIGNALWIRE_PROJECT_ID=...

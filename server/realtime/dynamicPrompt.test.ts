@@ -11,9 +11,10 @@ const baseClient = mergeClientConfig({
 describe("buildVoiceSystemPrompt", () => {
   it("includes business name, industry, mode, and booking policy", () => {
     const s = createCallState();
-    const out = buildVoiceSystemPrompt(s, "Acme Solar", "solar", baseClient);
+    const out = buildVoiceSystemPrompt(s, "Acme Solar", "solar", baseClient, "=== DOMAIN PACK ===\nVERTICAL: Solar");
     expect(out).toContain("Acme Solar");
     expect(out).toContain("solar");
+    expect(out).toContain("DOMAIN PACK");
     expect(out).toContain("CURRENT MODE");
     expect(out).toContain("BOOKING POLICY");
     expect(out).toContain("20008");

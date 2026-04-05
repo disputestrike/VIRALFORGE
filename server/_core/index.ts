@@ -13,7 +13,7 @@ import * as voiceSessionManager from "./services/voiceSessionManager";
 import { apiRateLimiter, aiRateLimiter, authRateLimiter, webhookRateLimiter } from "./middleware/rateLimiter";
 import * as voiceProcessingService from "./services/voiceProcessingService";
 import { startSessionPersistenceInterval } from "./services/voiceSessionManager";
-// Live calls: realtimeVoiceEngine — Deepgram STT → Cerebras (LLM) → Cartesia TTS.
+// Live calls: realtimeVoiceEngine — Deepgram STT → Groq (LLM) → Cartesia TTS.
 import { createCallEngine, notifyVoiceCallTerminalFromHttp } from "../realtime/realtimeVoiceEngine";
 import { getUsRingtoneWav } from "./telephony/usRingtoneWav";
 import { registerWebchatPublicRoutes } from "./webchatPublicApi";
@@ -90,6 +90,10 @@ async function runMigrations() {
           "ALTER TABLE `users` ADD COLUMN `gcalRefreshToken` text NULL",
           "ALTER TABLE `users` ADD COLUMN `gcalBookingUrl` varchar(500) NULL",
           "ALTER TABLE `users` ADD COLUMN `businessName` varchar(200) NULL",
+          "ALTER TABLE `users` ADD COLUMN `primaryIndustryLabel` varchar(200) NULL",
+          "ALTER TABLE `users` ADD COLUMN `voiceIndustryContext` text NULL",
+          "ALTER TABLE `users` ADD COLUMN `voiceKeyPhrases` text NULL",
+          "ALTER TABLE `users` ADD COLUMN `voiceRestrictionNotes` text NULL",
           // ── Create missing feature tables ──
           "CREATE TABLE IF NOT EXISTS `crm_connections` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `provider` varchar(50) NOT NULL, `status` varchar(50) DEFAULT 'pending', `displayName` varchar(255), `externalAccountId` varchar(255), `lastSyncAt` timestamp NULL, `meta` text, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, UNIQUE KEY `uniq_user_provider` (`userId`, `provider`))",
           "CREATE TABLE IF NOT EXISTS `knowledge_bases` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `name` varchar(255) NOT NULL, `description` text, `status` varchar(50) DEFAULT 'training', `trainingProgress` int DEFAULT 0, `brandProfile` text, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
@@ -204,8 +208,12 @@ async function startServer() {
   console.log(`  STT:         ${ENV.sttEnabled ? `✅ Deepgram ready (model=${process.env.VOICE_DEEPGRAM_MODEL ?? "nova-3"})` : "⚠️  disabled (set DEEPGRAM_API_KEY)"}`);
   const activeTts = ENV.elevenLabsApiKey ? `Cartesia+ElevenLabs (TTS_PROVIDER=${ENV.ttsProvider})` : "Cartesia";
   console.log(`  TTS:         ${ENV.ttsEnabled || ENV.elevenLabsApiKey ? `✅ ${activeTts}` : "⚠️  disabled (set CARTESIA_API_KEY or ELEVENLABS_API_KEY)"}`);
-  const activeLlm = ENV.cerebrasApiKey ? `Cerebras (${ENV.cerebrasModel})` : ENV.anthropicApiKey ? "Anthropic Claude" : ENV.groqApiKey ? "Groq" : "NONE";
-  console.log(`  AI/LLM:      ${ENV.aiEnabled ? `✅ ${activeLlm} [LLM_PROVIDER=${ENV.llmProvider}]` : "⚠️  disabled — set CEREBRAS_API_KEY, ANTHROPIC_API_KEY, or GROQ_API_KEY"}`);
+  const activeLlm = ENV.groqApiKey
+    ? `Groq (${ENV.groqModel})`
+    : ENV.anthropicApiKey
+      ? "Anthropic Claude"
+      : "NONE";
+  console.log(`  AI/LLM:      ${ENV.aiEnabled ? `✅ ${activeLlm} [LLM_PROVIDER=${ENV.llmProvider}]` : "⚠️  disabled — set GROQ_API_KEY (and/or ANTHROPIC_API_KEY for router)"}`);
   console.log("");
 
   // INTEGRATION: Initialize job queue and workers
@@ -550,14 +558,14 @@ async function startServer() {
         voice:    ENV.voiceEnabled  ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         voiceRealtime: ENV.voiceRealtimeReady
           ? `ready (Deepgram nova-3 STT + ${ENV.llmProvider} LLM + ${ENV.ttsProvider} TTS)`
-          : "incomplete — set DEEPGRAM_API_KEY + one LLM key (CEREBRAS/ANTHROPIC/GROQ) + one TTS key (CARTESIA/ELEVENLABS)",
+          : "incomplete — set DEEPGRAM_API_KEY + GROQ_API_KEY (live voice) + one TTS key (CARTESIA/ELEVENLABS)",
         sms:      ENV.smsEnabled    ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         email:    ENV.emailEnabled  ? "ready"  : "disabled — add RESEND_API_KEY",
         stripe:   ENV.stripeEnabled ? "ready — webhook POST /api/stripe/webhook" : "disabled — add STRIPE_SECRET_KEY + price ids",
         calendar: (process.env.GCAL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID) ? "ready (Google Calendar)" : "ready (add-to-calendar links)",
         stt:      ENV.sttEnabled    ? `ready (Deepgram ${process.env.VOICE_DEEPGRAM_MODEL ?? "nova-3"})` : "disabled — add DEEPGRAM_API_KEY",
         tts:      (ENV.ttsEnabled || ENV.elevenLabsApiKey) ? `ready (${ENV.ttsProvider})` : "disabled — add CARTESIA_API_KEY or ELEVENLABS_API_KEY",
-        ai:       ENV.aiEnabled ? `ready (${ENV.llmProvider} — ${ENV.cerebrasModel || "configured"})` : "disabled — add CEREBRAS_API_KEY, ANTHROPIC_API_KEY, or GROQ_API_KEY",
+        ai:       ENV.aiEnabled ? `ready (${ENV.llmProvider} — ${ENV.groqApiKey ? ENV.groqModel : "anthropic"})` : "disabled — add GROQ_API_KEY and/or ANTHROPIC_API_KEY",
       },
     });
   });
@@ -1639,7 +1647,7 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
         console.log("[VOICE-WS] connected", { sessionId, leadId, isInbound });
 
         // Live path: SignalWire audio ↔ createCallEngine (realtimeVoiceEngine.ts)
-        // Deepgram = streaming STT only. Cartesia = TTS. Cerebras = LLM.
+        // Deepgram = streaming STT only. Cartesia = TTS. Groq = LLM.
         // (deepgramVoiceAgent.ts = alternate Deepgram Voice Agent API — not wired here.)
         let resolvedUserId: number | undefined;
         let resolvedLeadId: number | undefined;
@@ -1682,18 +1690,29 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
           } catch {}
         }
 
-        // Resolve user language preference
+        // Resolve user language + tenant voice domain fields (per-tenant industry adaptation)
         let callLanguage: string | undefined;
+        let tenantIndustryOverlay: import("./services/domainPacks").TenantIndustryOverlay | undefined;
         if (resolvedUserId) {
           try {
             const db = await import("../db");
             const user = await db.getUserById(resolvedUserId);
-            callLanguage = (user as any)?.language || "en";
+            const u = user as any;
+            callLanguage = u?.language || "en";
+            if ((!businessName || !String(businessName).trim()) && u?.businessName?.trim()) {
+              businessName = u.businessName.trim();
+            }
+            const o: import("./services/domainPacks").TenantIndustryOverlay = {};
+            if (u?.primaryIndustryLabel?.trim()) o.primaryIndustryLabel = u.primaryIndustryLabel.trim();
+            if (u?.voiceIndustryContext?.trim()) o.customIndustryContext = u.voiceIndustryContext.trim();
+            if (u?.voiceKeyPhrases?.trim()) o.voiceKeyPhrases = u.voiceKeyPhrases.trim();
+            if (u?.voiceRestrictionNotes?.trim()) o.voiceRestrictionNotes = u.voiceRestrictionNotes.trim();
+            if (Object.keys(o).length) tenantIndustryOverlay = o;
           } catch {}
         }
 
         // ── NEW: Real-time voice engine ─────────────────────────────────
-        // Deepgram STT → Cerebras → Cartesia TTS
+        // Deepgram STT → Groq → Cartesia TTS
         // Streaming end-to-end, instant barge-in, clean hangup
         createCallEngine({
           sigWs: ws as unknown as import("ws").WebSocket,
@@ -1704,6 +1723,7 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
           industry,
           voiceProfileId,
           language: callLanguage,
+          tenantIndustryOverlay,
         });
 
       });

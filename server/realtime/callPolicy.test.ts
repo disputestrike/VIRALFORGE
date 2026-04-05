@@ -8,6 +8,7 @@ import {
   detectEndCallIntent,
   detectLiveTransferIntent,
   inferUtteranceIntent,
+  blueprintPhaseToConversationMode,
 } from "./callPolicy";
 
 describe("callPolicy", () => {
@@ -49,5 +50,12 @@ describe("callPolicy", () => {
     s = markQuestionAnswered(s);
     s = { ...s, interestConfirmed: true, bookingAllowed: true, questionAnswered: true };
     expect(canOfferBooking(s)).toBe(true);
+  });
+
+  it("maps blueprint conversation phases to runtime modes", () => {
+    expect(blueprintPhaseToConversationMode("discovery")).toBe("qualify");
+    expect(blueprintPhaseToConversationMode("value_delivery")).toBe("recommend");
+    expect(blueprintPhaseToConversationMode("escalation")).toBe("handoff");
+    expect(blueprintPhaseToConversationMode("end")).toBe("close");
   });
 });

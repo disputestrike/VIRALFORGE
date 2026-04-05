@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -76,6 +77,10 @@ export default function Settings() {
   const [selectedVoice, setSelectedVoice] = useState("cartesia-sarah-sales");
   const [saving, setSaving] = useState(false);
   const [savingVoice, setSavingVoice] = useState(false);
+  const [primaryIndustryLabel, setPrimaryIndustryLabel] = useState("");
+  const [voiceIndustryContext, setVoiceIndustryContext] = useState("");
+  const [voiceKeyPhrases, setVoiceKeyPhrases] = useState("");
+  const [voiceRestrictionNotes, setVoiceRestrictionNotes] = useState("");
 
   useEffect(() => {
     if (userSettings) {
@@ -83,6 +88,10 @@ export default function Settings() {
       setLanguage((userSettings as any).language || "en");
       setAgencyName((userSettings as any).agencyName || "");
       setSelectedVoice((userSettings as any).voiceProfileId || "cartesia-sarah-sales");
+      setPrimaryIndustryLabel((userSettings as any).primaryIndustryLabel || "");
+      setVoiceIndustryContext((userSettings as any).voiceIndustryContext || "");
+      setVoiceKeyPhrases((userSettings as any).voiceKeyPhrases || "");
+      setVoiceRestrictionNotes((userSettings as any).voiceRestrictionNotes || "");
     }
   }, [userSettings]);
 
@@ -440,6 +449,10 @@ export default function Settings() {
       transferNumber: transferNumber || undefined,
       language: language as any,
       agencyName: agencyName || undefined,
+      primaryIndustryLabel: primaryIndustryLabel.trim() ? primaryIndustryLabel.trim() : null,
+      voiceIndustryContext: voiceIndustryContext.trim() ? voiceIndustryContext.trim() : null,
+      voiceKeyPhrases: voiceKeyPhrases.trim() ? voiceKeyPhrases.trim() : null,
+      voiceRestrictionNotes: voiceRestrictionNotes.trim() ? voiceRestrictionNotes.trim() : null,
     });
   };
 
@@ -2301,6 +2314,62 @@ export default function Settings() {
                 <CheckCircle2 className="w-3 h-3 text-green-400" /> Currently active
               </span>
             )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── VOICE DOMAIN (any industry) ───────────────────────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Brain className="w-4 h-4 text-primary" />
+            Voice AI — your industry & domain
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Apex adapts to <strong>any</strong> vertical — not only preset industries. Curated packs apply when the label matches
+            (solar, HVAC, etc.); otherwise the universal pack plus your notes below shapes the agent. Saved with{" "}
+            <span className="text-foreground font-medium">Save Settings</span> at the bottom.
+          </p>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Primary industry label (optional)</Label>
+            <Input
+              value={primaryIndustryLabel}
+              onChange={(e) => setPrimaryIndustryLabel(e.target.value)}
+              className="bg-secondary border-border"
+              placeholder="e.g. Commercial refrigeration, Dental lab, Boutique retail"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Used to pick domain guidance and vocabulary when lead/campaign industry is generic or empty.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Domain context for the agent (authoritative)</Label>
+            <Textarea
+              value={voiceIndustryContext}
+              onChange={(e) => setVoiceIndustryContext(e.target.value)}
+              className="bg-secondary border-border min-h-[100px] text-sm"
+              placeholder="What you sell, who calls, typical goals, how appointments work, words to use or avoid..."
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Key phrases & jargon (comma or newline separated)</Label>
+            <Textarea
+              value={voiceKeyPhrases}
+              onChange={(e) => setVoiceKeyPhrases(e.target.value)}
+              className="bg-secondary border-border min-h-[72px] text-sm font-mono text-xs"
+              placeholder="SKU-1000, CoolMax, net-30, ADA compliant"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Restrictions & compliance reminders</Label>
+            <Textarea
+              value={voiceRestrictionNotes}
+              onChange={(e) => setVoiceRestrictionNotes(e.target.value)}
+              className="bg-secondary border-border min-h-[72px] text-sm"
+              placeholder="e.g. Never quote labor rates; licensed tech only for on-site; no HIPAA specifics"
+            />
           </div>
         </CardContent>
       </Card>

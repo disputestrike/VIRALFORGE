@@ -76,16 +76,8 @@ export interface CallState {
   updatedAt: number;
 }
 
-export interface IndustryPack {
-  industry: string;
-  displayName: string;
-  requiredQualificationFields: string[];
-  bookingTriggerConditions: string[];
-  faqAnswers: Record<string, string>;
-  prohibitedClaims: string[];
-  handoffTriggers: string[];
-  systemContext: string; // industry-specific context injected into prompt
-}
+/** @see domainPacks.ts — single canonical shape */
+export type { DomainPack as IndustryPack } from "./domainPacks";
 
 export interface ClientConfig {
   clientId: string;
@@ -99,40 +91,26 @@ export interface ClientConfig {
   agentName: string;
   brandVoice: "professional" | "friendly" | "consultative";
   customFAQ: Record<string, string>;
+  /** Voice/domain: overrides curated vertical label in prompts */
+  primaryIndustryLabel?: string;
+  /** Tenant-authored domain context (any vertical) */
+  voiceIndustryContext?: string;
+  /** Comma/newline terms — brands, jargon */
+  voiceKeyPhrases?: string;
+  /** Extra “never say” / compliance lines */
+  voiceRestrictionNotes?: string;
 }
 
 // ── In-memory store ───────────────────────────────────────────────────────────
 
 const callStates = new Map<string, CallState>();
 
-// ── Industry Packs ────────────────────────────────────────────────────────────
-
-export const INDUSTRY_PACKS: Record<string, IndustryPack> = {
-  solar: {
-    industry: "solar",
-    displayName: "Solar Energy",
-    requiredQualificationFields: ["zipCode", "homeowner", "monthlyElectricBill"],
-    bookingTriggerConditions: ["service_area_confirmed", "interest_confirmed"],
-    faqAnswers: {
-      "how does solar work": "Solar panels convert sunlight into electricity, reducing your utility bill. Most homeowners save $100-200 per month.",
-      "how long does installation take": "Installation typically takes 1-2 days after permits are approved, which takes 2-4 weeks.",
-      "is my house eligible": "Most homes with a south-facing roof and good sun exposure qualify. We can check your specific address.",
-    },
-    prohibitedClaims: ["guaranteed savings without basis", "false tax credit amounts"],
-    handoffTriggers: ["complex financing", "legal questions", "angry caller"],
-    systemContext: "You help homeowners learn about solar energy and schedule free consultations. Key topics: service area, savings, incentives, installation, eligibility.",
-  },
-  general: {
-    industry: "general",
-    displayName: "General",
-    requiredQualificationFields: ["name", "need"],
-    bookingTriggerConditions: ["interest_confirmed"],
-    faqAnswers: {},
-    prohibitedClaims: [],
-    handoffTriggers: ["complex questions", "angry caller"],
-    systemContext: "You are a helpful AI assistant handling inbound calls. Answer questions and help callers with their needs.",
-  },
-};
+export {
+  resolveDomainPack,
+  tenantOverlayFromClientConfig,
+  normalizeIndustryKey,
+  CURATED_DOMAIN_PACKS as INDUSTRY_PACKS,
+} from "./domainPacks";
 
 // ── Factory ───────────────────────────────────────────────────────────────────
 

@@ -14,7 +14,7 @@ function formatMandatoryFaqBlock(client: ClientConfig): string {
 
 const MODE_HINTS: Record<ConversationMode, string> = {
   answer:
-    "Answer the current question FIRST, fully but efficiently. Structure: acknowledge → answer → one clear next step (or one question).",
+    "Answer the current question FIRST with enough substance to sound human (not a one-liner unless they asked yes/no). Structure: brief warm acknowledgment → complete factual answer → ONE closing move: either one question OR a single sentence that offers two spoken options (\"want X or Y?\"). Never sound cold or rushed.",
   clarify:
     "They’re confused or need a replay. Briefly restate the last point in simpler words — no new sales pitch.",
   qualify:
@@ -109,9 +109,16 @@ When asked if you're AI/robot/human:
 - For who / what / when factual questions, name the entity and add at least one concrete detail (role, time period, or one short context sentence).
 - Never answer with a single word unless the caller explicitly asked for just one word.
 
+=== ENGAGEMENT SIGNATURE (sound like a top rep, stay factual) ===
+- When the caller is vague, confused, or says they are not sure why they called: normalize warmly first (e.g. \"No worries — that happens\"), then give a helpful frame and two concrete directions they might mean. Do not sound annoyed or terse.
+- When they contradict themselves or names get tangled: thank them for clarifying, restate what you understood in one line, then answer or ask one focused follow-up. Stay patient.
+- When they change topic or industry mid-call: acknowledge the switch, confirm the new frame in one short line, then continue in the new context. Do not mix old and new scenarios.
+- After a substantive answer, prefer a helpful fork they can answer in one phrase (\"looking for A or B?\") instead of ending dead — still ONE question to the ear.
+- Ground claims in CONFIG FACTS, MANDATORY COMPANY FACTS, and what they actually said. If you do not know, say so and offer what you can do next.
+
 === VOICE STYLE ===
-Tone: calm, direct, warm, professional. Like a knowledgeable colleague on a phone call.
-Structure: brief acknowledgment → direct answer (1-2 sentences) → one question or next step.
+Tone: calm, direct, warm, professional. Like a knowledgeable colleague on a phone call — never stiff or hostile.
+Structure: brief acknowledgment → direct complete answer → one question or next step (compound \"A or B?\" counts as one step).
 Speech: short sentences, natural pauses, no nested clauses, no lists.
 
 NATURAL SPEECH CUES (sparingly — max once per 3 turns):
@@ -120,12 +127,13 @@ NATURAL SPEECH CUES (sparingly — max once per 3 turns):
 
 === DEMO TAKEOVER PROTOCOL ===
 If caller says: "demo", "show me", "how does this work", "can I try", "walk me through", "test it", "roleplay", "pretend", "simulate":
-1. Say: "Perfect — let's do it live right now."
-2. If you know their company and industry, START immediately.
-3. Say: "I'm going to act as I would with a real customer calling your business."
-4. Begin: "Hi, this is Alex from [their company] — how can I help you today?"
-5. Lead every turn: qualify, handle objections, move toward booking.
-6. End with: "That's exactly how I'd handle every call for your business."`;
+1. Sound enthusiastic but professional: e.g. "Perfect — let's run a quick live demo."
+2. If you do NOT have their name or business context yet, ask once in one breath: their name and what kind of business or calls they handle — then continue. If you already have it from the call, skip re-asking.
+3. Explain the game in one short paragraph: they play the customer, you play their front line for [their business], so they see how you handle real inquiries.
+4. Ask "Ready to start?" or "Anything you want in the scenario before we begin?" — wait for assent.
+5. Open the role-play: "Hi, thanks for calling [their business], this is Alex — how can I help you today?"
+6. Every turn: answer fully, stay in character, handle objections and tangents helpfully — same warmth as a top sales or support call.
+7. Close the demo: "That's how I'd handle calls like this for you" and offer one next step (e.g. book, questions, human handoff).`;
 
 /** Additional style and behavioral rules injected alongside the persona. */
 const BEHAVIORAL_HARDENING = `
@@ -142,19 +150,24 @@ export function buildVoiceSystemPrompt(
   state: ConversationPolicyState,
   businessName: string,
   industry: string,
-  client: ClientConfig
+  client: ClientConfig,
+  domainPackBlock?: string
 ): string {
   const bookingLocked = !canOfferBooking(state);
   const bookingRule = bookingLocked
     ? "DO NOT offer appointment times or calendar slots. Answer first; one non-booking next step only."
     : "You may offer specific times only if the caller is ready to book.";
 
+  const domainSection = domainPackBlock?.trim()
+    ? `\n\n${domainPackBlock.trim()}\n\nINDUSTRY_LABEL FOR ADAPTATION: Use the VERTICAL LABEL above; stay within CONFIG FACTS and DOMAIN GUIDANCE.`
+    : "";
+
   return `${CORE_PERSONA}
 
 ${BEHAVIORAL_HARDENING}
 
 BUSINESS: ${businessName}
-INDUSTRY: ${industry}
+INDUSTRY (session): ${industry}${domainSection}
 CURRENT MODE: ${state.mode.toUpperCase()}
 MODE BEHAVIOR: ${MODE_HINTS[state.mode]}
 ACTIVE QUESTION (unanswered — address before anything else): ${state.activeQuestion ?? "none"}

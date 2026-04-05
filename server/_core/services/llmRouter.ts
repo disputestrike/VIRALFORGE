@@ -2,12 +2,12 @@
  * LLM Router — Multi-provider with intelligent routing.
  *
  * Provider selection (LLM_PROVIDER env var):
- *   cerebras  (default) — llama3.1-8b via OpenAI-compatible API, 5-key round-robin
- *   anthropic           — Claude claude-3-5-haiku (complex reasoning, tool-heavy flows)
- *   groq                — llama-3.1-8b-instant (ultra-low-latency fallback)
+ *   groq       (default) — llama-3.1-8b-instant via OpenAI-compatible Groq API
+ *   anthropic  — Claude claude-3-5-haiku (complex reasoning, tool-heavy flows)
+ *
+ * Legacy: LLM_PROVIDER=cerebras is treated as groq (Cerebras removed from codebase).
  *
  * chooseRoute() determines semantic label (fast vs smart) for analytics/logging.
- * The provider itself is selected by LLM_PROVIDER or callsite opts.
  */
 
 import OpenAI from "openai";
@@ -15,7 +15,7 @@ import OpenAI from "openai";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type LLMRoute = "fast" | "smart";
-export type LLMProvider = "cerebras" | "anthropic" | "groq";
+export type LLMProvider = "anthropic" | "groq";
 
 export interface RouterMessage {
   role: "system" | "user" | "assistant";
@@ -29,23 +29,29 @@ export interface LLMResponse {
   provider: LLMProvider;
 }
 
+function normalizeLlmProviderPref(raw: string): LLMProvider | "" {
+  const p = raw.trim().toLowerCase();
+  if (p === "cerebras") return "groq";
+  if (p === "groq" || p === "anthropic") return p as LLMProvider;
+  return "";
+}
+
 function defaultRouterModel(provider: LLMProvider): string {
   if (provider === "anthropic") {
     return (process.env.ANTHROPIC_MODEL || "claude-3-5-haiku-20241022").trim();
   }
-  if (provider === "groq") {
-    return (process.env.GROQ_MODEL || "llama-3.1-8b-instant").trim();
-  }
-  return (process.env.CEREBRAS_MODEL || process.env.LLM_MODEL || "llama3.1-8b").trim();
+  return (process.env.GROQ_MODEL || "llama-3.1-8b-instant").trim();
 }
 
 /** Resolve active LLM provider. Prefers LLM_PROVIDER env, then auto-detects by available keys. */
 function resolveProvider(override?: LLMProvider): LLMProvider {
-  const pref = (override || process.env.LLM_PROVIDER || "").toLowerCase().trim() as LLMProvider;
+  const prefRaw = (override || process.env.LLM_PROVIDER || "").trim();
+  const pref = normalizeLlmProviderPref(prefRaw);
   if (pref === "anthropic" && process.env.ANTHROPIC_API_KEY?.trim()) return "anthropic";
   if (pref === "groq" && process.env.GROQ_API_KEY?.trim()) return "groq";
-  // Default: Cerebras (requires at least one key)
-  return "cerebras";
+  if (process.env.GROQ_API_KEY?.trim()) return "groq";
+  if (process.env.ANTHROPIC_API_KEY?.trim()) return "anthropic";
+  return "groq";
 }
 
 // ── Routing Logic (semantic label only) ───────────────────────────────────────
@@ -83,15 +89,14 @@ export function chooseRoute(
   return "fast";
 }
 
-// ── Cerebras (OpenAI-compatible) ──────────────────────────────────────────────
+// ── Groq (OpenAI-compatible) ──────────────────────────────────────────────────
 
-async function callCerebras(messages: RouterMessage[], maxTokens = 200): Promise<string> {
-  const { getCerebrasKey } = await import("../cerebrasKeyManager");
-  const apiKey = getCerebrasKey();
-  if (!apiKey) throw new Error("CEREBRAS_API_KEY not configured");
+async function callGroq(messages: RouterMessage[], maxTokens = 200): Promise<string> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error("GROQ_API_KEY not configured");
 
-  const client = new OpenAI({ apiKey, baseURL: "https://api.cerebras.ai/v1" });
-  const model = defaultRouterModel("cerebras");
+  const client = new OpenAI({ apiKey, baseURL: "https://api.groq.com/openai/v1" });
+  const model = defaultRouterModel("groq");
 
   const systemMsg = messages.find((m) => m.role === "system")?.content ?? "";
   const chatMessages = messages
@@ -140,33 +145,6 @@ async function callAnthropic(messages: RouterMessage[], maxTokens = 400): Promis
   return (block && "text" in block ? block.text : "").trim();
 }
 
-// ── Groq (OpenAI-compatible) ──────────────────────────────────────────────────
-
-async function callGroq(messages: RouterMessage[], maxTokens = 200): Promise<string> {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) throw new Error("GROQ_API_KEY not configured");
-
-  const client = new OpenAI({ apiKey, baseURL: "https://api.groq.com/openai/v1" });
-  const model = defaultRouterModel("groq");
-
-  const systemMsg = messages.find((m) => m.role === "system")?.content ?? "";
-  const chatMessages = messages
-    .filter((m) => m.role !== "system")
-    .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
-
-  const response = await client.chat.completions.create({
-    model,
-    max_tokens: maxTokens,
-    temperature: 0.3,
-    messages: [
-      ...(systemMsg ? [{ role: "system" as const, content: systemMsg }] : []),
-      ...chatMessages,
-    ],
-  });
-
-  return (response.choices?.[0]?.message?.content ?? "").trim();
-}
-
 // ── Main Router ───────────────────────────────────────────────────────────────
 
 export async function routedLLMCall(
@@ -177,7 +155,6 @@ export async function routedLLMCall(
   providerOverride?: LLMProvider
 ): Promise<LLMResponse> {
   const semanticRoute = chooseRoute(transcript, turnHistory, objectionCount);
-  // For smart routing: prefer anthropic if available (better reasoning), else cerebras
   const wantProvider: LLMProvider =
     providerOverride ??
     (semanticRoute === "smart" && process.env.ANTHROPIC_API_KEY?.trim()
@@ -191,28 +168,22 @@ export async function routedLLMCall(
   try {
     if (provider === "anthropic") {
       text = await callAnthropic(messages, 512);
-    } else if (provider === "groq") {
-      text = await callGroq(messages, 512);
     } else {
-      text = await callCerebras(messages, 512);
+      text = await callGroq(messages, 512);
     }
   } catch (err: any) {
-    // Fallback chain: anthropic → cerebras → groq
     const tried = new Set([provider]);
-    for (const fallback of ["cerebras", "groq", "anthropic"] as LLMProvider[]) {
+    for (const fallback of ["groq", "anthropic"] as LLMProvider[]) {
       if (tried.has(fallback)) continue;
       const hasFallbackKey =
-        fallback === "cerebras"
-          ? Boolean(process.env.CEREBRAS_API_KEY?.trim() || process.env.CEREBRAS_API_KEY_1?.trim())
-          : fallback === "anthropic"
+        fallback === "anthropic"
           ? Boolean(process.env.ANTHROPIC_API_KEY?.trim())
           : Boolean(process.env.GROQ_API_KEY?.trim());
       if (!hasFallbackKey) continue;
       console.warn(`[LLM:Router] ${provider} failed (${err.message}) — falling back to ${fallback}`);
       try {
         if (fallback === "anthropic") text = await callAnthropic(messages, 512);
-        else if (fallback === "groq") text = await callGroq(messages, 512);
-        else text = await callCerebras(messages, 512);
+        else text = await callGroq(messages, 512);
         console.log(`[LLM:${fallback}] fallback success route=${semanticRoute} (${Date.now() - t0}ms)`);
         return {
           text,
@@ -224,7 +195,7 @@ export async function routedLLMCall(
         tried.add(fallback);
       }
     }
-    throw err; // all providers exhausted
+    throw err;
   }
 
   const model = defaultRouterModel(provider);

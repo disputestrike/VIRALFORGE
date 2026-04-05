@@ -88,15 +88,15 @@ export const ENV = {
    * Lower = easier interrupt. Values above 127 are treated as legacy mis-scaled (e.g. 600) and mapped with /5 so they still work.
    */
   voiceBargeInEnergyThreshold: (() => {
-    // Default raised to 110 (was 75) — reduces false triggers from background noise, TV, coughs.
-    // Lower = easier interrupt; raise via VOICE_BARGE_IN_ENERGY_THRESHOLD if callers can't interrupt.
+    // Default 118 — fewer false barge-ins from background noise than 110; lower = easier interrupt.
+    // Raise VOICE_BARGE_IN_ENERGY_THRESHOLD if callers struggle to interrupt; lower if noise still chops TTS.
     const raw =
-      parseInt(process.env.VOICE_BARGE_IN_ENERGY_THRESHOLD || process.env.INTERRUPTION_ENERGY_THRESHOLD || "110", 10) || 110;
+      parseInt(process.env.VOICE_BARGE_IN_ENERGY_THRESHOLD || process.env.INTERRUPTION_ENERGY_THRESHOLD || "118", 10) || 118;
     const scaled = raw > 127 ? Math.round(raw / 5) : raw;
     return Math.max(12, Math.min(125, scaled));
   })(),
   /** Frames of sustained energy required to trigger barge-in (prevents single-frame noise spikes). */
-  voiceBargeInSustainFrames: Math.max(1, Math.min(10, parseInt(process.env.VOICE_BARGE_IN_SUSTAIN_FRAMES ?? "3", 10) || 3)),
+  voiceBargeInSustainFrames: Math.max(1, Math.min(10, parseInt(process.env.VOICE_BARGE_IN_SUSTAIN_FRAMES ?? "4", 10) || 4)),
   /** Deepgram streaming: ms of silence before end-of-turn (lower = faster replies; too low may clip words). */
   // Default raised to 400ms (was 250ms) — prevents noise bursts from prematurely ending speech detection.
   voiceDeepgramEndpointingMs: Math.max(100, Math.min(2000, parseInt(process.env.VOICE_DEEPGRAM_ENDPOINTING_MS ?? "400", 10) || 400)),
@@ -151,16 +151,20 @@ export const ENV = {
   pipedriveClientSecret: process.env.PIPEDRIVE_CLIENT_SECRET ?? "",
   pipedriveRedirectUri: process.env.PIPEDRIVE_REDIRECT_URI ?? "",
 
-  // ── Groq (optional ultra-low-latency LLM fallback) ──────────────────────────
+  // ── Groq (primary LLM: live voice streaming + invokeLLM) ────────────────────
   groqApiKey: (process.env.GROQ_API_KEY ?? "").trim(),
   groqModel: (process.env.GROQ_MODEL ?? "llama-3.1-8b-instant").trim(),
 
   /**
-   * LLM provider selection for voice pipeline.
-   * cerebras (default) | anthropic | groq
-   * The router auto-upgrades to anthropic for "smart" routes when ANTHROPIC_API_KEY is set.
+   * LLM provider selection for routing / logging (batch + voiceRealtimePipeline).
+   * groq (default) | anthropic — legacy `LLM_PROVIDER=cerebras` is treated as groq.
+   * Live SignalWire streaming in `realtimeVoiceEngine` uses Groq only (`GROQ_API_KEY`).
    */
-  llmProvider: (process.env.LLM_PROVIDER ?? "cerebras").trim(),
+  llmProvider: (() => {
+    const p = (process.env.LLM_PROVIDER ?? "groq").trim().toLowerCase();
+    if (p === "cerebras") return "groq";
+    return p;
+  })(),
 
   /**
    * TTS provider selection.
@@ -168,18 +172,6 @@ export const ENV = {
    * Auto-fallback: if primary unavailable, tries the other.
    */
   ttsProvider: (process.env.TTS_PROVIDER ?? "cartesia").trim(),
-
-  // ── Cerebras (primary LLM — 5-key round-robin) ──────────────────────────
-  cerebrasKeys: [
-    (process.env.CEREBRAS_API_KEY ?? process.env.CEREBRAS_API_KEY_1 ?? "").trim(),
-    (process.env.CEREBRAS_API_KEY_2 ?? "").trim(),
-    (process.env.CEREBRAS_API_KEY_3 ?? "").trim(),
-    (process.env.CEREBRAS_API_KEY_4 ?? "").trim(),
-    (process.env.CEREBRAS_API_KEY_5 ?? "").trim(),
-  ].filter(k => k.length > 0),
-  cerebrasModel: (process.env.CEREBRAS_MODEL ?? "llama3.1-8b").trim(),
-  /** Convenience: first valid key (for simple checks) */
-  get cerebrasApiKey(): string { return this.cerebrasKeys[0] ?? ""; },
 
   /** Barge-in: spoken ack only when enabled and heuristics pass (see realtimeVoiceEngine). */
   interruptAckEnabled: process.env.INTERRUPT_ACK_ENABLED !== "false",
@@ -214,10 +206,7 @@ export const ENV = {
   get sttEnabled()    { return this.deepgramApiKey !== ""; },
   /** Live SignalWire streaming voice: requires Deepgram STT + any LLM + any TTS. */
   get voiceRealtimeReady() {
-    const hasLlm =
-      this.cerebrasApiKey !== "" ||
-      this.anthropicApiKey !== "" ||
-      this.groqApiKey !== "";
+    const hasLlm = this.groqApiKey !== "";
     const hasTts =
       this.cartesiaApiKey !== "" ||
       this.elevenLabsApiKey !== "";
@@ -238,10 +227,6 @@ export const ENV = {
   },
   /** AI enabled — true when any LLM provider key is configured. */
   get aiEnabled() {
-    return (
-      this.cerebrasApiKey !== "" ||
-      this.anthropicApiKey !== "" ||
-      this.groqApiKey !== ""
-    );
+    return this.groqApiKey !== "" || this.anthropicApiKey !== "";
   },
 };

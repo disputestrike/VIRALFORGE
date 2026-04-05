@@ -52,6 +52,14 @@ describe("Small Talk Micro-Policy", () => {
     expect(classifySmallTalk("is this automated?")).toBe("are_you_ai");
   });
 
+  it("classifies meta curiosity (smart / how you know) before light tease", () => {
+    expect(classifySmallTalk("why are you so smart?")).toBe("meta_capability");
+    expect(classifySmallTalk("how do you know all this?")).toBe("meta_capability");
+    const r = getSmallTalkResponse("meta_capability", 1);
+    expect(r).toMatch(/built|tuned|AI|assistant|here to/i);
+    expect(r).toMatch(/help|mind|next|what/i);
+  });
+
   it('returns a positive canonical response to "how are you" — never freestyle', () => {
     const stClass = classifySmallTalk("how are you?");
     const response = getSmallTalkResponse(stClass, 1);

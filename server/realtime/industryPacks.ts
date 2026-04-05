@@ -1,6 +1,12 @@
 /**
- * industryPacks.ts — universal engine + per-vertical facts (no solar hardcoded in engine)
+ * Back-compat shim — canonical definitions live in server/_core/services/domainPacks.ts
  */
+
+import {
+  resolveDomainPack,
+  normalizeIndustryKey,
+  type DomainPack,
+} from "../_core/services/domainPacks";
 
 export type IndustryPack = {
   id: string;
@@ -10,52 +16,21 @@ export type IndustryPack = {
   prohibitedClaims: string[];
 };
 
-export const INDUSTRY_PACKS: Record<string, IndustryPack> = {
-  solar: {
-    id: "solar",
-    label: "Solar",
-    qualificationHints: ["monthly electric bill", "homeowner", "roof condition", "utility"],
-    bookingTriggerFields: ["zipCode", "interest"],
-    prohibitedClaims: ["guaranteed savings amount without audit"],
-  },
-  roofing: {
-    id: "roofing",
-    label: "Roofing",
-    qualificationHints: ["storm damage", "roof age", "insurance"],
-    bookingTriggerFields: ["zipCode", "issueType"],
-    prohibitedClaims: ["insurance guarantee"],
-  },
-  hvac: {
-    id: "hvac",
-    label: "HVAC",
-    qualificationHints: ["system age", "urgency", "repair vs replace"],
-    bookingTriggerFields: ["zipCode", "urgency"],
-    prohibitedClaims: [],
-  },
-  insurance: {
-    id: "insurance",
-    label: "Insurance",
-    qualificationHints: ["state", "coverage type", "renewal"],
-    bookingTriggerFields: ["state", "productLine"],
-    prohibitedClaims: ["binding quote without license"],
-  },
-  "real-estate": {
-    id: "real-estate",
-    label: "Real Estate",
-    qualificationHints: ["buy vs sell", "timeline", "area"],
-    bookingTriggerFields: ["intent", "area"],
-    prohibitedClaims: [],
-  },
-  smb: {
-    id: "smb",
-    label: "General SMB",
-    qualificationHints: ["business type", "call volume", "goal"],
-    bookingTriggerFields: ["interest"],
-    prohibitedClaims: [],
-  },
-};
+function toSlim(p: DomainPack): IndustryPack {
+  return {
+    id: p.industry,
+    label: p.displayName,
+    qualificationHints: p.qualificationHints,
+    bookingTriggerFields: p.bookingTriggerConditions,
+    prohibitedClaims: p.prohibitedClaims,
+  };
+}
+
+/** @deprecated Use resolveDomainPack from domainPacks for full pack + tenant overlay */
+export const INDUSTRY_PACKS: Record<string, IndustryPack> = {};
 
 export function getIndustryPack(industryKey: string): IndustryPack {
-  const k = industryKey.toLowerCase().replace(/\s+/g, "-");
-  return INDUSTRY_PACKS[k] ?? INDUSTRY_PACKS.smb;
+  return toSlim(resolveDomainPack(industryKey));
 }
+
+export { normalizeIndustryKey, resolveDomainPack, type DomainPack };

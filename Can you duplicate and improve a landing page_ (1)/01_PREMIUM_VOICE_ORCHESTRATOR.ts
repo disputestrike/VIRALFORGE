@@ -3,7 +3,7 @@
 // ============================================================================
 // The "Best Ever Possible" Voice Agent
 // - Real-time streaming with Cartesia
-// - Fast LLM inference with Cerebras
+// - Fast LLM inference with Groq (OpenAI-compatible)
 // - SignalWire voice integration
 // - Natural conversation with emotion and tone
 // - Context awareness and personalization
@@ -28,9 +28,9 @@ interface CartesiaConfig {
   encoding: string; // "pcm_s16le", "pcm_mulaw"
 }
 
-interface CerebrasConfig {
+interface GroqConfig {
   apiKey: string;
-  modelId: string; // "llama-2-70b" or similar
+  modelId: string; // e.g. llama-3.1-8b-instant
 }
 
 interface SignalWireConfig {
@@ -46,7 +46,7 @@ interface VoiceSettings {
 
 export class PremiumVoiceOrchestrator extends EventEmitter {
   private cartesiaConfig: CartesiaConfig;
-  private cerebrasConfig: CerebrasConfig;
+  private groqConfig: GroqConfig;
   private signalWireConfig: SignalWireConfig;
   private conversationHistory: Array<{
     role: "user" | "assistant";
@@ -62,12 +62,12 @@ export class PremiumVoiceOrchestrator extends EventEmitter {
 
   constructor(
     cartesiaConfig: CartesiaConfig,
-    cerebrasConfig: CerebrasConfig,
+    groqConfig: GroqConfig,
     signalWireConfig: SignalWireConfig
   ) {
     super();
     this.cartesiaConfig = cartesiaConfig;
-    this.cerebrasConfig = cerebrasConfig;
+    this.groqConfig = groqConfig;
     this.signalWireConfig = signalWireConfig;
   }
 
@@ -164,12 +164,12 @@ export class PremiumVoiceOrchestrator extends EventEmitter {
   }
 
   // ========================================================================
-  // RESPONSE GENERATION WITH CEREBRAS
+  // RESPONSE GENERATION WITH GROQ
   // ========================================================================
 
   /**
-   * Generate response using Cerebras for fast inference
-   * WIRE THIS: Replace with your Cerebras API endpoint
+   * Generate response using Groq for fast inference
+   * WIRE THIS: GROQ_API_KEY + https://api.groq.com/openai/v1
    */
   async generateResponse(userMessage: string): Promise<string> {
     try {
@@ -179,11 +179,10 @@ export class PremiumVoiceOrchestrator extends EventEmitter {
         .map((m) => `${m.role}: ${m.content}`)
         .join("\n");
 
-      // WIRE THIS: Use Cerebras API for fast LLM inference
       const response = await axios.post(
-        "https://api.cerebras.ai/v1/chat/completions",
+        "https://api.groq.com/openai/v1/chat/completions",
         {
-          model: this.cerebrasConfig.modelId,
+          model: this.groqConfig.modelId,
           messages: [
             {
               role: "system",
@@ -200,7 +199,7 @@ export class PremiumVoiceOrchestrator extends EventEmitter {
         },
         {
           headers: {
-            Authorization: `Bearer ${this.cerebrasConfig.apiKey}`,
+            Authorization: `Bearer ${this.groqConfig.apiKey}`,
             "Content-Type": "application/json",
           },
           timeout: 5000,
@@ -224,7 +223,7 @@ export class PremiumVoiceOrchestrator extends EventEmitter {
 
       return assistantMessage;
     } catch (error) {
-      console.error("Error generating response with Cerebras:", error);
+      console.error("Error generating response with Groq:", error);
       return "I understand. Tell me more about that.";
     }
   }
@@ -238,9 +237,9 @@ export class PremiumVoiceOrchestrator extends EventEmitter {
   ): Promise<string> {
     try {
       const response = await axios.post(
-        "https://api.cerebras.ai/v1/chat/completions",
+        "https://api.groq.com/openai/v1/chat/completions",
         {
-          model: this.cerebrasConfig.modelId,
+          model: this.groqConfig.modelId,
           messages: [
             {
               role: "system",
@@ -256,7 +255,7 @@ export class PremiumVoiceOrchestrator extends EventEmitter {
         },
         {
           headers: {
-            Authorization: `Bearer ${this.cerebrasConfig.apiKey}`,
+            Authorization: `Bearer ${this.groqConfig.apiKey}`,
             "Content-Type": "application/json",
           },
           timeout: 5000,

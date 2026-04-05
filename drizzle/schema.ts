@@ -36,6 +36,14 @@ export const users = mysqlTable("users", {
   gcalRefreshToken: text("gcalRefreshToken"),
   gcalBookingUrl: varchar("gcalBookingUrl", { length: 500 }),
   businessName: varchar("businessName", { length: 200 }),
+  /** Voice prompts: display vertical when niche ≠ curated slug (e.g. "Dental implant lab") */
+  primaryIndustryLabel: varchar("primaryIndustryLabel", { length: 200 }),
+  /** Tenant-authored domain context for any industry */
+  voiceIndustryContext: text("voiceIndustryContext"),
+  /** Comma/newline-separated jargon, brands, SKUs for recognition + speech */
+  voiceKeyPhrases: text("voiceKeyPhrases"),
+  /** Extra compliance / never-say lines */
+  voiceRestrictionNotes: text("voiceRestrictionNotes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

@@ -203,3 +203,34 @@ export function markQuestionAnswered(state: ConversationPolicyState): Conversati
   if (updated.mode === "answer") updated.mode = "qualify";
   return updated;
 }
+
+// ── Universal blueprint phase names → runtime ConversationMode (SignalWire + Groq path) ──
+
+export type BlueprintConversationPhase =
+  | "greeting"
+  | "discovery"
+  | "qualification"
+  | "value_delivery"
+  | "demo"
+  | "objection_handling"
+  | "support"
+  | "booking"
+  | "escalation"
+  | "end";
+
+/** Maps spec “modes” to the modes implemented in `dynamicPrompt` / strict controller. */
+export function blueprintPhaseToConversationMode(phase: BlueprintConversationPhase): ConversationMode {
+  const m: Record<BlueprintConversationPhase, ConversationMode> = {
+    greeting: "answer",
+    discovery: "qualify",
+    qualification: "qualify",
+    value_delivery: "recommend",
+    demo: "recommend",
+    objection_handling: "recommend",
+    support: "answer",
+    booking: "book",
+    escalation: "handoff",
+    end: "close",
+  };
+  return m[phase];
+}

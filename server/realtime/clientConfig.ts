@@ -11,6 +11,12 @@ export type ClientConfig = {
   bookingUrl?: string;
   transferNumber?: string;
   voiceProfileId?: string;
+  /** Display label for vertical (e.g. custom niche not in curated list) */
+  primaryIndustryLabel?: string;
+  /** Free-form tenant domain notes — authoritative in voice prompts */
+  voiceIndustryContext?: string;
+  voiceKeyPhrases?: string;
+  voiceRestrictionNotes?: string;
 };
 
 export const DEFAULT_CLIENT: ClientConfig = {

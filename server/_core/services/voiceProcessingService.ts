@@ -82,7 +82,7 @@ export async function processAudioMessage(
     })),
   ];
 
-  // ── Step 4: LLM (Cerebras primary / Claude or Groq fallback) ────────────────────────────
+  // ── Step 4: LLM (Groq default / Anthropic for smart route when configured) ───────────────
   let aiResponse = "How can I help you today?";
   let action = "follow_up";
   const t1 = Date.now();

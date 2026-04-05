@@ -39,7 +39,7 @@ The **Part 1 table below** (rows **1–20**) is the same numbering as your **“
 
 - **You do not need magic words.** Say **“continue from CROSSWALK Part 1 row N”** (or “next open row”) so each session picks up without re-explaining.
 - **One session cannot run forever** (context and tooling limits). For maximum throughput: **prioritize 2–3 rows**, accept the diff, then **“continue”** with the next rows.
-- **For “live / real / integrated”:** apply **SQL migrations** on Railway (`0011` … **`0021_ab_testing.sql`** for prompt A/B tables, plus `voice_metric_events` if used), set **env vars** per [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) (Deepgram STT, **Cerebras** default LLM on `realtimeVoiceEngine`, Cartesia TTS, SignalWire; Anthropic/Groq optional for routing and readiness). Treat **🔗 rows** as merge work until they show **✅** here.
+- **For “live / real / integrated”:** apply **SQL migrations** on Railway (`0011` … **`0021_ab_testing.sql`** for prompt A/B tables, plus `voice_metric_events` if used), set **env vars** per [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) (Deepgram STT, **Groq** LLM on `realtimeVoiceEngine`, Cartesia TTS, SignalWire; optional Anthropic for router). Treat **🔗 rows** as merge work until they show **✅** here.
 - **Optional but powerful:** paste **Railway `DATABASE_URL`** only if you want migration verification from this environment (security: rotate after).
 
 ---
@@ -54,7 +54,7 @@ The **Part 1 table below** (rows **1–20**) is the same numbering as your **“
 | ✅ | Zapier **emit** — `call.completed` (after recording persist), `lead.created` (after lead create); respects Settings filter |
 | ✅ | Call summary UI — `aiSummary` on Voice AI → Call Recordings + Summary dialog |
 
-**Stack focus (product — live calls):** SignalWire → **Deepgram Nova-3** (STT) → **Cerebras** `llama3.1-8b` (default streaming LLM in `respondVoiceLlm`) → **Cartesia** (TTS), with **ElevenLabs** TTS fallback and **Anthropic / Groq** available for `LLM_PROVIDER` / readiness per [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md). Authoritative live path diagram: same file. Compliance tiers: [`VOICE_COMPLIANCE_MATRIX.md`](./VOICE_COMPLIANCE_MATRIX.md). **Staging checklist:** [`internal/VOICE_STAGING_CHECKLIST.md`](../internal/VOICE_STAGING_CHECKLIST.md).
+**Stack focus (product — live calls):** SignalWire → **Deepgram Nova-3** (STT) → **Groq** (default streaming LLM in `respondVoiceLlm`) → **Cartesia** (TTS), with **ElevenLabs** TTS fallback and optional **Anthropic** for `llmRouter` per [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md). Authoritative live path diagram: same file. Compliance tiers: [`VOICE_COMPLIANCE_MATRIX.md`](./VOICE_COMPLIANCE_MATRIX.md). **Staging checklist:** [`internal/VOICE_STAGING_CHECKLIST.md`](../internal/VOICE_STAGING_CHECKLIST.md).
 
 ---
 
@@ -65,7 +65,7 @@ The **Part 1 table below** (rows **1–20**) is the same numbering as your **“
 | 1 | Dedicated phone **management** | 1 | ✅ `user_phone_numbers` (Drizzle + migrations) | ✅ `onboarding.provisionNumber` (persists row) + `settings.listPhoneNumbers` / `setPhoneNumberActive` | ✅ Settings card | Voice + inbound SMS resolve tenant via `getUserIdByPhoneNumber(To)` |
 | 2 | Knowledge base (crawl + docs) | 1 | ✅ `knowledge_bases` + sources + chunks (0011) | ✅ `knowledgeBase.*` | ✅ Settings | Run migration; list/create/addWebsite |
 | 3 | Built-in CRM / lead capture | 1 | ✅ `leads` + tenant `createdBy` | ✅ `leads.*` | ✅ `/leads` (`Leads.tsx`) | Optional bundle `crm_leads` merge later — core CRM list/create/import in app |
-| 4 | Call summaries | 1 | ✅ `call_recordings.aiSummary` | ✅ `callSummaryService` + persist in `voiceSessionManager` | ✅ Voice AI recordings | Cerebras/LLM summary on session end |
+| 4 | Call summaries | 1 | ✅ `call_recordings.aiSummary` | ✅ `callSummaryService` + persist in `voiceSessionManager` | ✅ Voice AI recordings | Groq/LLM summary on session end |
 | 5 | Lead scoring | 1 | ✅ `lead_scoring_rules` (0012) | ✅ `leadScoring.list` / `upsert` | ✅ Settings | Default rules → bonus on `leads.create` via `leadScoringApply` |
 | 6 | Multiple voice options | 1 | ✅ `system_config` key `user:{id}:voice_profile_id` + catalog `VOICE_PROFILES` in `voiceProfiles.ts` | ✅ `settings.voiceProfiles` + `settings.update` (`setUserVoiceProfileId`) | ✅ Settings | Cartesia voices; per-tenant selection persisted |
 | 7 | Spam filtering | 2 | ✅ `blocked_phone_numbers` (0013) | ✅ `phoneBlocklist.*` | ✅ Settings | Inbound reject + toll-free heuristics (`index.ts`) |
@@ -134,7 +134,7 @@ Use this table to prove **DB + API + UI** for each shipped row. Paths are relati
 |------|----------|
 | Dynamic system prompt | `server/realtime/dynamicPrompt.ts` — `buildVoiceSystemPrompt`; `server/realtime/dynamicPrompt.test.ts` |
 | Live pipeline | `server/_core/services/voiceRealtimePipeline.ts` — barge-in, STT, transfer |
-| Streaming voice brain | `server/realtime/realtimeVoiceEngine.ts` — Deepgram → `respondVoiceLlm` (Cerebras stream) → `streamToCartesia`; `responseGuardrails.ts` + `guardrails.test.ts` |
+| Streaming voice brain | `server/realtime/realtimeVoiceEngine.ts` — Deepgram → `respondVoiceLlm` (Groq stream) → `streamToCartesia`; `responseGuardrails.ts` + `guardrails.test.ts` |
 | TTS | `server/_core/services/ttsService.ts` — Cartesia + ElevenLabs path; `server/tts.service.test.ts` |
 | Tunables | `server/_core/env.ts` — `voiceBargeInEnergyThreshold`, `voiceDeepgramEndpointingMs`, `voiceTtsSpeedScale`, `voiceResponseMicroPauseMs`, `LLM_PROVIDER`, etc. |
 
@@ -144,7 +144,7 @@ Use this table to prove **DB + API + UI** for each shipped row. Paths are relati
 
 | Module | File (reference) | Merge target | Status |
 |--------|------------------|--------------|--------|
-| Orchestrator | `01_PREMIUM_VOICE_ORCHESTRATOR.ts` | `server/realtime/realtimeVoiceEngine.ts` (Cerebras + tools + session) | ♻️ |
+| Orchestrator | `01_PREMIUM_VOICE_ORCHESTRATOR.ts` | `server/realtime/realtimeVoiceEngine.ts` (Groq + tools + session) | ♻️ |
 | Dynamic prompt | `02_DYNAMIC_PROMPT_ENGINE.ts` | `server/realtime/dynamicPrompt.ts` (`buildVoiceSystemPrompt`) + `callPolicy` | ✅ |
 | Sentiment | `03_SENTIMENT_AND_EMOTION.ts` | `sentimentInfer.ts` + `voiceSessionManager` persist; `sentimentInfer.test.ts` | ♻️ Heuristic aggregate; bundle = per-turn API |
 | Realtime streaming | `04_REALTIME_STREAMING.ts` | `voiceRealtimePipeline` + Deepgram/Cartesia streaming | ♻️ |
@@ -205,6 +205,6 @@ Landing lists **platform capabilities** (Part 1 mirror) at anchor `#capabilities
 | 2026-04-01 | `sentimentInfer`: dedupe POS keyword; skip counting `interested` when phrase `not interested`; tests for weighted negatives; Part 2 Sentiment row cites `sentimentInfer.test.ts` | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` (206 tests) |
 | 2026-04-01 | `webhooksRouter.test.ts` — `omniAiLead` open vs `WEBHOOK_SECRET` + `x-webhook-secret`; Part 3 Webhooks row cites test file | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` (209 tests) |
 | 2026-04-01 | Stripe: `stripeBilling.ts` + `POST /api/stripe/webhook` + `saas.billing.*` + Settings billing card; users stripe columns; CROSSWALK evidence index + Part 1 file map | `pnpm exec tsc --noEmit`; `pnpm exec vitest run` |
-| 2026-04-02 | Repo aligned to `main`: guardrails, `llmRouter` / Cerebras keys, `0021` A/B tables, expanded `crmRouter`, `.github/workflows/ci.yml`. CROSSWALK + `VOICE_COMPLIANCE_MATRIX` stack text synced to `ARCHITECTURE.md`. | `pnpm run verify` — **309** tests; `pnpm run build`; `docs/internal/VOICE_STAGING_CHECKLIST.md` added |
+| 2026-04-02 | Repo aligned to `main`: guardrails, `llmRouter`, `0021` A/B tables, expanded `crmRouter`, `.github/workflows/ci.yml`. CROSSWALK + `VOICE_COMPLIANCE_MATRIX` stack text synced to `ARCHITECTURE.md`. | `pnpm run verify` — **309** tests; `pnpm run build`; `docs/internal/VOICE_STAGING_CHECKLIST.md` added |
 | 2026-04-04 | Settings UI for voice prompt A/B (`abTesting.*`); `verify:integrations` / `verify:integrations:strict`; CI informational integration report; `CRM_STAGING_CHECKLIST.md`. | `pnpm run verify:quick` — **309** tests; `pnpm run check` |
 | 2026-04-04 | A/B: select variant by **SignalWire callSid** before greeting; `recordAbTestResult` with duration + dedupe; CRM **Connect** opens OAuth; **Leads** cloud menu → `crm.syncLead`; workflow `release-verify.yml` (manual strict). | `pnpm run verify:quick` |

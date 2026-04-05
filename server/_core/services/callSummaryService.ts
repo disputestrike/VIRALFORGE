@@ -1,5 +1,5 @@
 /**
- * Post-call summaries (Claude via invokeLLM) — stored on call_recordings.aiSummary.
+ * Post-call summaries (Groq via invokeLLM) — stored on call_recordings.aiSummary.
  */
 import { invokeLLM } from "../llm";
 

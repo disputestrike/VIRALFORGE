@@ -11,12 +11,13 @@ import {
   ClientConfig,
   ResponseMode,
   UtteranceIntent,
-  INDUSTRY_PACKS,
   determineResponseMode,
   setActiveQuestion,
   resolveActiveQuestion,
   canOfferBooking,
   addTurn,
+  resolveDomainPack,
+  tenantOverlayFromClientConfig,
 } from "./callStateManager";
 
 export type ConversationAction =
@@ -88,7 +89,7 @@ export async function generateResponse(
 ): Promise<ConversationResult> {
   const classificationStartedAt = Date.now();
 
-  const pack = INDUSTRY_PACKS[state.industry] || INDUSTRY_PACKS.general;
+  const pack = resolveDomainPack(state.industry, tenantOverlayFromClientConfig(clientConfig));
   const businessName = clientConfig?.businessName || "ApexAI";
   const agentName = clientConfig?.agentName || "Alex";
 

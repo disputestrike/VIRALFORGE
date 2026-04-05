@@ -35,11 +35,11 @@ Record counts in [`CROSSWALK.md`](../integration/CROSSWALK.md) verification log 
 Minimum for **live** streaming path per [`ARCHITECTURE.md`](../ARCHITECTURE.md):
 
 - [ ] `DEEPGRAM_API_KEY`
-- [ ] `CEREBRAS_API_KEY` (streaming `respondVoiceLlm` uses Cerebras OpenAI-compatible API)
+- [ ] `GROQ_API_KEY` (streaming `respondVoiceLlm` uses Groq OpenAI-compatible API)
 - [ ] `CARTESIA_API_KEY`
 - [ ] SignalWire: `SIGNALWIRE_PROJECT_ID`, `SIGNALWIRE_TOKEN`, space URL, from-number as configured
 
-Optional / fallback: `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `ELEVENLABS_API_KEY`, `LLM_PROVIDER`.
+Optional / fallback: `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`, `LLM_PROVIDER`, `GROQ_MODEL`.
 
 ---
 
