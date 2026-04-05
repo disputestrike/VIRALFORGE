@@ -9,6 +9,11 @@ This document maps the **Universal Conversational System** blueprint to **what A
 | Twilio Programmable Voice + Media Streams | **SignalWire** — TwiML-compatible `<Connect><Stream>` to `wss://…/api/voice-stream` |
 | X-Twilio-Signature | SignalWire-compatible request signing (middleware name retained for Twilio-compatible API) |
 
+## Opening line (perceptible quality)
+
+- First spoken TTS line is **rotated** per session (`server/realtime/voiceOpeningLines.ts`) and can mention the resolved **vertical label** for tenant lines — not a single frozen inbound script.
+- System prompt instructs the LLM **not** to repeat that audio greeting on the caller’s first real utterance (`dynamicPrompt.ts`).
+
 ## Audio pipeline
 
 | Module | Apex |

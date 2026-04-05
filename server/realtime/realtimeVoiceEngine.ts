@@ -49,7 +49,8 @@ import {
   onProcessing,
   type TurnControllerState,
 } from "./turnController";
-import { mergeClientConfig, type ClientConfig } from "./clientConfig";
+import { isApexPlatformDemoLine, mergeClientConfig, type ClientConfig } from "./clientConfig";
+import { selectInboundGreeting, selectOutboundIntro } from "./voiceOpeningLines";
 import type { TenantIndustryOverlay } from "../_core/services/domainPacks";
 import {
   formatDomainPackForVoicePrompt,
@@ -2210,11 +2211,27 @@ export function createCallEngine(opts: EngineOptions): void {
               ? `This call may be recorded for quality assurance. ${scriptLine}`
               : scriptLine;
           } else if (isOutbound) {
+            const intro = selectOutboundIntro({
+              businessName: bname,
+              sessionId: activeSessionId || callId,
+            });
             greeting = sessGreet?.complianceRecordingPending
-              ? `This call may be recorded for quality assurance. Hi, this is Alex from ${bname} — do you have a quick moment?`
-              : `Hi, this is Alex from ${bname} — do you have a quick moment?`;
+              ? `This call may be recorded for quality assurance. ${intro}`
+              : intro;
           } else {
-            greeting = `Hi, thanks for calling ${bname}, this is Alex. How can I help you today?`;
+            const vertical = resolveDomainPack(
+              clientConfig.primaryIndustryLabel || industry,
+              tenantOverlayFromClientConfig(clientConfig)
+            ).displayName;
+            let base = selectInboundGreeting({
+              businessName: bname,
+              sessionId: activeSessionId || callId,
+              industryLabel: vertical,
+              apexProductLine: isApexPlatformDemoLine(bname),
+            });
+            greeting = sessGreet?.complianceRecordingPending
+              ? `This call may be recorded for quality assurance. ${base}`
+              : base;
           }
           await speak(greeting, generationEpoch);
           if (

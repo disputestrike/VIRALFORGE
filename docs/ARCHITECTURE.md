@@ -36,6 +36,9 @@ Caller → SignalWire → ApexAI Server → WebSocket → AI Pipeline
    Inbound μ-law energy > threshold → cancel Cartesia context
    → clear SignalWire buffer → new generation epoch
 
+   OPENING LINE:
+   Inbound/outbound first TTS line is chosen from rotated templates (`voiceOpeningLines.ts`) keyed by session + vertical label — not one frozen “thanks for calling…” string. LLM prompt forbids duplicating that audio greeting on turn one.
+
 6. End-of-call: finalize session, persist to MySQL, notify owner
 ```
 
