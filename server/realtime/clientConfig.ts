@@ -19,6 +19,15 @@ export type ClientConfig = {
   voiceRestrictionNotes?: string;
 };
 
+/** True only for ApexAI's own demo/sales line — not "Apex Roofing" etc. */
+export function isApexPlatformDemoLine(businessName: string): boolean {
+  const compact = businessName.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (compact === "apexai") return true;
+  const t = businessName.trim().toLowerCase();
+  if (t === "apex ai" || t === "apex a i") return true;
+  return /^apex\s+a\s+i$/i.test(businessName.trim());
+}
+
 export const DEFAULT_CLIENT: ClientConfig = {
   businessName: "Apex A I",
   industry: "AI phone agent platform for revenue-driven businesses",
@@ -48,10 +57,17 @@ export const DEFAULT_CLIENT: ClientConfig = {
 };
 
 export function mergeClientConfig(partial?: Partial<ClientConfig>): ClientConfig {
-  return {
+  const merged: ClientConfig = {
     ...DEFAULT_CLIENT,
     ...partial,
-    faqAnswers: { ...DEFAULT_CLIENT.faqAnswers, ...partial?.faqAnswers },
     serviceAreas: partial?.serviceAreas?.length ? partial.serviceAreas : DEFAULT_CLIENT.serviceAreas,
   };
+  const name = merged.businessName;
+  // Tenant calls must NOT inherit canned ApexAI product FAQs — that caused every customer to sound like our sales deck.
+  if (isApexPlatformDemoLine(name)) {
+    merged.faqAnswers = { ...DEFAULT_CLIENT.faqAnswers, ...partial?.faqAnswers };
+  } else {
+    merged.faqAnswers = { ...(partial?.faqAnswers ?? {}) };
+  }
+  return merged;
 }

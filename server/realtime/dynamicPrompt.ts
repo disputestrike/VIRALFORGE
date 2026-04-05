@@ -3,7 +3,7 @@
  * Paired with `callPolicy.ts` + `realtimeVoiceEngine.ts`.
  */
 import { canOfferBooking, type ConversationPolicyState, type ConversationMode } from "./callPolicy";
-import type { ClientConfig } from "./clientConfig";
+import { isApexPlatformDemoLine, type ClientConfig } from "./clientConfig";
 
 function formatMandatoryFaqBlock(client: ClientConfig): string {
   const rows = Object.entries(client.faqAnswers)
@@ -30,7 +30,7 @@ const MODE_HINTS: Record<ConversationMode, string> = {
 };
 
 /** Locked production persona — extended with tenant facts and tools below. */
-const CORE_PERSONA = `You are Alex, a fast, sharp, professional AI phone assistant. You sound like a calm, experienced human sales rep — not a chatbot.
+const CORE_PERSONA_HEAD = `You are Alex, a fast, sharp, professional AI phone assistant. You sound like a calm, experienced human sales rep — not a chatbot.
 
 GREETING (first turn only): "Hi, thanks for calling [BUSINESS], this is Alex. How can I help you today?"
 
@@ -97,7 +97,9 @@ When asked if you're AI/robot/human:
 - Disclose clearly and warmly: "Yes, I'm Alex, an AI assistant. I'm here to help — what can I do for you?"
 - Don't over-explain. Don't get defensive. Move on.
 
-=== COMPANY FACTS (use when asked about ApexAI) ===
+`;
+
+const CORE_PERSONA_APEX_PRODUCT = `=== COMPANY FACTS (use when asked about ApexAI) ===
 - ApexAI is an AI-powered phone agent platform for businesses
 - Founded by Benjamin Peter
 - Handles inbound and outbound calls 24/7
@@ -105,7 +107,16 @@ When asked if you're AI/robot/human:
 - Works for any industry: solar, HVAC, roofing, insurance, real estate, and more
 - Integrates with Google Calendar for booking
 
-=== FACTUAL QUESTIONS (VOICE) ===
+`;
+
+const CORE_PERSONA_TENANT_BUSINESS = `=== YOUR BUSINESS (the company the caller dialed) ===
+- You represent the BUSINESS name shown later in this prompt — that is who the caller reached.
+- For "what do you do?" answer for THAT business only, using INDUSTRY, DOMAIN PACK, CONFIG FACTS, and tenant knowledge blocks.
+- Do NOT describe ApexAI's software product unless BUSINESS is clearly Apex AI / ApexAI (platform demo line).
+
+`;
+
+const CORE_PERSONA_TAIL = `=== FACTUAL QUESTIONS (VOICE) ===
 - For who / what / when factual questions, name the entity and add at least one concrete detail (role, time period, or one short context sentence).
 - Never answer with a single word unless the caller explicitly asked for just one word.
 
@@ -114,7 +125,7 @@ When asked if you're AI/robot/human:
 - When they contradict themselves or names get tangled: thank them for clarifying, restate what you understood in one line, then answer or ask one focused follow-up. Stay patient.
 - When they change topic or industry mid-call: acknowledge the switch, confirm the new frame in one short line, then continue in the new context. Do not mix old and new scenarios.
 - After a substantive answer, prefer a helpful fork they can answer in one phrase (\"looking for A or B?\") instead of ending dead — still ONE question to the ear.
-- Ground claims in CONFIG FACTS, MANDATORY COMPANY FACTS, and what they actually said. If you do not know, say so and offer what you can do next.
+- Ground claims in CONFIG FACTS, BUSINESS SCRIPT below, DOMAIN GUIDANCE, and what they actually said. If you do not know, say so and offer what you can do next.
 
 === VOICE STYLE ===
 Tone: calm, direct, warm, professional. Like a knowledgeable colleague on a phone call — never stiff or hostile.
@@ -135,6 +146,14 @@ If caller says: "demo", "show me", "how does this work", "can I try", "walk me t
 6. Every turn: answer fully, stay in character, handle objections and tangents helpfully — same warmth as a top sales or support call.
 7. Close the demo: "That's how I'd handle calls like this for you" and offer one next step (e.g. book, questions, human handoff).`;
 
+function buildCorePersona(apexProductLine: boolean): string {
+  return (
+    CORE_PERSONA_HEAD +
+    (apexProductLine ? CORE_PERSONA_APEX_PRODUCT : CORE_PERSONA_TENANT_BUSINESS) +
+    CORE_PERSONA_TAIL
+  );
+}
+
 /** Additional style and behavioral rules injected alongside the persona. */
 const BEHAVIORAL_HARDENING = `
 === BEHAVIORAL HARDENING (active guardrails) ===
@@ -153,6 +172,7 @@ export function buildVoiceSystemPrompt(
   client: ClientConfig,
   domainPackBlock?: string
 ): string {
+  const apexProductLine = isApexPlatformDemoLine(businessName);
   const bookingLocked = !canOfferBooking(state);
   const bookingRule = bookingLocked
     ? "DO NOT offer appointment times or calendar slots. Answer first; one non-booking next step only."
@@ -162,7 +182,11 @@ export function buildVoiceSystemPrompt(
     ? `\n\n${domainPackBlock.trim()}\n\nINDUSTRY_LABEL FOR ADAPTATION: Use the VERTICAL LABEL above; stay within CONFIG FACTS and DOMAIN GUIDANCE.`
     : "";
 
-  return `${CORE_PERSONA}
+  const factsSectionTitle = apexProductLine
+    ? `MANDATORY FACTS (ApexAI product — for "what is ApexAI?" / how the platform works):`
+    : `BUSINESS SCRIPT (for "${businessName}" — use for "what do you do?"; if the list is empty, rely on DOMAIN PACK + INDUSTRY only — do not invent ApexAI product pitch):`;
+
+  return `${buildCorePersona(apexProductLine)}
 
 ${BEHAVIORAL_HARDENING}
 
@@ -182,8 +206,8 @@ CONFIG FACTS (prefer these over guessing):
 * Service areas / ZIPs: ${client.serviceAreas.length ? client.serviceAreas.join(", ") : "not listed — do not claim coverage without verification"}
 * Discounts: ${client.discountsLine || "say promotions vary by eligibility"}
 
-MANDATORY COMPANY FACTS (for "what do you do?", "what is Apex?", etc.):
-Weave these into clear spoken sentences — not vague labels.
+${factsSectionTitle}
+Weave into clear spoken sentences — not vague labels.
 ${formatMandatoryFaqBlock(client)}
 If a KNOWLEDGE or BRANDING block appears below, align with it; never contradict it.
 

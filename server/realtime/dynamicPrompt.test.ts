@@ -4,6 +4,8 @@ import { buildVoiceSystemPrompt } from "./dynamicPrompt";
 import { mergeClientConfig } from "./clientConfig";
 
 const baseClient = mergeClientConfig({
+  businessName: "Acme Solar",
+  industry: "solar",
   serviceAreas: ["20008"],
   discountsLine: "10% off first visit",
 });
@@ -18,7 +20,9 @@ describe("buildVoiceSystemPrompt", () => {
     expect(out).toContain("CURRENT MODE");
     expect(out).toContain("BOOKING POLICY");
     expect(out).toContain("20008");
-    expect(out).toContain("MANDATORY COMPANY FACTS");
+    expect(out).toContain("BUSINESS SCRIPT");
+    expect(out).not.toContain("MANDATORY FACTS (ApexAI product");
+    expect(out).toContain("YOUR BUSINESS (the company the caller dialed)");
     expect(out).toContain("fast, sharp, professional AI phone assistant");
     expect(out).toContain("acknowledge");
     expect(out).toContain("answer");
