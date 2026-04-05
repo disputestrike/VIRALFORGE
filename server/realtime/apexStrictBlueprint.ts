@@ -463,7 +463,15 @@ export function routeBlueprintDeterministic(
   state: ApexControllerState,
   transcript: string,
   now: Date,
-  opts: { bookingScoreThreshold: number }
+  opts: {
+    bookingScoreThreshold: number;
+    /**
+     * When the voice stack has a real LLM (Groq/xAI), skip canned one-liners for
+     * “what do you do / tell me about” and “how does this help” so `dynamicPrompt`
+     * + domain packs control substance and pace instead of COPY_BLOCKS only.
+     */
+    preferLlmForExplainAndBenefit?: boolean;
+  }
 ): { next: ApexControllerState; route: BlueprintDeterministicResult } {
   let next: ApexControllerState = { ...state };
   const t = transcript.trim();
@@ -619,6 +627,9 @@ export function routeBlueprintDeterministic(
 
   if (bucket === "core_explain") {
     next = { ...next, lastUserIntent: "core_explain", answered: false, lastQuestion: t };
+    if (opts.preferLlmForExplainAndBenefit) {
+      return { next, route: { kind: "none" } };
+    }
     return {
       next,
       route: { kind: "speak", text: COPY_BLOCKS.core_explain, markAnswered: true },
@@ -627,6 +638,9 @@ export function routeBlueprintDeterministic(
 
   if (bucket === "benefit") {
     next = { ...next, lastUserIntent: "benefit", answered: false, lastQuestion: t };
+    if (opts.preferLlmForExplainAndBenefit) {
+      return { next, route: { kind: "none" } };
+    }
     return {
       next,
       route: { kind: "speak", text: COPY_BLOCKS.benefit, markAnswered: true },

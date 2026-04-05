@@ -115,6 +115,23 @@ export type VoiceFinalizeOpts = {
   outcome?: VoiceOutcome;
 };
 
+/** Caller-safe copy when Deepgram / Groq / TTS env is missing (not “wrong number”). */
+const VOICE_STACK_UNAVAILABLE_MSG =
+  "Thanks for calling. Our automated assistant isn’t available on this line at the moment. Please try again later, or reach us another way.";
+
+/** Which env vars are missing for live voice (see ENV.voiceRealtimeReady). */
+function voiceStackMissingEnvVars(): string[] {
+  const m: string[] = [];
+  if (!(ENV.deepgramApiKey ?? "").trim()) m.push("DEEPGRAM_API_KEY");
+  if (!ENV.voiceLlmConfigured) {
+    m.push(ENV.llmProvider === "xai" ? "XAI_API_KEY (LLM_PROVIDER=xai)" : "GROQ_API_KEY");
+  }
+  if (!(ENV.cartesiaApiKey ?? "").trim() && !(ENV.elevenLabsApiKey ?? "").trim()) {
+    m.push("CARTESIA_API_KEY or ELEVENLABS_API_KEY");
+  }
+  return m;
+}
+
 const enginesByCallSid = new Map<string, { finalize: (opts: VoiceFinalizeOpts) => Promise<void> }>();
 
 function mapCallStatusToOutcome(status: string): VoiceOutcome | undefined {
@@ -1144,6 +1161,7 @@ export function createCallEngine(opts: EngineOptions): void {
     const nowBp = new Date();
     const bpRoute = routeBlueprintDeterministic(apexState, transcript, nowBp, {
       bookingScoreThreshold: ENV.bookingScoreThreshold,
+      preferLlmForExplainAndBenefit: ENV.voiceLlmConfigured,
     });
     apexState = bpRoute.next;
     let recoveryPrefixForLlm = false;
@@ -1156,6 +1174,18 @@ export function createCallEngine(opts: EngineOptions): void {
     }
 
     if (bpRoute.route.kind === "speak_then_llm") {
+      if (!ENV.voiceRealtimeReady) {
+        appendHistory("user", transcript);
+        const missing = voiceStackMissingEnvVars();
+        log(
+          `[Voice] speak_then_llm blocked — voiceRealtimeReady=false (${missing.join(", ")})`
+        );
+        try {
+          await speak(VOICE_STACK_UNAVAILABLE_MSG, epoch);
+        } catch {}
+        traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+        return;
+      }
       appendHistory("user", transcript);
       await speak(bpRoute.route.prefix, epoch);
       recoveryPrefixForLlm = true;
@@ -1275,20 +1305,21 @@ export function createCallEngine(opts: EngineOptions): void {
 
     const reprompt =
       "I didn't quite catch that—could you say that again in a few words?";
-    const activeProvider = ENV.llmProvider || "groq";
+    const activeProvider = ENV.llmProvider === "xai" ? "xai" : "groq";
+    const activeModel = ENV.llmProvider === "xai" ? ENV.xaiModel : ENV.groqModel;
     traceEvent(callId, "llm_route", {
       path: activeProvider,
-      model: ENV.groqModel,
+      model: activeModel,
     });
-    log(`[ROUTE] Voice LLM: provider=groq (streaming) model=${ENV.groqModel}`);
+    log(`[ROUTE] Voice LLM: provider=${activeProvider} (streaming) model=${activeModel}`);
 
-    if (!ENV.groqApiKey) {
-      log("[Voice] No Groq LLM configured — add GROQ_API_KEY for live voice");
+    if (!ENV.voiceRealtimeReady) {
+      const missing = voiceStackMissingEnvVars();
+      log(
+        `[Voice] voiceRealtimeReady=false — set on host: ${missing.join(", ")}. (Groq: GROQ_API_KEY; xAI: XAI_API_KEY + LLM_PROVIDER=xai.)`
+      );
       try {
-        await speak(
-          "I'm sorry, this line isn't fully configured right now. Please try again later.",
-          epoch
-        );
+        await speak(VOICE_STACK_UNAVAILABLE_MSG, epoch);
       } catch {}
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
       return;
@@ -1438,13 +1469,8 @@ export function createCallEngine(opts: EngineOptions): void {
     const silenceLlmCue =
       "Internal cue: The caller has been quiet. Ask ONE short follow-up question directly related to the last thing discussed. Maximum 15 words. Do NOT introduce new topics. Do NOT be enthusiastic. Do NOT say exciting, fantastic, or awesome. Just ask a simple, relevant question. FORBIDDEN phrases: still with me, still there, checking in, just wanted to make sure, can you hear me, on the line, are you there, exciting, fantastic.";
 
-    if (!ENV.groqApiKey) {
-      try {
-        await speak(
-          "What questions do you have so far?",
-          epoch
-        );
-      } catch {}
+    if (!ENV.voiceLlmConfigured) {
+      log("[VOICE] Silence reengage skipped — no voice LLM (set GROQ_API_KEY or LLM_PROVIDER=xai + XAI_API_KEY)");
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
       return;
     }
@@ -1518,24 +1544,29 @@ export function createCallEngine(opts: EngineOptions): void {
 
     const textForGuard = cue ? "" : userTranscript;
 
-    // ── Groq — streaming LLM (OpenAI-compatible API) ──
-    const groqKey = ENV.groqApiKey;
-    if (!groqKey) throw new Error("GROQ_API_KEY not configured");
+    // ── Groq or xAI — streaming LLM (OpenAI-compatible chat/completions) ──
+    const useXai = ENV.llmProvider === "xai";
+    const apiKey = useXai ? ENV.xaiApiKey : ENV.groqApiKey;
+    if (!apiKey) {
+      throw new Error(useXai ? "XAI_API_KEY not configured" : "GROQ_API_KEY not configured");
+    }
+    const baseURL = useXai ? ENV.xaiBaseUrl : "https://api.groq.com/openai/v1";
+    const model = useXai ? ENV.xaiModel : ENV.groqModel;
     const { default: OpenAI } = await import("openai");
-    const client = new OpenAI({ apiKey: groqKey, baseURL: "https://api.groq.com/openai/v1" });
+    const client = new OpenAI({ apiKey, baseURL });
     const stream = await client.chat.completions.create({
-      model: ENV.groqModel,
+      model,
       messages: [{ role: "system", content: prompt }, ...messages],
       max_tokens: ENV.voiceLlmMaxTokens,
       temperature: ENV.voiceLlmTemperature,
       stream: true,
     });
     traceEvent(callId, "llm_stream_start", {
-      provider: "groq",
-      model: ENV.groqModel,
+      provider: useXai ? "xai" : "groq",
+      model,
     });
     const { clean, full } = await streamToCartesia(openAiTextDeltas(stream), epoch, textForGuard);
-    if (!clean.trim() && !full.trim()) throw new Error("Empty Groq response");
+    if (!clean.trim() && !full.trim()) throw new Error("Empty LLM response");
   }
 
   // ── True streaming LLM → TTS pipeline — research-compliant ──────────────────
@@ -2200,6 +2231,23 @@ export function createCallEngine(opts: EngineOptions): void {
         await new Promise((r) => setTimeout(r, 200));
         if (!isEnded && !greetingPlayed) {
           greetingPlayed = true;
+          if (!ENV.voiceRealtimeReady) {
+            const missing = voiceStackMissingEnvVars();
+            log(
+              `[Voice] voiceRealtimeReady=false — set on host: ${missing.join(", ")}. (Groq: GROQ_API_KEY; xAI: XAI_API_KEY + LLM_PROVIDER=xai.)`
+            );
+            traceEvent(callId, "voice_stack_unready", { missing: missing.join("|") });
+            try {
+              await speak(VOICE_STACK_UNAVAILABLE_MSG, generationEpoch);
+            } catch {}
+            traceEvent(callId, "greeting_sent");
+            log("[GREETING] Sent (voice stack unavailable)");
+            setTimeout(() => {
+              greetingDone = true;
+              log("[GREETING] Barge-in enabled");
+            }, 2500);
+            return;
+          }
           const sessGreet = activeSessionId ? voiceSessionManager.getSession(activeSessionId) : null;
           const outboundScript = sessGreet?.outboundScript?.trim();
           const isOutbound = sessGreet?.callDirection === "outbound";

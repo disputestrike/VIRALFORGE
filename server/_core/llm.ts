@@ -1,6 +1,7 @@
 /**
- * LLM — Groq (OpenAI-compatible API).
- * Set GROQ_API_KEY. Model: GROQ_MODEL or default llama-3.1-8b-instant.
+ * LLM — Groq or xAI Grok (OpenAI-compatible chat/completions).
+ * Groq: GROQ_API_KEY, GROQ_MODEL
+ * xAI:  LLM_PROVIDER=xai, XAI_API_KEY, XAI_MODEL, optional XAI_BASE_URL (default https://api.x.ai/v1)
  */
 
 import OpenAI from "openai";
@@ -29,8 +30,17 @@ export type InvokeResult = {
   }>;
 };
 
-/** True when Groq is configured (scripts, AI search, templates, summaries, etc.). */
+function llmProviderNorm(): string {
+  const p = (process.env.LLM_PROVIDER ?? "groq").trim().toLowerCase();
+  if (p === "cerebras") return "groq";
+  if (p === "grok") return "xai";
+  return p;
+}
+
+/** True when invokeLLM() can run for the current LLM_PROVIDER + keys. */
 export function isLlmConfigured(): boolean {
+  const p = llmProviderNorm();
+  if (p === "xai") return Boolean((process.env.XAI_API_KEY ?? "").trim());
   return Boolean((process.env.GROQ_API_KEY ?? "").trim());
 }
 
@@ -38,10 +48,12 @@ function makeGroqClient(apiKey: string): OpenAI {
   return new OpenAI({ apiKey, baseURL: "https://api.groq.com/openai/v1" });
 }
 
-export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  const apiKey = (process.env.GROQ_API_KEY ?? "").trim();
-  if (!apiKey) throw new Error("GROQ_API_KEY not configured");
+function makeXaiClient(apiKey: string, baseUrl: string): OpenAI {
+  return new OpenAI({ apiKey, baseURL: baseUrl });
+}
 
+export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
+  const provider = llmProviderNorm();
   const maxTokens = Math.min(
     params.maxTokens ?? parseInt(process.env.LLM_MAX_TOKENS || "2048", 10),
     4096
@@ -61,18 +73,59 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
         }))
       : [{ role: "user" as const, content: "Hello" }];
 
-  const model = (params.model || process.env.GROQ_MODEL || "llama-3.1-8b-instant").trim();
+  const apiMessages = [
+    ...(systemPrompt?.trim() ? [{ role: "system" as const, content: systemPrompt }] : []),
+    ...messages,
+  ];
 
+  if (provider === "xai") {
+    const apiKey = (process.env.XAI_API_KEY ?? "").trim();
+    if (!apiKey) throw new Error("XAI_API_KEY not configured (set LLM_PROVIDER=xai and XAI_API_KEY)");
+    const baseUrl = (process.env.XAI_BASE_URL ?? "https://api.x.ai/v1").replace(/\/$/, "");
+    const model = (params.model || process.env.XAI_MODEL || "grok-3-latest").trim();
+    const client = makeXaiClient(apiKey, baseUrl);
+    const run = () =>
+      client.chat.completions.create({
+        model,
+        max_tokens: Math.max(64, maxTokens),
+        messages: apiMessages,
+      });
+    try {
+      const response = await run();
+      const textContent = response.choices?.[0]?.message?.content ?? "";
+      return {
+        choices: [{ message: { role: "assistant", content: textContent } }],
+      };
+    } catch (e: any) {
+      if (
+        e?.status === 429 ||
+        e?.message?.includes("429") ||
+        e?.message?.includes("rate") ||
+        e?.message?.includes("too_many_requests")
+      ) {
+        console.warn("[xAI] Rate limit — retrying once after short delay");
+        await new Promise((r) => setTimeout(r, 600));
+        const response = await run();
+        const textContent = response.choices?.[0]?.message?.content ?? "";
+        return {
+          choices: [{ message: { role: "assistant", content: textContent } }],
+        };
+      }
+      throw e;
+    }
+  }
+
+  const apiKey = (process.env.GROQ_API_KEY ?? "").trim();
+  if (!apiKey) throw new Error("GROQ_API_KEY not configured");
+
+  const model = (params.model || process.env.GROQ_MODEL || "llama-3.1-8b-instant").trim();
   const client = makeGroqClient(apiKey);
 
   const run = () =>
     client.chat.completions.create({
       model,
       max_tokens: Math.max(64, maxTokens),
-      messages: [
-        ...(systemPrompt?.trim() ? [{ role: "system" as const, content: systemPrompt }] : []),
-        ...messages,
-      ],
+      messages: apiMessages,
     });
 
   try {

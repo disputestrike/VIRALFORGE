@@ -86,7 +86,8 @@ export type VoiceTracePhase =
   | "tts_first_clause_streaming"
   | "tts_clause"
   | "latency_budget_exceeded"
-  | "ab_variant";
+  | "ab_variant"
+  | "voice_stack_unready";
 
 const starts = new Map<string, number>();
 

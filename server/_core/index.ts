@@ -208,12 +208,19 @@ async function startServer() {
   console.log(`  STT:         ${ENV.sttEnabled ? `✅ Deepgram ready (model=${process.env.VOICE_DEEPGRAM_MODEL ?? "nova-3"})` : "⚠️  disabled (set DEEPGRAM_API_KEY)"}`);
   const activeTts = ENV.elevenLabsApiKey ? `Cartesia+ElevenLabs (TTS_PROVIDER=${ENV.ttsProvider})` : "Cartesia";
   console.log(`  TTS:         ${ENV.ttsEnabled || ENV.elevenLabsApiKey ? `✅ ${activeTts}` : "⚠️  disabled (set CARTESIA_API_KEY or ELEVENLABS_API_KEY)"}`);
-  const activeLlm = ENV.groqApiKey
-    ? `Groq (${ENV.groqModel})`
-    : ENV.anthropicApiKey
-      ? "Anthropic Claude"
-      : "NONE";
-  console.log(`  AI/LLM:      ${ENV.aiEnabled ? `✅ ${activeLlm} [LLM_PROVIDER=${ENV.llmProvider}]` : "⚠️  disabled — set GROQ_API_KEY (and/or ANTHROPIC_API_KEY for router)"}`);
+  const activeLlm =
+    ENV.llmProvider === "xai" && ENV.xaiApiKey
+      ? `xAI (${ENV.xaiModel})`
+      : ENV.groqApiKey
+        ? `Groq (${ENV.groqModel})`
+        : ENV.anthropicApiKey
+          ? "Anthropic Claude"
+          : ENV.xaiApiKey
+            ? `xAI (${ENV.xaiModel})`
+            : "NONE";
+  console.log(
+    `  AI/LLM:      ${ENV.aiEnabled ? `✅ ${activeLlm} [LLM_PROVIDER=${ENV.llmProvider}]` : "⚠️  disabled — set GROQ_API_KEY and/or XAI_API_KEY (LLM_PROVIDER=xai) and/or ANTHROPIC_API_KEY"}`
+  );
   console.log("");
 
   // INTEGRATION: Initialize job queue and workers
@@ -558,14 +565,16 @@ async function startServer() {
         voice:    ENV.voiceEnabled  ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         voiceRealtime: ENV.voiceRealtimeReady
           ? `ready (Deepgram nova-3 STT + ${ENV.llmProvider} LLM + ${ENV.ttsProvider} TTS)`
-          : "incomplete — set DEEPGRAM_API_KEY + GROQ_API_KEY (live voice) + one TTS key (CARTESIA/ELEVENLABS)",
+          : "incomplete — set DEEPGRAM_API_KEY + GROQ_API_KEY or (XAI_API_KEY + LLM_PROVIDER=xai) + one TTS key (CARTESIA/ELEVENLABS)",
         sms:      ENV.smsEnabled    ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         email:    ENV.emailEnabled  ? "ready"  : "disabled — add RESEND_API_KEY",
         stripe:   ENV.stripeEnabled ? "ready — webhook POST /api/stripe/webhook" : "disabled — add STRIPE_SECRET_KEY + price ids",
         calendar: (process.env.GCAL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID) ? "ready (Google Calendar)" : "ready (add-to-calendar links)",
         stt:      ENV.sttEnabled    ? `ready (Deepgram ${process.env.VOICE_DEEPGRAM_MODEL ?? "nova-3"})` : "disabled — add DEEPGRAM_API_KEY",
         tts:      (ENV.ttsEnabled || ENV.elevenLabsApiKey) ? `ready (${ENV.ttsProvider})` : "disabled — add CARTESIA_API_KEY or ELEVENLABS_API_KEY",
-        ai:       ENV.aiEnabled ? `ready (${ENV.llmProvider} — ${ENV.groqApiKey ? ENV.groqModel : "anthropic"})` : "disabled — add GROQ_API_KEY and/or ANTHROPIC_API_KEY",
+        ai:       ENV.aiEnabled
+          ? `ready (${ENV.llmProvider} — ${ENV.llmProvider === "xai" ? ENV.xaiModel : ENV.groqApiKey ? ENV.groqModel : "anthropic"})`
+          : "disabled — add GROQ_API_KEY and/or XAI_API_KEY (LLM_PROVIDER=xai) and/or ANTHROPIC_API_KEY",
       },
     });
   });

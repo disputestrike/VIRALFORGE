@@ -64,6 +64,24 @@ describe("routeBlueprintDeterministic", () => {
       throw new Error("booking should not fire under skepticism latch without explicit intent");
     }
   });
+
+  it("defers core_explain to LLM when preferLlmForExplainAndBenefit", () => {
+    const s = createApexControllerState();
+    const r = routeBlueprintDeterministic(s, "tell me about ApexAI", new Date(), {
+      bookingScoreThreshold: 0.65,
+      preferLlmForExplainAndBenefit: true,
+    });
+    expect(r.route.kind).toBe("none");
+  });
+
+  it("keeps canned core_explain when LLM not preferred", () => {
+    const s = createApexControllerState();
+    const r = routeBlueprintDeterministic(s, "what do you do", new Date(), {
+      bookingScoreThreshold: 0.65,
+    });
+    expect(r.route.kind).toBe("speak");
+    if (r.route.kind === "speak") expect(r.route.text.length).toBeGreaterThan(20);
+  });
 });
 
 describe("canEnterBooking", () => {

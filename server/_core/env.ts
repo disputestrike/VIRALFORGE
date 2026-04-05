@@ -155,14 +155,20 @@ export const ENV = {
   groqApiKey: (process.env.GROQ_API_KEY ?? "").trim(),
   groqModel: (process.env.GROQ_MODEL ?? "llama-3.1-8b-instant").trim(),
 
+  // ── xAI Grok (OpenAI-compatible chat/completions at api.x.ai) ───────────────
+  xaiApiKey: (process.env.XAI_API_KEY ?? "").trim(),
+  xaiModel: (process.env.XAI_MODEL ?? "grok-3-latest").trim(),
+  xaiBaseUrl: (process.env.XAI_BASE_URL ?? "https://api.x.ai/v1").replace(/\/$/, ""),
+
   /**
    * LLM provider selection for routing / logging (batch + voiceRealtimePipeline).
-   * groq (default) | anthropic — legacy `LLM_PROVIDER=cerebras` is treated as groq.
-   * Live SignalWire streaming in `realtimeVoiceEngine` uses Groq only (`GROQ_API_KEY`).
+   * groq (default) | xai | grok (alias for xai) | anthropic — legacy `LLM_PROVIDER=cerebras` → groq.
+   * Live voice: Groq (`GROQ_API_KEY`) or xAI (`XAI_API_KEY` + `LLM_PROVIDER=xai`).
    */
   llmProvider: (() => {
     const p = (process.env.LLM_PROVIDER ?? "groq").trim().toLowerCase();
     if (p === "cerebras") return "groq";
+    if (p === "grok") return "xai";
     return p;
   })(),
 
@@ -204,13 +210,17 @@ export const ENV = {
   get emailEnabled()  { return this.resendApiKey !== ""; },
   get ttsEnabled()    { return (process.env.CARTESIA_API_KEY ?? "").trim() !== ""; },
   get sttEnabled()    { return this.deepgramApiKey !== ""; },
-  /** Live SignalWire streaming voice: requires Deepgram STT + any LLM + any TTS. */
+  /** True when the configured voice LLM provider has an API key (Groq vs xAI). */
+  get voiceLlmConfigured() {
+    if (this.llmProvider === "xai") return this.xaiApiKey !== "";
+    return this.groqApiKey !== "";
+  },
+  /** Live SignalWire streaming voice: requires Deepgram STT + voice LLM + any TTS. */
   get voiceRealtimeReady() {
-    const hasLlm = this.groqApiKey !== "";
     const hasTts =
       this.cartesiaApiKey !== "" ||
       this.elevenLabsApiKey !== "";
-    return this.deepgramApiKey !== "" && hasLlm && hasTts;
+    return this.deepgramApiKey !== "" && this.voiceLlmConfigured && hasTts;
   },
   /** When true and a transfer target exists (user profile or env), live voice may transfer via SignalWire. */
   liveTransferEnabled: process.env.LIVE_TRANSFER_ENABLED === "true",
@@ -227,6 +237,6 @@ export const ENV = {
   },
   /** AI enabled — true when any LLM provider key is configured. */
   get aiEnabled() {
-    return this.groqApiKey !== "" || this.anthropicApiKey !== "";
+    return this.groqApiKey !== "" || this.xaiApiKey !== "" || this.anthropicApiKey !== "";
   },
 };
