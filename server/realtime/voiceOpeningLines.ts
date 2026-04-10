@@ -54,10 +54,10 @@ function tenantOpeners(businessName: string, industryHint?: string): string[] {
 function apexPlatformOpeners(businessName: string): string[] {
   const b = businessName.trim() || "ApexAI";
   return [
-    `Hi — thanks for calling ${b}. This is Alex. What would you like to know or get done today?`,
-    `${b}, Alex speaking. I can answer product questions or set up next steps — what works for you?`,
-    `Thanks for reaching ${b}. I'm Alex. Tell me what you're trying to solve on the phone, and we'll go from there.`,
-    `You've got ${b} — Alex here. Are you exploring how the AI phone agent works, or already a customer?`,
+    `Hi, thanks for calling ${b}. This is Alex. What would you like to know today?`,
+    `${b}, Alex speaking. What can I help you with today?`,
+    `Thanks for calling ${b}. I'm Alex. How can I help?`,
+    `Hi, this is Alex with ${b}. What would you like to go over today?`,
   ];
 }
 

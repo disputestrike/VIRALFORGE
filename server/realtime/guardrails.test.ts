@@ -36,6 +36,14 @@ describe("Small Talk Micro-Policy", () => {
     expect(classifySmallTalk("how's everything going?")).toBe("how_are_you");
   });
 
+  it('classifies repeated "hello?" as a dead-air check, not a new product question', () => {
+    expect(classifySmallTalk("Hello?")).toBe("hello_check");
+    expect(classifySmallTalk("Hello? Hello? Hello?")).toBe("hello_check");
+    const response = getSmallTalkResponse("hello_check", 1);
+    expect(response).toMatch(/i'?m here|with you|go ahead/i);
+    expect(response).not.toMatch(/apexai is|books appointments|outbound/i);
+  });
+
   it('classifies negative labels correctly', () => {
     expect(classifySmallTalk("you're not positive, why?")).toBe("negative_label");
     expect(classifySmallTalk("you sound tired")).toBe("negative_label");

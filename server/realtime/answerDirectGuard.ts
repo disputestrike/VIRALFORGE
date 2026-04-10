@@ -213,6 +213,10 @@ export function postProcessAssistantResponse(
     }
   }
 
+  if (intent === "core_explain") {
+    text = clampSentences(text, 2);
+  }
+
   text = clampSentences(text, MAX_SENTENCES);
   return { text, strippedFollowUp, askedFollowupBeforeAnswer, answerInsufficient };
 }

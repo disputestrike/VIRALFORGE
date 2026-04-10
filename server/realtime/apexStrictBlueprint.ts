@@ -8,11 +8,11 @@
 export const USER_ALWAYS_WINS_THE_TURN = true;
 
 /** After Deepgram speech_final, wait this long before treating utterance as final (true end-of-turn). */
-// Raised to 600ms (was 400ms) — gives more time to catch trailing words, reduces noise false-finals.
-export const FINAL_SILENCE_DEBOUNCE_MS = 600;
+// Keep within the validated hangover band while relying on faster endpointing and tighter prompts for sharpness.
+export const FINAL_SILENCE_DEBOUNCE_MS = 500;
 
-/** Post-process clamp for spoken replies (voice). Raised from 3 → 4 so factual / how-it-works answers can breathe. */
-export const MAX_SENTENCES = 4;
+/** Post-process clamp for spoken replies (voice). Elite phone answers should stay compact. */
+export const MAX_SENTENCES = 3;
 export const MAX_FOLLOW_UP_QUESTIONS = 1;
 export const TARGET_MAX_SPOKEN_MS = 6000;
 

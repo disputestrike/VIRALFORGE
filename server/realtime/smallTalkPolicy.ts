@@ -19,6 +19,7 @@
 export const MAX_SMALL_TALK_TURNS = 2;
 
 export type SmallTalkClass =
+  | "hello_check"         // "hello?", repeated hello when caller thinks line is dead
   | "how_are_you"         // "how are you?", "you okay?", "how's it going?"
   | "negative_label"      // "you're not positive", "you sound tired", "are you sad?"
   | "are_you_ai"          // "are you a robot?", "are you real?", "is this AI?"
@@ -32,6 +33,10 @@ export type SmallTalkClass =
 /** Detect the class of small-talk in a user utterance. Returns 'none' if not small talk. */
 export function classifySmallTalk(text: string): SmallTalkClass {
   const t = text.toLowerCase().trim();
+
+  if (/^(hello[?.!,\s]*){1,6}$/.test(t) || /^(hi[?.!,\s]*){1,6}$/.test(t)) {
+    return "hello_check";
+  }
 
   // Self-identity / AI disclosure (highest priority)
   if (
@@ -96,8 +101,14 @@ export function isPureSmallTalk(text: string): boolean {
 
 const HOW_ARE_YOU_RESPONSES = [
   "I'm doing great, thanks for asking! What can I help you with today?",
-  "Doing well and ready to help. What's on your mind?",
+  "Doing well, thanks. What can I help you with today?",
   "All good on my end — what can I do for you today?",
+];
+
+const HELLO_CHECK_RESPONSES = [
+  "I'm here. Go ahead.",
+  "Yes, I'm with you. Go ahead.",
+  "I'm here. What would you like to know?",
 ];
 
 const NEGATIVE_LABEL_RESPONSES = [
@@ -165,6 +176,7 @@ export function getSmallTalkResponse(
   const pick = (pool: string[]) => pool[consecutiveTurns % pool.length]!;
 
   switch (stClass) {
+    case "hello_check":   return pick(HELLO_CHECK_RESPONSES);
     case "how_are_you":    return pick(HOW_ARE_YOU_RESPONSES);
     case "negative_label": return pick(NEGATIVE_LABEL_RESPONSES);
     case "are_you_ai":     return pick(ARE_YOU_AI_RESPONSES);

@@ -38,4 +38,20 @@ describe("voice QA scorecard", () => {
     expect(qa.score).toBeLessThan(75);
     expect(qa.grade).toBe("weak");
   });
+
+  it("downgrades duplicate lines and stall acknowledgments", () => {
+    const qa = buildVoiceQaScorecard([
+      { role: "user", content: "Tell me about ApexAI." },
+      { role: "assistant", content: "One moment." },
+      { role: "assistant", content: "One moment." },
+      { role: "user", content: "Hello? Hello?" },
+      { role: "assistant", content: "I'm here." },
+      { role: "assistant", content: "I'm here." },
+    ]);
+
+    const codes = qa.failures.map((failure) => failure.code);
+    expect(codes).toContain("duplicate_assistant_line");
+    expect(codes).toContain("stall_ack_overuse");
+    expect(qa.grade).toBe("weak");
+  });
 });

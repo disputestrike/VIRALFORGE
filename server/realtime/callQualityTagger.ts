@@ -93,6 +93,14 @@ const HARSH_PHRASES = [
   /watch your language/i,
 ];
 
+const STALL_ACK_PATTERNS = [
+  /^one moment[.!]?$/i,
+  /^hang tight\b/i,
+  /^i'?m right here[.!]?$/i,
+  /^i'?m here[.!]?$/i,
+  /^yes,? i'?m with you[.!]?$/i,
+];
+
 const FACT_PATTERNS = [
   { regex: /what industry (are you in|do you work in|is your business)/i, factName: "industry" },
   { regex: /what'?s? (your|the) company (name|called)/i, factName: "company" },
@@ -364,6 +372,32 @@ export function tagCallFailureModes(transcript: Turn[]): FailureMode[] {
     }
   });
 
+  // 12. Duplicate assistant lines
+  for (let i = 1; i < assistantTurns.length; i++) {
+    const prev = normalizeText(assistantTurns[i - 1]!.content);
+    const curr = normalizeText(assistantTurns[i]!.content);
+    if (prev && curr && prev === curr) {
+      failures.push({
+        code: "duplicate_assistant_line",
+        severity: "conversion_killing",
+        description: "Agent repeated the same spoken line, which sounds broken on a live call.",
+        turnIndex: i,
+        snippet: assistantTurns[i]!.content.slice(0, 100),
+      });
+    }
+  }
+
+  // 13. Stall / placeholder acknowledgments overused
+  const stallTurns = assistantTurns.filter((t) => STALL_ACK_PATTERNS.some((pat) => pat.test(t.content)));
+  if (stallTurns.length >= 2) {
+    failures.push({
+      code: "stall_ack_overuse",
+      severity: "conversion_killing",
+      description: "Agent relied on placeholder hold lines instead of crisp answers.",
+      snippet: `${stallTurns.length} placeholder acknowledgments`,
+    });
+  }
+
   const severityOrder: Record<FailureSeverity, number> = {
     trust_killing: 0,
     conversion_killing: 1,
@@ -435,6 +469,9 @@ export function buildVoiceQaScorecard(transcript: Turn[]): VoiceQaScorecard {
   }
   if (failureCodes.has("stacked_questions") || metrics.stackedQuestionTurns > 0) {
     recommendations.push("Keep the voice rhythm to one clear question per turn so callers never feel interrogated.");
+  }
+  if (failureCodes.has("duplicate_assistant_line") || failureCodes.has("stall_ack_overuse")) {
+    recommendations.push("Cut placeholder acknowledgments and repeated lines so the agent sounds decisive and live.");
   }
   if (failureCodes.has("verbosity") || metrics.averageAssistantSentences > 3 || metrics.maxAssistantSentences > 4) {
     recommendations.push("Shorten spoken turns so each answer lands in a few crisp sentences before the next move.");

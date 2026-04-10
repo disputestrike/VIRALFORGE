@@ -104,7 +104,7 @@ import {
   getDriftRedirectResponse,
   type ConversationContext,
 } from "./responseGuardrails";
-import { buildVoiceQaScorecard, formatFailureModes } from "./callQualityTagger";
+import { buildVoiceQaScorecard, formatFailureModes, type FailureMode } from "./callQualityTagger";
 import { postCallQualityToMetrics } from "./voiceMetrics";
 
 type VoiceOutcome = import("../_core/services/voiceSessionManager").VoiceSession["outcome"];
@@ -356,6 +356,11 @@ export function createCallEngine(opts: EngineOptions): void {
   let loopTurnCount = 0;
   /** Recent assistant response texts for loop detection (last 3). */
   const recentAssistantTexts: string[] = [];
+  /** Live-call runtime quality counters that transcript-only QA cannot see. */
+  let latencyBudgetExceededCount = 0;
+  let deadStreamSendCount = 0;
+  let streamDropCount = 0;
+  let placeholderAckCount = 0;
 
   // A/B variant is selected in waitForCartesia() once SignalWire callSid + tenant userId are known (stable hash per real call).
 
@@ -509,6 +514,10 @@ export function createCallEngine(opts: EngineOptions): void {
   /** SignalWire <Stream> stop — media leg only; call may still be in-progress. */
   function onMediaStreamStopped(): void {
     log("Stream stopped (media) — session not finalized; awaiting reconnect or HTTP terminal status");
+    streamDropCount++;
+    generationEpoch++;
+    assistantResponseInProgress = false;
+    stopSpeaking();
     clearUserSilenceReengageTimer();
     clearInterruptAckPending();
     streamSid = "";
@@ -527,6 +536,10 @@ export function createCallEngine(opts: EngineOptions): void {
   function onSignalWireSocketEnded(reason: string): void {
     if (isEnded) return;
     log(`SignalWire WebSocket ended (${reason}) — not finalizing immediately`);
+    streamDropCount++;
+    generationEpoch++;
+    assistantResponseInProgress = false;
+    stopSpeaking();
     clearUserSilenceReengageTimer();
     clearInterruptAckPending();
     streamSid = "";
@@ -689,6 +702,7 @@ export function createCallEngine(opts: EngineOptions): void {
             traceEvent(callId, "tts_first_chunk", { bytes: Buffer.from(msg.data, "base64").length });
             log(`Sent audio to SignalWire (mulaw)`);
           } else {
+            deadStreamSendCount++;
             log(`CANNOT SEND: streamSid=${streamSid} wsState=${sigWs.readyState}`);
           }
         } else if (msg.type === "error") {
@@ -726,6 +740,11 @@ export function createCallEngine(opts: EngineOptions): void {
   }
 
   function cartesiaSend(text: string, continueCtx = true) {
+    if (!voiceStreamReady()) {
+      deadStreamSendCount++;
+      log(`cartesiaSend SKIPPED: inactive stream (streamSid=${streamSid} wsState=${sigWs.readyState})`);
+      return;
+    }
     if (!cartesiaWs || cartesiaWs.readyState !== WebSocket.OPEN) {
       log(`cartesiaSend SKIPPED: no ws or not open (state=${cartesiaWs?.readyState})`);
       return;
@@ -1128,7 +1147,6 @@ export function createCallEngine(opts: EngineOptions): void {
       smallTalkTurnCount++;
       const stResponse = getSmallTalkResponse(stClass, smallTalkTurnCount, businessName);
       appendHistory("user", transcript);
-      appendHistory("assistant", stResponse);
       await speak(stResponse, epoch);
       logVoiceControllerEvent(callId, "guardrail", { bucket: "small_talk_hardcode", stClass, turn: smallTalkTurnCount });
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
@@ -1327,12 +1345,12 @@ export function createCallEngine(opts: EngineOptions): void {
 
     // Latency budget enforcement — sub-700ms end-to-end target from research spec.
     // After 700ms total turn time with no TTS audio, speak a brief hold line.
-    const LATENCY_BUDGET_MS = parseInt(process.env.VOICE_LATENCY_BUDGET_MS ?? "700", 10) || 700;
+    const LATENCY_BUDGET_MS = parseInt(process.env.VOICE_LATENCY_BUDGET_MS ?? "900", 10) || 900;
     const latencyBudgetTimer = setTimeout(() => {
-      if (epoch !== generationEpoch || isEnded || isSpeaking) return;
+      if (epoch !== generationEpoch || isEnded || isSpeaking || assistantPlaybackStartAt) return;
+      latencyBudgetExceededCount++;
       traceEvent(callId, "latency_budget_exceeded", { budgetMs: LATENCY_BUDGET_MS });
-      log(`[LATENCY] Turn exceeded ${LATENCY_BUDGET_MS}ms budget — inserting hold ack`);
-      void speak("One moment.", epoch);
+      log(`[LATENCY] Turn exceeded ${LATENCY_BUDGET_MS}ms budget — tracing only`);
     }, LATENCY_BUDGET_MS);
 
     const clearLatencyTimer = () => clearTimeout(latencyBudgetTimer);
@@ -1587,13 +1605,13 @@ export function createCallEngine(opts: EngineOptions): void {
     clearUserSilenceReengageTimer();
     lastOutboundAudioAt = Date.now();
     assistantResponseInProgress = true;
+    let clausesSent = 0;
 
     let llmAckTimer: NodeJS.Timeout | null = setTimeout(() => {
       llmAckTimer = null;
-      if (epoch !== generationEpoch || isEnded) return;
+      if (epoch !== generationEpoch || isEnded || clausesSent > 0 || assistantPlaybackStartAt) return;
       traceEvent(callId, "llm_slow_ack_800ms");
-      log("[FAILSAFE] LLM >800ms to first token — brief ack");
-      void speak("Hang tight — pulling that together for you.", epoch);
+      log("[FAILSAFE] LLM >800ms to first token — tracing only");
     }, 800);
     silenceWatchTimer = setInterval(() => {
       if (isEnded || epoch !== generationEpoch) {
@@ -1604,12 +1622,11 @@ export function createCallEngine(opts: EngineOptions): void {
       if (Date.now() - lastOutboundAudioAt < 2000) return;
       disarmOutboundSilenceWatch();
       traceEvent(callId, "failsafe_silence_2s_outbound");
-      void speak("Still with you — almost there.", epoch);
+      log("[FAILSAFE] Outbound silence watchdog triggered");
     }, 500);
 
     let fullText = "";
     let tokenBuffer = ""; // accumulates tokens until a speakable clause boundary
-    let clausesSent = 0;
 
     // Sentence-boundary detector for streaming tokens.
     // Returns the next complete clause to speak and the remaining buffer.
@@ -1817,7 +1834,15 @@ export function createCallEngine(opts: EngineOptions): void {
 
   async function speak(text: string, epoch: number): Promise<void> {
     if (epoch !== generationEpoch || isEnded) return;
+    if (!voiceStreamReady()) {
+      deadStreamSendCount++;
+      log(`speak() SKIPPED: inactive stream text="${text.slice(0, 50)}"`);
+      return;
+    }
     log(`speak() called: "${text.slice(0,50)}" cartesiaWs=${cartesiaWs?.readyState}`);
+    if (/^(one moment|hang tight|still with you|i'?m right here|i'?m here)\b/i.test(text.trim())) {
+      placeholderAckCount++;
+    }
     // Cancel prior synthesis + clear SW buffer so short replies (greeting, reprompt) never overlap.
     stopSpeaking();
     // Always start a new Cartesia context — reusing ctx after greeting without a timely
@@ -1906,6 +1931,43 @@ export function createCallEngine(opts: EngineOptions): void {
   }
 
   // ── Hard finalize (call leg ended or irrecoverable stream) ───────────────
+  function buildRuntimeQaFailures(): FailureMode[] {
+    const failures: FailureMode[] = [];
+    if (latencyBudgetExceededCount > 0) {
+      failures.push({
+        code: "runtime_latency_budget",
+        severity: "conversion_killing",
+        description: "Live turn timing exceeded the target latency budget.",
+        snippet: `${latencyBudgetExceededCount} slow-turn event(s)`,
+      });
+    }
+    if (placeholderAckCount >= 2) {
+      failures.push({
+        code: "runtime_placeholder_ack",
+        severity: "conversion_killing",
+        description: "The agent relied on placeholder acknowledgments instead of crisp answers.",
+        snippet: `${placeholderAckCount} placeholder ack(s)`,
+      });
+    }
+    if (deadStreamSendCount > 0) {
+      failures.push({
+        code: "runtime_dead_stream_send",
+        severity: "trust_killing",
+        description: "The runtime tried to speak into an inactive media stream.",
+        snippet: `${deadStreamSendCount} dead-stream send attempt(s)`,
+      });
+    }
+    if (streamDropCount > 0) {
+      failures.push({
+        code: "runtime_stream_drop",
+        severity: "trust_killing",
+        description: "The live call lost its media stream before it completed cleanly.",
+        snippet: `${streamDropCount} stream interruption(s)`,
+      });
+    }
+    return failures;
+  }
+
   async function finalizeHard(opts: VoiceFinalizeOpts): Promise<void> {
     if (isEnded) return;
     isEnded = true;
@@ -1941,25 +2003,42 @@ export function createCallEngine(opts: EngineOptions): void {
         // ── Post-Call QA: tag all guardrail violations for analytics ──
         try {
           const qa = buildVoiceQaScorecard(history);
-          const failures = qa.failures;
-          const healthy = qa.healthy;
+          const runtimeFailures = buildRuntimeQaFailures();
+          const failures = [...qa.failures, ...runtimeFailures];
+          const healthy =
+            qa.healthy &&
+            runtimeFailures.every((f) => f.severity !== "trust_killing" && f.severity !== "compliance_risk");
+          let score = qa.score;
+          runtimeFailures.forEach((failure) => {
+            score -= failure.severity === "trust_killing" ? 18 : failure.severity === "conversion_killing" ? 10 : 6;
+          });
+          score = Math.max(0, score);
+          const grade =
+            score >= 95 ? "elite" : score >= 88 ? "strong" : score >= 75 ? "conditional" : "weak";
+          const recommendations = [...qa.recommendations];
+          if (runtimeFailures.some((f) => f.code === "runtime_stream_drop" || f.code === "runtime_dead_stream_send")) {
+            recommendations.unshift("Fix stream stability first so the caller never hears dead air, dropped audio, or a broken handoff.");
+          }
+          if (runtimeFailures.some((f) => f.code === "runtime_latency_budget" || f.code === "runtime_placeholder_ack")) {
+            recommendations.unshift("Tighten live latency and remove placeholder hold lines so answers land sharply on the phone.");
+          }
           const summary = formatFailureModes(failures);
-          log(`[QA] Call quality: ${healthy ? "HEALTHY" : "ISSUES DETECTED"} | score=${qa.score} grade=${qa.grade} | ${summary}`);
+          log(`[QA] Call quality: ${healthy ? "HEALTHY" : "ISSUES DETECTED"} | score=${score} grade=${grade} | ${summary}`);
           if (!healthy) {
             log(`[QA] Trust/compliance failures: ${failures.filter(f => f.severity === "trust_killing" || f.severity === "compliance_risk").map(f => f.code).join(", ")}`);
           }
-          if (qa.recommendations.length) {
-            log(`[QA] Coaching: ${qa.recommendations.slice(0, 3).join(" | ")}`);
+          if (recommendations.length) {
+            log(`[QA] Coaching: ${recommendations.slice(0, 3).join(" | ")}`);
           }
           // Store in voiceControllerLog for dashboard visibility
           logVoiceControllerEvent(cid, failures.length === 0 ? "quality_pass" : "quality_issues", {
             failureCount: failures.length,
             healthy,
             summary,
-            score: qa.score,
-            grade: qa.grade,
+            score,
+            grade,
             metrics: qa.metrics,
-            recommendations: qa.recommendations.slice(0, 4),
+            recommendations: recommendations.slice(0, 4),
             failures: failures.slice(0, 5).map(f => ({ code: f.code, severity: f.severity })),
           });
           // ── Post to voice-metrics-service for dashboard aggregation ──
@@ -2253,7 +2332,7 @@ export function createCallEngine(opts: EngineOptions): void {
             setTimeout(() => {
               greetingDone = true;
               log("[GREETING] Barge-in enabled");
-            }, 2500);
+            }, 1200);
             return;
           }
           const sessGreet = activeSessionId ? voiceSessionManager.getSession(activeSessionId) : null;
@@ -2307,7 +2386,7 @@ export function createCallEngine(opts: EngineOptions): void {
           setTimeout(() => {
             greetingDone = true;
             log("[GREETING] Barge-in enabled");
-          }, 2500);
+          }, 1200);
         } else if (!isEnded && greetingPlayed) {
           log("[GREETING] Skipped duplicate start");
         }

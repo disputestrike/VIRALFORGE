@@ -82,8 +82,8 @@ export const ENV = {
   voicePlayRingBeforeStream: process.env.VOICE_PLAY_RING_BEFORE_STREAM !== "false",
   /** Multiply Cartesia voice profile speed (~0.91 default; override with VOICE_TTS_SPEED_SCALE). */
   voiceTtsSpeedScale: Math.min(1.25, Math.max(0.55, parseFloat(process.env.VOICE_TTS_SPEED_SCALE ?? "1.0") || 1.0)),
-  /** After Deepgram speech_final, pause before LLM — target 200–300ms for natural turn-taking. */
-  voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "80", 10) || 0),
+  /** After Deepgram speech_final, pause before LLM — keep small so the agent feels sharp. */
+  voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "40", 10) || 0),
   /**
    * After assistant audio finishes, if the caller stays quiet, prompt one upbeat check-in (sales tempo).
    * Set VOICE_USER_SILENCE_REENGAGE_ENABLED=false to disable.
@@ -109,8 +109,8 @@ export const ENV = {
   /** Frames of sustained energy required to trigger barge-in (prevents single-frame noise spikes). */
   voiceBargeInSustainFrames: Math.max(1, Math.min(10, parseInt(process.env.VOICE_BARGE_IN_SUSTAIN_FRAMES ?? "4", 10) || 4)),
   /** Deepgram streaming: ms of silence before end-of-turn (lower = faster replies; too low may clip words). */
-  // Default raised to 400ms (was 250ms) — prevents noise bursts from prematurely ending speech detection.
-  voiceDeepgramEndpointingMs: Math.max(100, Math.min(2000, parseInt(process.env.VOICE_DEEPGRAM_ENDPOINTING_MS ?? "400", 10) || 400)),
+  // Default 250ms keeps the system sharper on clean calls while still allowing override per deployment.
+  voiceDeepgramEndpointingMs: Math.max(100, Math.min(2000, parseInt(process.env.VOICE_DEEPGRAM_ENDPOINTING_MS ?? "250", 10) || 250)),
   /** Deepgram utterance_end_ms — cap wait for utterance boundary. */
   voiceDeepgramUtteranceEndMs: Math.max(300, Math.min(3000, parseInt(process.env.VOICE_DEEPGRAM_UTTERANCE_END_MS ?? "1000", 10) || 1000)),
   /** Minimum STT confidence to process a turn (below this = likely noise, ignored). */
