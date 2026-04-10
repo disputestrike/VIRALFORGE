@@ -101,7 +101,7 @@ const HOW_ARE_YOU_RESPONSES = [
 ];
 
 const NEGATIVE_LABEL_RESPONSES = [
-  "Ha — I promise I'm doing just fine. Ready to help. What can I do for you?",
+  "I promise I'm doing just fine. What can I help you with?",
   "I'm actually doing great! What can I help you with today?",
   "All good here — fully focused on you. What's going on?",
 ];
@@ -118,14 +118,14 @@ const NAME_RESPONSES = [
 ];
 
 const WHERE_FROM_RESPONSES = [
-  "I'm based wherever you need me to be — I'm an AI. What can I help you with today?",
-  "I'm an AI, so I'm everywhere and nowhere. What can I do for you?",
+  "I'm an AI assistant, so I support callers wherever the business needs me. What can I help you with today?",
+  "I'm an AI assistant working on this line. What can I do for you?",
 ];
 
 const LIGHT_TEASE_RESPONSES = [
-  "Ha, thank you! Let me put that energy to work — what can I help you with?",
-  "Appreciate it! Now, what can I help you with today?",
-  "You're too kind. What can I do for you?",
+  "Thank you — what can I help you with?",
+  "Appreciate that. What can I help you with today?",
+  "Glad to hear that. What can I do for you?",
 ];
 
 const META_CAPABILITY_RESPONSES = [
@@ -140,7 +140,7 @@ const WEATHER_RESPONSES = [
 ];
 
 const PIVOT_RESPONSES = [
-  "I think we've been chatting for a bit — let me make sure I'm actually helpful here. What's going on with your business or your calls?",
+  "Let me make sure I'm helping with the right thing. What's going on with your business or your calls?",
   "Let me bring us back to what I can actually help with. What's the main thing you're dealing with right now?",
   "I'm here to help you with something real — what can I do for your business today?",
 ];

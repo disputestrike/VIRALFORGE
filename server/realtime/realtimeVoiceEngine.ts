@@ -104,7 +104,7 @@ import {
   getDriftRedirectResponse,
   type ConversationContext,
 } from "./responseGuardrails";
-import { tagCallFailureModes, formatFailureModes, isCallHealthy } from "./callQualityTagger";
+import { buildVoiceQaScorecard, formatFailureModes } from "./callQualityTagger";
 import { postCallQualityToMetrics } from "./voiceMetrics";
 
 type VoiceOutcome = import("../_core/services/voiceSessionManager").VoiceSession["outcome"];
@@ -1940,18 +1940,26 @@ export function createCallEngine(opts: EngineOptions): void {
 
         // ── Post-Call QA: tag all guardrail violations for analytics ──
         try {
-          const failures = tagCallFailureModes(history);
-          const healthy = isCallHealthy(failures);
+          const qa = buildVoiceQaScorecard(history);
+          const failures = qa.failures;
+          const healthy = qa.healthy;
           const summary = formatFailureModes(failures);
-          log(`[QA] Call quality: ${healthy ? "HEALTHY" : "ISSUES DETECTED"} | ${summary}`);
+          log(`[QA] Call quality: ${healthy ? "HEALTHY" : "ISSUES DETECTED"} | score=${qa.score} grade=${qa.grade} | ${summary}`);
           if (!healthy) {
             log(`[QA] Trust/compliance failures: ${failures.filter(f => f.severity === "trust_killing" || f.severity === "compliance_risk").map(f => f.code).join(", ")}`);
+          }
+          if (qa.recommendations.length) {
+            log(`[QA] Coaching: ${qa.recommendations.slice(0, 3).join(" | ")}`);
           }
           // Store in voiceControllerLog for dashboard visibility
           logVoiceControllerEvent(cid, failures.length === 0 ? "quality_pass" : "quality_issues", {
             failureCount: failures.length,
             healthy,
             summary,
+            score: qa.score,
+            grade: qa.grade,
+            metrics: qa.metrics,
+            recommendations: qa.recommendations.slice(0, 4),
             failures: failures.slice(0, 5).map(f => ({ code: f.code, severity: f.severity })),
           });
           // ── Post to voice-metrics-service for dashboard aggregation ──

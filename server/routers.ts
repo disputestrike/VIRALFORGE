@@ -1054,9 +1054,7 @@ const onboardingRouter = router({
         }
 
         const numberToBuy = available[0].phoneNumber;
-        const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
-          ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-          : "https://apexai-production-d567.up.railway.app";
+        const baseUrl = ENV.publicUrl;
 
         // Purchase the number
         const purchased = await client.incomingPhoneNumbers.create({
@@ -1529,9 +1527,7 @@ const agencyRouter = router({
       const available = await swClient.availablePhoneNumbers("US").local.list(searchOpts);
       if (!available.length) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No numbers available" });
 
-      const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
-        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-        : "https://apexai-production-d567.up.railway.app";
+      const baseUrl = ENV.publicUrl;
 
       const purchased = await swClient.incomingPhoneNumbers.create({
         phoneNumber: available[0].phoneNumber,

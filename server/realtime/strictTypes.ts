@@ -12,6 +12,8 @@ export const HARD_RULES = {
 
 export type StrictIntent =
   | "ask_what_it_is"
+  | "demo_request"
+  | "support_request"
   | "pricing_question"
   | "setup_time_question"
   | "success_rate_question"

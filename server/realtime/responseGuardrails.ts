@@ -446,11 +446,11 @@ export function getDriftRedirectResponse(
     case "religion":
       return `That's outside what I can help with. I'm here to focus on ${businessGoal}. What can I do for you?`;
     case "personal_life":
-      return `Ha — I'm all business. What can I help you with today?`;
+      return `I keep the focus on ${businessGoal}. What can I help you with today?`;
     case "test_abuse":
       return `I'm Alex, and I stay focused on helping you with ${businessGoal}. What can I do for you?`;
     case "profanity_bait":
-      return `Let's keep things professional. What can I help you with today?`;
+      return `I'm here to help if you want to focus on ${businessGoal}. What can I help you with today?`;
     default:
       return `Let me bring us back to what I can help with. What's going on with ${businessGoal}?`;
   }

@@ -5,6 +5,19 @@
 
 import { normalizeToE164US } from "./phoneE164";
 
+function resolvePublicUrl() {
+  if (process.env.RAILWAY_PUBLIC_DOMAIN?.trim()) {
+    return `https://${process.env.RAILWAY_PUBLIC_DOMAIN.trim()}`;
+  }
+
+  if (process.env.PUBLIC_URL?.trim()) {
+    return process.env.PUBLIC_URL.trim().replace(/\/$/, "");
+  }
+
+  const port = process.env.PORT?.trim() || "3000";
+  return `http://localhost:${port}`;
+}
+
 export const ENV = {
   // ── Core ──────────────────────────────────────────────────
   nodeEnv:      process.env.NODE_ENV ?? "development",
@@ -56,9 +69,7 @@ export const ENV = {
 
   // ── Public URL (SignalWire webhook callbacks) ─────────────
   publicDomain: process.env.RAILWAY_PUBLIC_DOMAIN ?? "",
-  publicUrl: process.env.RAILWAY_PUBLIC_DOMAIN
-    ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-    : process.env.PUBLIC_URL ?? "https://apexai-production-d567.up.railway.app",
+  publicUrl: resolvePublicUrl(),
 
   // ── Admin notifications ───────────────────────────────────
   adminEmail: process.env.ADMIN_EMAIL ?? "",

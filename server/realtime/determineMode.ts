@@ -13,6 +13,10 @@ export function determineStrictConversationMode(
 ): ConversationMode {
   if (classified.indicatesDone || policy.endCallRequested) return "close";
   if (classified.asksForHuman) return "handoff";
+  if (classified.intent === "support_request") return "answer";
+  if (classified.intent === "demo_request") {
+    return facts.industry || facts.painLabels.length > 0 ? "recommend" : "qualify";
+  }
   if (classified.intent === "date_time_question") return "answer";
   if (classified.intent === "meta_voice_complaint") return "clarify";
   if (classified.containsConfusion || classified.intent === "confusion") return "clarify";

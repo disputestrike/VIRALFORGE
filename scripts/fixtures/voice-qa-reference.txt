@@ -1,0 +1,4 @@
+Caller: Hi, we keep missing calls after hours.
+Assistant: Got it. That usually means revenue is leaking when no one picks up. About how many calls are slipping through each week?
+Caller: Probably twenty or so.
+Assistant: That is enough volume to matter. We can answer those calls, qualify the lead, and book the right next step. Do you want a quick demo or pricing first?

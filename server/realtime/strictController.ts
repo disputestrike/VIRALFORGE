@@ -53,7 +53,7 @@ export function mergeStrictTurnState(
 }
 
 const META_VOICE_REPLY =
-  "I'm an AI line — here for quick answers. What do you want to know about handling your inbound calls?";
+  "I'm Alex, an AI assistant on this line. I can answer questions and help with your inbound calls. What would you like to know?";
 
 export type StrictPreLlmRoute =
   | {
