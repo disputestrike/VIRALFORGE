@@ -771,11 +771,14 @@ async function startServer() {
 
         // Look up which user owns the called number (To) for proper tenant assignment
         if (!ownerId) {
-          ownerId = To ? await db.getUserIdByPhoneNumber(To) : 1;
+          ownerId = To ? await db.getUserIdByPhoneNumber(To) : null;
+        }
+        if (!ownerId) {
+          console.warn("[Voice] No tenant owner match for inbound number", { to: To, from: From, sessionId });
         }
 
         // Load owner's settings (transfer number, language)
-        let ownerSettings: { transferNumber?: string; language?: string } = {};
+        let ownerSettings: { transferNumber?: string; language?: string; businessName?: string } = {};
         try {
           const { getDb } = await import("../db");
           const { users } = await import("../../drizzle/schema");
@@ -783,7 +786,11 @@ async function startServer() {
           const dbInst = await getDb();
           if (dbInst && ownerId) {
             const [ownerUser] = await (dbInst as any).select().from(users).where(eq(users.id, ownerId)).limit(1);
-            if (ownerUser) ownerSettings = { transferNumber: ownerUser.transferNumber, language: ownerUser.language || "en" };
+            if (ownerUser) ownerSettings = {
+              transferNumber: ownerUser.transferNumber,
+              language: ownerUser.language || "en",
+              businessName: ownerUser.businessName || undefined,
+            };
           }
         } catch {}
 
@@ -800,17 +807,19 @@ async function startServer() {
             status: "new",
             score: 60,
             segment: "warm",
-            createdBy: ownerId ?? 1,
+            createdBy: ownerId ?? null,
           });
           const { runEmailSequencesForLeadCreated } = await import("./services/emailSequenceTrigger");
-          void runEmailSequencesForLeadCreated(ownerId ?? 1, {
-            id: insertId,
-            firstName: "Inbound",
-            lastName: From.slice(-4),
-            phone: From,
-            email: null,
-            company: null,
-          }).catch((e) => console.warn("[EmailSequence] voice/inbound:", e));
+          if (ownerId) {
+            void runEmailSequencesForLeadCreated(ownerId, {
+              id: insertId,
+              firstName: "Inbound",
+              lastName: From.slice(-4),
+              phone: From,
+              email: null,
+              company: null,
+            }).catch((e) => console.warn("[EmailSequence] voice/inbound:", e));
+          }
           lead = await db.getLeadById(insertId);
         }
         const vm = await import("./services/voiceSessionManager");
@@ -819,8 +828,16 @@ async function startServer() {
         if (!vm.getSession(sessionId)) {
           const contactPhone =
             outboundLeadId && To ? String(To) : String(From || "");
+          console.log("[Voice] Tenant route:", {
+            to: To,
+            from: From,
+            ownerId: ownerId ?? null,
+            resolvedBusinessName: ownerSettings.businessName || null,
+            resolvedLanguage: ownerSettings.language || "en",
+            resolvedVoiceProfileId: voiceSettings.voiceProfileId || null,
+          });
           vm.createSession((lead as any).id ?? 0, "default", sessionId, {
-            userId: ownerId ?? 1,
+            userId: ownerId ?? null,
             language: ownerSettings.language || "en",
             voiceProfileId: voiceSettings.voiceProfileId,
             callerPhone: contactPhone || undefined,
@@ -1714,6 +1731,16 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
         // ── NEW: Real-time voice engine ─────────────────────────────────
         // Deepgram STT → Groq → Cartesia TTS
         // Streaming end-to-end, instant barge-in, clean hangup
+        console.log("[VOICE-WS] tenant_context", {
+          sessionId,
+          leadId: resolvedLeadId ?? null,
+          userId: resolvedUserId ?? null,
+          businessName: businessName ?? null,
+          industry: industry ?? null,
+          language: callLanguage ?? null,
+          voiceProfileId: voiceProfileId ?? null,
+        });
+
         createCallEngine({
           sigWs: ws as unknown as import("ws").WebSocket,
           sessionId: sessionId || undefined,

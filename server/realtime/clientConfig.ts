@@ -29,7 +29,7 @@ export function isApexPlatformDemoLine(businessName: string): boolean {
 }
 
 export const DEFAULT_CLIENT: ClientConfig = {
-  businessName: "Apex A I",
+  businessName: "Your Business",
   industry: "AI phone agent platform for revenue-driven businesses",
   serviceAreas: [],
   faqAnswers: {},

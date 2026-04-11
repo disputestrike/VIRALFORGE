@@ -65,7 +65,7 @@ function apexPlatformOpeners(businessName: string): string[] {
  * Pick the spoken inbound greeting (μ-law TTS). Varies by sessionId so repeat callers get fresh openers.
  */
 export function selectInboundGreeting(input: InboundGreetingInput): string {
-  const name = input.businessName.trim() || "ApexAI";
+  const name = input.businessName.trim() || "our team";
   const apex = input.apexProductLine ?? isApexPlatformDemoLine(name);
   const hint = cleanIndustryHint(input.industryLabel);
   const pool = apex ? apexPlatformOpeners(name) : tenantOpeners(name, hint);
@@ -75,7 +75,7 @@ export function selectInboundGreeting(input: InboundGreetingInput): string {
 
 /** Outbound cold intro — rotated so not identical every dial. */
 export function selectOutboundIntro(input: { businessName: string; sessionId?: string }): string {
-  const b = input.businessName.trim() || "ApexAI";
+  const b = input.businessName.trim() || "our team";
   const pool = [
     `Hi, this is Alex from ${b} — do you have a quick moment?`,
     `Hey — Alex with ${b}. Got a minute for a quick call?`,

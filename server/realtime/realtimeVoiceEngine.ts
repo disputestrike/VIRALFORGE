@@ -250,7 +250,7 @@ export function createCallEngine(opts: EngineOptions): void {
     sessionId,
     leadId,
     userId,
-    businessName: optBusinessName = "ApexAI",
+    businessName: optBusinessName = "Your Business",
     industry: optIndustry = "business services",
     voiceProfileId,
     language: optLanguage = "en",
@@ -284,6 +284,7 @@ export function createCallEngine(opts: EngineOptions): void {
     industry,
     ...tenantPartial,
   });
+  log(`[TENANT] init businessName=${JSON.stringify(clientConfig.businessName)} industry=${JSON.stringify(clientConfig.industry)} userId=${userId ?? null} leadId=${leadId ?? null} voiceProfileId=${voiceProfileId ?? null}`);
 
   // State
   let streamSid = "";
@@ -2341,6 +2342,7 @@ export function createCallEngine(opts: EngineOptions): void {
               ? `This call may be recorded for quality assurance. ${base}`
               : base;
           }
+          log(`[GREETING] selected businessName=${JSON.stringify(bname)} apexDemo=${isApexPlatformDemoLine(bname)} text=${JSON.stringify(greeting)}`);
           await speak(greeting, generationEpoch);
           if (
             activeSessionId &&

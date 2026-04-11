@@ -724,15 +724,39 @@ export async function setUserPhoneNumberActive(id: number, userId: number, isAct
 export async function getUserIdByPhoneNumber(phoneNumber: string): Promise<number | null> {
   const db = await getDb();
   if (!db) return null;
+  const raw = String(phoneNumber ?? "").trim();
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, "");
+  const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
+  const candidates = Array.from(
+    new Set(
+      [
+        raw,
+        digits ? `+${digits}` : "",
+        digits.length === 10 ? `+1${digits}` : "",
+        digits.length === 11 && digits.startsWith("1") ? `+${digits}` : "",
+        last10,
+      ].filter(Boolean)
+    )
+  );
   try {
-    // Check user_phone_numbers table (provisioned numbers)
-    const [rows] = await (db as any).execute(
-      "SELECT userId FROM user_phone_numbers WHERE phoneNumber = ? AND isActive = TRUE LIMIT 1",
-      [phoneNumber]
-    );
-    if (Array.isArray(rows) && rows.length > 0) return (rows[0] as any).userId;
+    // Check user_phone_numbers table (provisioned numbers) with relaxed normalization.
+    for (const candidate of candidates) {
+      const [rows] = await (db as any).execute(
+        "SELECT userId FROM user_phone_numbers WHERE phoneNumber = ? AND isActive = TRUE LIMIT 1",
+        [candidate]
+      );
+      if (Array.isArray(rows) && rows.length > 0) return (rows[0] as any).userId;
+    }
+    if (last10) {
+      const [rows] = await (db as any).execute(
+        "SELECT userId FROM user_phone_numbers WHERE REPLACE(REPLACE(REPLACE(REPLACE(phoneNumber, ' ', ''), '-', ''), '(', ''), ')', '') LIKE ? AND isActive = TRUE LIMIT 1",
+        [`%${last10}`]
+      );
+      if (Array.isArray(rows) && rows.length > 0) return (rows[0] as any).userId;
+    }
   } catch { /* table may not exist yet */ }
-  return 1; // Fallback to system admin
+  return null;
 }
 
 export async function getLocalNumberByAreaCode(areaCode: string): Promise<{ phoneNumber: string } | null> {
