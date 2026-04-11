@@ -242,6 +242,8 @@ interface EngineOptions {
   language?: string;
   /** Merged from `users` voice domain columns at WS connect */
   tenantIndustryOverlay?: TenantIndustryOverlay;
+  /** From `users.voiceAgentDisplayName`; empty uses "Alex" in prompts and greetings */
+  voiceAgentDisplayName?: string;
 }
 
 export function createCallEngine(opts: EngineOptions): void {
@@ -255,6 +257,7 @@ export function createCallEngine(opts: EngineOptions): void {
     voiceProfileId,
     language: optLanguage = "en",
     tenantIndustryOverlay,
+    voiceAgentDisplayName: optVoiceAgentDisplayName,
   } = opts;
 
   const callId = `call_${Date.now()}`;
@@ -282,9 +285,11 @@ export function createCallEngine(opts: EngineOptions): void {
   let clientConfig: ClientConfig = mergeClientConfig({
     businessName,
     industry,
+    voiceAgentDisplayName: optVoiceAgentDisplayName?.trim() || undefined,
     ...tenantPartial,
   });
-  log(`[TENANT] init businessName=${JSON.stringify(clientConfig.businessName)} industry=${JSON.stringify(clientConfig.industry)} userId=${userId ?? null} leadId=${leadId ?? null} voiceProfileId=${voiceProfileId ?? null}`);
+  const spokenAgent = (): string => (clientConfig.voiceAgentDisplayName ?? "").trim() || "Alex";
+  log(`[TENANT] init businessName=${JSON.stringify(clientConfig.businessName)} industry=${JSON.stringify(clientConfig.industry)} userId=${userId ?? null} leadId=${leadId ?? null} voiceProfileId=${voiceProfileId ?? null} agent=${spokenAgent()}`);
 
   // State
   let streamSid = "";
@@ -1135,7 +1140,11 @@ export function createCallEngine(opts: EngineOptions): void {
     // 1b. Topic drift check (off-limits territory)
     const driftResult = detectTopicDrift(transcript);
     if (driftResult.isDrift && driftResult.driftClass !== "none") {
-      const driftResponse = getDriftRedirectResponse(driftResult.driftClass, businessName || "your business");
+      const driftResponse = getDriftRedirectResponse(
+        driftResult.driftClass,
+        businessName || "your business",
+        spokenAgent()
+      );
       appendHistory("user", transcript);
       await speak(driftResponse, epoch);
       logVoiceControllerEvent(callId, "guardrail", { bucket: "topic_drift", driftClass: driftResult.driftClass });
@@ -1147,7 +1156,7 @@ export function createCallEngine(opts: EngineOptions): void {
     const stClass = classifySmallTalk(transcript);
     if (stClass !== "none") {
       smallTalkTurnCount++;
-      const stResponse = getSmallTalkResponse(stClass, smallTalkTurnCount, businessName);
+      const stResponse = getSmallTalkResponse(stClass, smallTalkTurnCount, businessName, spokenAgent());
       appendHistory("user", transcript);
       await speak(stResponse, epoch);
       logVoiceControllerEvent(callId, "guardrail", { bucket: "small_talk_hardcode", stClass, turn: smallTalkTurnCount });
@@ -1226,7 +1235,7 @@ export function createCallEngine(opts: EngineOptions): void {
     }
 
     const classified = classifyTurn(transcript);
-    const strictPre = routeStrictBeforeLlm(transcript, new Date(), classified);
+    const strictPre = routeStrictBeforeLlm(transcript, new Date(), classified, spokenAgent());
     if (strictPre) {
       if (strictPre.kind === "date_authority") {
         traceEvent(callId, "date_authority_short_circuit");
@@ -1641,7 +1650,8 @@ export function createCallEngine(opts: EngineOptions): void {
         cleaned,
         userTranscript,
         conversationHistory,
-        currentConversationContext
+        currentConversationContext,
+        spokenAgent()
       );
       if (clauseCheck.action === "block") {
         logVoiceControllerEvent(callId, "guardrail", { bucket: "clause_blocked", reason: clauseCheck.reason, clause: cleaned.slice(0, 60) });
@@ -1763,7 +1773,8 @@ export function createCallEngine(opts: EngineOptions): void {
       cleanResponse,
       userTranscript,
       conversationHistory,
-      currentConversationContext
+      currentConversationContext,
+      spokenAgent()
     );
     if (fullGuard.wasModified) {
       cleanResponse = fullGuard.text;
@@ -2230,6 +2241,32 @@ export function createCallEngine(opts: EngineOptions): void {
           waited += 50;
         }
         try {
+          const sessEarly = activeSessionId ? voiceSessionManager.getSession(activeSessionId) : null;
+          if (sessEarly?.userId) {
+            const { getUserById } = await import("../db");
+            const urow = await getUserById(sessEarly.userId);
+            const u = urow as {
+              businessName?: string | null;
+              voiceAgentDisplayName?: string | null;
+              primaryIndustryLabel?: string | null;
+              voiceIndustryContext?: string | null;
+              voiceKeyPhrases?: string | null;
+              voiceRestrictionNotes?: string | null;
+            } | null;
+            if (u?.businessName?.trim()) businessName = u.businessName.trim();
+            const agentNm = u?.voiceAgentDisplayName?.trim();
+            clientConfig = mergeClientConfig({
+              ...clientConfig,
+              businessName,
+              industry,
+              ...(agentNm ? { voiceAgentDisplayName: agentNm } : {}),
+              ...(u?.primaryIndustryLabel?.trim() ? { primaryIndustryLabel: u.primaryIndustryLabel.trim() } : {}),
+              ...(u?.voiceIndustryContext?.trim() ? { voiceIndustryContext: u.voiceIndustryContext.trim() } : {}),
+              ...(u?.voiceKeyPhrases?.trim() ? { voiceKeyPhrases: u.voiceKeyPhrases.trim() } : {}),
+              ...(u?.voiceRestrictionNotes?.trim() ? { voiceRestrictionNotes: u.voiceRestrictionNotes.trim() } : {}),
+            });
+            log(`[TENANT] hydrated userId=${sessEarly.userId} agent=${spokenAgent()}`);
+          }
           if (activeLeadId) {
             const { getLeadById } = await import("../db");
             const lead = await getLeadById(activeLeadId);
@@ -2237,12 +2274,9 @@ export function createCallEngine(opts: EngineOptions): void {
               const l = lead as { industry?: string | null };
               if (l.industry) industry = l.industry;
               clientConfig = mergeClientConfig({
+                ...clientConfig,
                 businessName,
                 industry,
-                primaryIndustryLabel: clientConfig.primaryIndustryLabel,
-                voiceIndustryContext: clientConfig.voiceIndustryContext,
-                voiceKeyPhrases: clientConfig.voiceKeyPhrases,
-                voiceRestrictionNotes: clientConfig.voiceRestrictionNotes,
               });
             }
           }
@@ -2323,6 +2357,7 @@ export function createCallEngine(opts: EngineOptions): void {
             const intro = selectOutboundIntro({
               businessName: bname,
               sessionId: activeSessionId || callId,
+              agentDisplayName: spokenAgent(),
             });
             greeting = sessGreet?.complianceRecordingPending
               ? `This call may be recorded for quality assurance. ${intro}`
@@ -2337,6 +2372,7 @@ export function createCallEngine(opts: EngineOptions): void {
               sessionId: activeSessionId || callId,
               industryLabel: vertical,
               apexProductLine: isApexPlatformDemoLine(bname),
+              agentDisplayName: spokenAgent(),
             });
             greeting = sessGreet?.complianceRecordingPending
               ? `This call may be recorded for quality assurance. ${base}`

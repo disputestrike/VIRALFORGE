@@ -52,8 +52,10 @@ export function mergeStrictTurnState(
   return { strictFacts: nextFacts, policyState: nextPolicy };
 }
 
-const META_VOICE_REPLY =
-  "I'm Alex, an AI assistant on this line. I can answer questions and help with your inbound calls. What would you like to know?";
+function metaVoiceReply(agentDisplayName?: string): string {
+  const a = (agentDisplayName ?? "").trim() || "Alex";
+  return `I'm ${a}, an AI assistant on this line. I can answer questions and help with your inbound calls. What would you like to know?`;
+}
 
 export type StrictPreLlmRoute =
   | {
@@ -71,7 +73,8 @@ export type StrictPreLlmRoute =
 export function routeStrictBeforeLlm(
   transcript: string,
   now: Date,
-  classified: ClassifiedTurn
+  classified: ClassifiedTurn,
+  agentDisplayName?: string
 ): StrictPreLlmRoute | null {
   if (isDateRelatedQuestion(transcript)) {
     return {
@@ -83,7 +86,7 @@ export function routeStrictBeforeLlm(
   if (classified.intent === "meta_voice_complaint") {
     return {
       kind: "meta_voice",
-      speakText: META_VOICE_REPLY,
+      speakText: metaVoiceReply(agentDisplayName),
       trace: { intent: classified.intent, mode: "clarify" },
     };
   }

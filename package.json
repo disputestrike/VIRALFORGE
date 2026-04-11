@@ -10,6 +10,7 @@
     "check": "node --max-old-space-size=8192 ./node_modules/typescript/bin/tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:settings-contract": "vitest run server/settings.contract.test.ts",
     "test:voice": "vitest run server/realtime",
     "test:vaqs": "vitest run server/realtime/vaqsEngineering.test.ts",
     "voice:qa": "tsx scripts/voice-qa-report.ts",

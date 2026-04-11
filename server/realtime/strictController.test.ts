@@ -59,6 +59,15 @@ describe("strictController", () => {
     expect(r?.speakText).toContain("2026");
   });
 
+  it("routeStrictBeforeLlm meta_voice uses custom agent name", () => {
+    const t = "You sound like a robot";
+    const c = classifyTurn(t);
+    const r = routeStrictBeforeLlm(t, new Date(), c, "Nora");
+    expect(r?.kind).toBe("meta_voice");
+    expect(r?.speakText).toContain("Nora");
+    expect(r?.speakText).not.toContain("Alex");
+  });
+
   it("strictFactsToSessionSnapshot clones arrays", () => {
     const f = mergeStrictFactsFromTranscript("missed calls", emptyStrictFacts());
     const s = strictFactsToSessionSnapshot(f);

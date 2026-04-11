@@ -17,6 +17,8 @@ export type ClientConfig = {
   voiceIndustryContext?: string;
   voiceKeyPhrases?: string;
   voiceRestrictionNotes?: string;
+  /** Spoken agent name on calls; empty/omitted defaults to "Alex" in prompts and greetings */
+  voiceAgentDisplayName?: string;
 };
 
 /** True only for ApexAI's own demo/sales line — not "Apex Roofing" etc. */

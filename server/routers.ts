@@ -1274,11 +1274,7 @@ const settingsRouter = router({
   get: protectedProcedure.query(async ({ ctx }) => {
     const db_mod = await import("./db");
     const { getUserVoiceSettings } = await import("./_core/services/voiceProfiles");
-    const [user] = await (await db_mod.getDb() as any)
-      .select()
-      .from((await import("../drizzle/schema")).users)
-      .where((await import("drizzle-orm")).eq((await import("../drizzle/schema")).users.id, ctx.user.id))
-      .limit(1);
+    const user = await db_mod.getUserById(ctx.user.id);
     const voiceSettings = await getUserVoiceSettings(ctx.user.id);
     return { ...(user ?? ctx.user), ...voiceSettings };
   }),
@@ -1335,19 +1331,19 @@ const settingsRouter = router({
       voiceIndustryContext: z.string().max(20000).optional().nullable(),
       voiceKeyPhrases: z.string().max(8000).optional().nullable(),
       voiceRestrictionNotes: z.string().max(8000).optional().nullable(),
+      /** Spoken name on live calls; null clears (default Alex in prompts) */
+      voiceAgentDisplayName: z.string().max(80).optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db_mod = await import("./db");
-      const drizzle_orm = await import("drizzle-orm");
-      const schema = await import("../drizzle/schema");
       const { setUserVoiceProfileId } = await import("./_core/services/voiceProfiles");
-      const db_inst = await db_mod.getDb();
-      if (!db_inst) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
       const { voiceProfileId, ...userInput } = input;
 
-      await (db_inst as any).update(schema.users)
-        .set({ ...userInput, updatedAt: new Date() })
-        .where(drizzle_orm.eq(schema.users.id, ctx.user.id));
+      try {
+        await db_mod.updateUserById(ctx.user.id, { ...userInput });
+      } catch {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      }
 
       if (voiceProfileId) {
         await setUserVoiceProfileId(ctx.user.id, voiceProfileId);
@@ -1377,6 +1373,40 @@ const settingsRouter = router({
         description: `Phone ${input.id} isActive=${input.isActive}`,
       });
       return { success: true };
+    }),
+
+  /**
+   * Register a number the tenant already owns (port-in / BYOC). Inbound routing uses `user_phone_numbers`;
+   * the DID must still be pointed at this app in SignalWire (or carrier).
+   */
+  registerOwnPhoneNumber: protectedProcedure
+    .input(
+      z.object({
+        phone: z.string().min(8, "Enter a full phone number"),
+        friendlyName: z.string().max(120).optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const r = await db.registerBringYourOwnPhoneNumber(
+          ctx.user.id,
+          input.phone,
+          input.friendlyName ?? null
+        );
+        await db.logActivity({
+          userId: ctx.user.id,
+          entityType: "phone_number",
+          entityId: r.insertId,
+          action: r.alreadyLinked ? "byoc_already_linked" : "byoc_registered",
+          description: `BYOC ${r.phoneNumber}`,
+        });
+        return r;
+      } catch (e: any) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: e?.message || "Could not link that number",
+        });
+      }
     }),
 
   // ── Google Calendar ──────────────────────────────────────────────────────

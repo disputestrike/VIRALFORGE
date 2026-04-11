@@ -117,17 +117,6 @@ const NEGATIVE_LABEL_RESPONSES = [
   "All good here — fully focused on you. What's going on?",
 ];
 
-const ARE_YOU_AI_RESPONSES = [
-  "Yes — I'm Alex, an AI assistant. I'm here to help with your calls and business. What can I do for you?",
-  "I am — I'm Alex, an AI assistant on this line. What are you looking to figure out today?",
-  "Yes, I'm an AI assistant named Alex. What can I help you with today?",
-];
-
-const NAME_RESPONSES = [
-  "I'm Alex — an AI assistant here to help. What can I do for you today?",
-  "My name is Alex. How can I help you?",
-];
-
 const WHERE_FROM_RESPONSES = [
   "I'm an AI assistant, so I support callers wherever the business needs me. What can I help you with today?",
   "I'm an AI assistant working on this line. What can I do for you?",
@@ -160,8 +149,19 @@ const PIVOT_RESPONSES = [
 export function getSmallTalkResponse(
   stClass: SmallTalkClass,
   consecutiveTurns: number,
-  businessName?: string
+  businessName?: string,
+  agentDisplayName?: string
 ): string {
+  const agent = (agentDisplayName ?? "").trim() || "Alex";
+  const areYouAiResponses = [
+    `Yes — I'm ${agent}, an AI assistant. I'm here to help with your calls and business. What can I do for you?`,
+    `I am — I'm ${agent}, an AI assistant on this line. What are you looking to figure out today?`,
+    `Yes, I'm an AI assistant named ${agent}. What can I help you with today?`,
+  ];
+  const nameResponses = [
+    `I'm ${agent} — an AI assistant here to help. What can I do for you today?`,
+    `My name is ${agent}. How can I help you?`,
+  ];
   // If we've hit the small-talk limit, force a business pivot
   if (
     consecutiveTurns >= MAX_SMALL_TALK_TURNS &&
@@ -179,8 +179,8 @@ export function getSmallTalkResponse(
     case "hello_check":   return pick(HELLO_CHECK_RESPONSES);
     case "how_are_you":    return pick(HOW_ARE_YOU_RESPONSES);
     case "negative_label": return pick(NEGATIVE_LABEL_RESPONSES);
-    case "are_you_ai":     return pick(ARE_YOU_AI_RESPONSES);
-    case "your_name":      return pick(NAME_RESPONSES);
+    case "are_you_ai":     return pick(areYouAiResponses);
+    case "your_name":      return pick(nameResponses);
     case "where_from":     return pick(WHERE_FROM_RESPONSES);
     case "light_tease":    return pick(LIGHT_TEASE_RESPONSES);
     case "meta_capability": return pick(META_CAPABILITY_RESPONSES);

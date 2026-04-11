@@ -148,8 +148,10 @@ export function checkClause(
   clause: string,
   userTranscript: string,
   conversationHistory: Array<{ role: string; content: string }>,
-  context: ConversationContext
+  context: ConversationContext,
+  agentDisplayName = "Alex"
 ): ClauseGuardrailResult {
+  const agent = (agentDisplayName ?? "").trim() || "Alex";
   const text = clause.trim();
   if (!text) return { action: "pass", text };
 
@@ -202,7 +204,7 @@ export function checkClause(
     if (pattern.test(text)) {
       return {
         action: "replace",
-        text: "I'm Alex, and I'm here to help. What can I do for you?",
+        text: `I'm ${agent}, and I'm here to help. What can I do for you?`,
         reason: "robotic_phrase",
       };
     }
@@ -213,7 +215,7 @@ export function checkClause(
     if (pattern.test(text)) {
       return {
         action: "replace",
-        text: "I'm Alex, an AI assistant. What can I help you with today?",
+        text: `I'm ${agent}, an AI assistant. What can I help you with today?`,
         reason: "identity_instability",
       };
     }
@@ -265,8 +267,10 @@ export function applyFullResponseGuardrails(
   response: string,
   userTranscript: string,
   conversationHistory: Array<{ role: string; content: string }>,
-  context: ConversationContext
+  context: ConversationContext,
+  agentDisplayName = "Alex"
 ): FullResponseGuardrailResult {
+  const agent = (agentDisplayName ?? "").trim() || "Alex";
   const violations: string[] = [];
   let text = response.trim();
   let wasModified = false;
@@ -323,7 +327,7 @@ export function applyFullResponseGuardrails(
     for (const pattern of ROBOTIC_PHRASE_PATTERNS) {
       if (pattern.test(text)) {
         violations.push("robotic_phrase");
-        text = "I'm Alex, and I'm here to help. What can I do for you?";
+        text = `I'm ${agent}, and I'm here to help. What can I do for you?`;
         wasModified = true;
         break;
       }
@@ -335,7 +339,7 @@ export function applyFullResponseGuardrails(
     for (const pattern of IDENTITY_INSTABILITY_PATTERNS) {
       if (pattern.test(text)) {
         violations.push("identity_instability");
-        text = "I'm Alex, an AI assistant. What can I help you with today?";
+        text = `I'm ${agent}, an AI assistant. What can I help you with today?`;
         wasModified = true;
         break;
       }
@@ -439,8 +443,10 @@ export function detectTopicDrift(text: string): TopicDriftResult {
 /** Safe redirect response for topic drift. */
 export function getDriftRedirectResponse(
   driftClass: "politics" | "religion" | "personal_life" | "unrelated_banter" | "profanity_bait" | "test_abuse",
-  businessGoal = "your calls and business"
+  businessGoal = "your calls and business",
+  agentDisplayName = "Alex"
 ): string {
+  const agent = (agentDisplayName ?? "").trim() || "Alex";
   switch (driftClass) {
     case "politics":
     case "religion":
@@ -448,7 +454,7 @@ export function getDriftRedirectResponse(
     case "personal_life":
       return `I keep the focus on ${businessGoal}. What can I help you with today?`;
     case "test_abuse":
-      return `I'm Alex, and I stay focused on helping you with ${businessGoal}. What can I do for you?`;
+      return `I'm ${agent}, and I stay focused on helping you with ${businessGoal}. What can I do for you?`;
     case "profanity_bait":
       return `I'm here to help if you want to focus on ${businessGoal}. What can I help you with today?`;
     default:

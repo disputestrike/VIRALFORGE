@@ -36,4 +36,27 @@ describe("voiceOpeningLines", () => {
     expect(a.length).toBeGreaterThan(10);
     expect(b.length).toBeGreaterThan(10);
   });
+
+  it("inbound greeting uses agentDisplayName instead of default Alex", () => {
+    const g = selectInboundGreeting({
+      businessName: "Peak Dental",
+      sessionId: "sess_agent_name_1",
+      industryLabel: "Dental",
+      agentDisplayName: "Marie",
+    });
+    expect(g).toContain("Marie");
+    expect(g).not.toMatch(/\bAlex\b/);
+    expect(g).toContain("Peak Dental");
+  });
+
+  it("outbound intro uses agentDisplayName", () => {
+    const g = selectOutboundIntro({
+      businessName: "Coastal HVAC",
+      sessionId: "out_agent_1",
+      agentDisplayName: "Diego",
+    });
+    expect(g).toContain("Diego");
+    expect(g).not.toMatch(/\bAlex\b/);
+    expect(g).toContain("Coastal HVAC");
+  });
 });

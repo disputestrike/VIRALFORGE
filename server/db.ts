@@ -41,6 +41,7 @@ import {
   type UserPhoneNumber,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { normalizeToE164US } from "./_core/phoneE164";
 
 let _db: MySql2Database | null = null;
 
@@ -122,6 +123,15 @@ export async function getUserById(id: number) {
   if (!db) return undefined;
   const rows = await db.select().from(users).where(eq(users.id, id)).limit(1);
   return rows[0];
+}
+
+/** Partial `users` row update (settings screen, admin tools). */
+export async function updateUserById(userId: number, patch: Record<string, unknown>): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+  if (Object.keys(clean).length === 0) return;
+  await db.update(users).set({ ...clean, updatedAt: new Date() } as Record<string, unknown>).where(eq(users.id, userId));
 }
 
 export async function findUserByStripeCustomerId(customerId: string) {
@@ -710,6 +720,49 @@ export async function insertUserPhoneNumber(data: InsertUserPhoneNumber): Promis
   if (!db) throw new Error("Database not available");
   const insertId = await insertAndGetId(db, userPhoneNumbers, data);
   return { insertId };
+}
+
+/**
+ * Link a tenant-owned / port-in number to this user for inbound routing (`getUserIdByPhoneNumber`).
+ * Does not purchase from SignalWire — customer keeps or ports their existing DID.
+ */
+export async function registerBringYourOwnPhoneNumber(
+  userId: number,
+  rawPhone: string,
+  friendlyName?: string | null
+): Promise<{ insertId: number; phoneNumber: string; alreadyLinked: boolean }> {
+  const trimmed = String(rawPhone ?? "").trim();
+  if (!trimmed) throw new Error("Phone number is required");
+  const normalized =
+    normalizeToE164US(trimmed) ||
+    (trimmed.startsWith("+") ? trimmed.replace(/\s+/g, "") : `+${trimmed.replace(/\D/g, "")}`);
+
+  const owner = await getUserIdByPhoneNumber(normalized);
+  if (owner !== null && owner !== userId) {
+    throw new Error("That number is already linked to another account.");
+  }
+
+  const existing = await listUserPhoneNumbers(userId);
+  const dup = existing.find(
+    (row) =>
+      normalizeToE164US(row.phoneNumber) === normalized ||
+      row.phoneNumber.replace(/\D/g, "") === normalized.replace(/\D/g, "")
+  );
+  if (dup) {
+    return { insertId: dup.id, phoneNumber: dup.phoneNumber, alreadyLinked: true };
+  }
+
+  const isFirst = existing.length === 0;
+  const { insertId } = await insertUserPhoneNumber({
+    userId,
+    phoneNumber: normalized,
+    signalwireSid: null,
+    friendlyName: friendlyName?.trim() || null,
+    isActive: true,
+    isPrimary: isFirst,
+    industry: null,
+  });
+  return { insertId, phoneNumber: normalized, alreadyLinked: false };
 }
 
 export async function setUserPhoneNumberActive(id: number, userId: number, isActive: boolean): Promise<void> {

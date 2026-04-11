@@ -36,4 +36,15 @@ describe("buildVoiceSystemPrompt", () => {
     expect(out).toMatch(/single word/i);
     expect(out).toMatch(/concrete detail/i);
   });
+
+  it("uses voiceAgentDisplayName from client config in persona", () => {
+    const client = mergeClientConfig({
+      ...baseClient,
+      voiceAgentDisplayName: "Mary",
+    });
+    const out = buildVoiceSystemPrompt(createCallState(), "Acme Solar", "solar", client);
+    expect(out).toContain("You are Mary,");
+    expect(out).toContain("Your name is Mary.");
+    expect(out).not.toContain("You are Alex,");
+  });
 });

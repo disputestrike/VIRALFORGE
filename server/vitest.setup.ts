@@ -3,6 +3,7 @@
  */
 
 import { vi, beforeEach } from "vitest";
+import { normalizeToE164US } from "./_core/phoneE164";
 
 // ─── Mock LLM (invokeLLM) ─────────────────────────────────────────────────────
 vi.mock("./_core/llm", () => ({
@@ -56,8 +57,8 @@ function resetStores() {
   _idCounters = {};
   _userPhoneNumbers = [];
   _users = [
-    { id: 1, openId: "test-user-open-id", name: "Test User", email: "test@apexai.com", role: "user", loginMethod: "manus", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
-    { id: 99, openId: "admin-open-id", name: "Admin User", email: "admin@apexai.com", role: "admin", loginMethod: "manus", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
+    { id: 1, openId: "test-user-open-id", name: "Test User", email: "test@apexai.com", role: "user", loginMethod: "manus", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date(), voiceAgentDisplayName: null },
+    { id: 99, openId: "admin-open-id", name: "Admin User", email: "admin@apexai.com", role: "admin", loginMethod: "manus", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date(), voiceAgentDisplayName: null },
   ];
 }
 
@@ -79,6 +80,17 @@ function buildMock() {
     ),
 
     getAllUsers: vi.fn().mockImplementation(async () => _users),
+
+    getUserById: vi.fn().mockImplementation(async (id: number) => _users.find((u) => u.id === id) ?? undefined),
+
+    updateUserById: vi.fn().mockImplementation(async (userId: number, patch: Record<string, unknown>) => {
+      const u = _users.find((x) => x.id === userId);
+      if (!u) throw new Error("Database not available");
+      for (const [k, v] of Object.entries(patch)) {
+        if (v !== undefined) (u as Record<string, unknown>)[k] = v;
+      }
+      u.updatedAt = new Date();
+    }),
 
     updateUserRole: vi.fn().mockImplementation(async (userId: number, role: string) => {
       const u = _users.find((u) => u.id === userId);
@@ -336,6 +348,67 @@ function buildMock() {
       const idx = _userPhoneNumbers.findIndex((r) => r.id === id && Number(r.userId) === userId);
       if (idx !== -1) _userPhoneNumbers[idx] = { ..._userPhoneNumbers[idx], isActive };
     }),
+
+    getUserIdByPhoneNumber: vi.fn().mockImplementation(async (phoneNumber: string) => {
+      const normalized =
+        normalizeToE164US(String(phoneNumber).trim()) ||
+        (String(phoneNumber).trim().startsWith("+") ? String(phoneNumber).trim().replace(/\s+/g, "") : "");
+      if (!normalized) return null;
+      for (const row of _userPhoneNumbers) {
+        const r = String(row.phoneNumber ?? "");
+        const rn = normalizeToE164US(r) || r.replace(/\D/g, "");
+        if (rn === normalized || r.replace(/\D/g, "") === normalized.replace(/\D/g, "")) {
+          return Number(row.userId);
+        }
+      }
+      return null;
+    }),
+
+    registerBringYourOwnPhoneNumber: vi.fn().mockImplementation(
+      async (userId: number, rawPhone: string, friendlyName?: string | null) => {
+        const trimmed = String(rawPhone ?? "").trim();
+        if (!trimmed) throw new Error("Phone number is required");
+        const normalized =
+          normalizeToE164US(trimmed) ||
+          (trimmed.startsWith("+") ? trimmed.replace(/\s+/g, "") : `+${trimmed.replace(/\D/g, "")}`);
+        let owner: number | null = null;
+        for (const row of _userPhoneNumbers) {
+          const r = String(row.phoneNumber ?? "");
+          const rn = normalizeToE164US(r) || r.replace(/\D/g, "");
+          if (rn === normalized || r.replace(/\D/g, "") === normalized.replace(/\D/g, "")) {
+            owner = Number(row.userId);
+            break;
+          }
+        }
+        if (owner !== null && owner !== userId) {
+          throw new Error("That number is already linked to another account.");
+        }
+        const existing = _userPhoneNumbers.filter((row) => Number(row.userId) === userId);
+        const dup = existing.find((row) => {
+          const r = String(row.phoneNumber ?? "");
+          return (
+            normalizeToE164US(r) === normalized || r.replace(/\D/g, "") === normalized.replace(/\D/g, "")
+          );
+        });
+        if (dup) {
+          return { insertId: Number(dup.id), phoneNumber: String(dup.phoneNumber), alreadyLinked: true };
+        }
+        const isFirst = existing.length === 0;
+        const id = nextId("userPhoneNumbers");
+        _userPhoneNumbers.push({
+          id,
+          userId,
+          phoneNumber: normalized,
+          signalwireSid: null,
+          friendlyName: friendlyName?.trim() || null,
+          isActive: true,
+          isPrimary: isFirst,
+          industry: null,
+          createdAt: new Date(),
+        });
+        return { insertId: id, phoneNumber: normalized, alreadyLinked: false };
+      }
+    ),
 
     listCrmConnections: vi.fn().mockResolvedValue([]),
     upsertCrmConnectionStub: vi.fn().mockResolvedValue(undefined),

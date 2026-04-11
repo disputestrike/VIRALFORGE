@@ -44,6 +44,8 @@ export const users = mysqlTable("users", {
   voiceKeyPhrases: text("voiceKeyPhrases"),
   /** Extra compliance / never-say lines */
   voiceRestrictionNotes: text("voiceRestrictionNotes"),
+  /** Spoken first name for the AI on this tenant's line (e.g. Mary, Nora). Empty = default Alex in prompts. */
+  voiceAgentDisplayName: varchar("voiceAgentDisplayName", { length: 80 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

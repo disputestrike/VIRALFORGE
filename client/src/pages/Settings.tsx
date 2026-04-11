@@ -87,6 +87,7 @@ export default function Settings() {
   const [voiceIndustryContext, setVoiceIndustryContext] = useState("");
   const [voiceKeyPhrases, setVoiceKeyPhrases] = useState("");
   const [voiceRestrictionNotes, setVoiceRestrictionNotes] = useState("");
+  const [voiceAgentDisplayName, setVoiceAgentDisplayName] = useState("");
 
   useEffect(() => {
     if (userSettings) {
@@ -98,6 +99,7 @@ export default function Settings() {
       setVoiceIndustryContext((userSettings as any).voiceIndustryContext || "");
       setVoiceKeyPhrases((userSettings as any).voiceKeyPhrases || "");
       setVoiceRestrictionNotes((userSettings as any).voiceRestrictionNotes || "");
+      setVoiceAgentDisplayName((userSettings as any).voiceAgentDisplayName || "");
     }
   }, [userSettings]);
 
@@ -459,6 +461,7 @@ export default function Settings() {
       voiceIndustryContext: voiceIndustryContext.trim() ? voiceIndustryContext.trim() : null,
       voiceKeyPhrases: voiceKeyPhrases.trim() ? voiceKeyPhrases.trim() : null,
       voiceRestrictionNotes: voiceRestrictionNotes.trim() ? voiceRestrictionNotes.trim() : null,
+      voiceAgentDisplayName: voiceAgentDisplayName.trim() ? voiceAgentDisplayName.trim() : null,
     });
   };
 
@@ -474,6 +477,17 @@ export default function Settings() {
       toast.success("Phone number updated");
     },
     onError: (e: { message?: string }) => toast.error(e.message ?? "Error"),
+  });
+  const [byocPhone, setByocPhone] = useState("");
+  const [byocLabel, setByocLabel] = useState("");
+  const registerOwnPhoneMut = trpc.settings.registerOwnPhoneNumber.useMutation({
+    onSuccess: (r) => {
+      utils.settings.listPhoneNumbers.invalidate();
+      setByocPhone("");
+      setByocLabel("");
+      toast.success(r.alreadyLinked ? "That number is already on your account." : "Number linked for inbound routing.");
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? "Could not link number"),
   });
 
   const { data: billingStatus } = trpc.saas.billing.status.useQuery();
@@ -507,7 +521,7 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Numbers purchased during onboarding are stored here for inbound voice and SMS routing. Inbound calls and texts to these lines resolve your tenant via the number&apos;s owner.
+            Numbers purchased during onboarding appear here for inbound voice and SMS routing. You can also link a number you already own (same line you have used for years, or a port-in): we record it for tenant routing while you keep or move the actual DID with your carrier or SignalWire. New lines can still be provisioned during onboarding.
           </p>
           {phoneNumsLoading ? (
             <p className="text-xs text-muted-foreground">Loading…</p>
@@ -546,6 +560,40 @@ export default function Settings() {
               ))}
             </ul>
           )}
+          <div className="rounded-lg border border-border bg-secondary/20 p-3 space-y-2 mt-2">
+            <p className="text-xs font-medium text-foreground">Link your existing number (BYOC)</p>
+            <p className="text-[11px] text-muted-foreground">
+              After linking, point that DID at this app in SignalWire (or your carrier) so inbound calls hit ApexAI. We do not purchase the number for you.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Input
+                type="tel"
+                placeholder="+1…"
+                value={byocPhone}
+                onChange={(e) => setByocPhone(e.target.value)}
+                className="bg-secondary border-border font-mono text-sm flex-1"
+              />
+              <Input
+                placeholder="Label (optional)"
+                value={byocLabel}
+                onChange={(e) => setByocLabel(e.target.value)}
+                className="bg-secondary border-border text-sm sm:max-w-[160px]"
+              />
+              <Button
+                type="button"
+                size="sm"
+                disabled={!byocPhone.trim() || registerOwnPhoneMut.isPending}
+                onClick={() =>
+                  registerOwnPhoneMut.mutate({
+                    phone: byocPhone.trim(),
+                    friendlyName: byocLabel.trim() || undefined,
+                  })
+                }
+              >
+                {registerOwnPhoneMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Link number"}
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -2263,6 +2311,19 @@ export default function Settings() {
           <p className="text-sm text-muted-foreground">
             Choose the voice profile your AI uses on every live call. Previews use the same backend voice profile that powers production calls.
           </p>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Agent introduction name (on calls)</Label>
+            <Input
+              value={voiceAgentDisplayName}
+              onChange={(e) => setVoiceAgentDisplayName(e.target.value)}
+              maxLength={80}
+              placeholder="e.g. Alex, Nora, Mary — leave blank for default Alex"
+              className="bg-secondary border-border max-w-md"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Callers hear this name in greetings and when they ask who they are speaking with. Saved with <span className="text-foreground font-medium">Save Settings</span> below.
+            </p>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {(voiceProfiles || []).map((v: any) => {

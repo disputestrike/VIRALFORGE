@@ -94,6 +94,7 @@ async function runMigrations() {
           "ALTER TABLE `users` ADD COLUMN `voiceIndustryContext` text NULL",
           "ALTER TABLE `users` ADD COLUMN `voiceKeyPhrases` text NULL",
           "ALTER TABLE `users` ADD COLUMN `voiceRestrictionNotes` text NULL",
+          "ALTER TABLE `users` ADD COLUMN `voiceAgentDisplayName` varchar(80) NULL",
           // ── Create missing feature tables ──
           "CREATE TABLE IF NOT EXISTS `crm_connections` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `provider` varchar(50) NOT NULL, `status` varchar(50) DEFAULT 'pending', `displayName` varchar(255), `externalAccountId` varchar(255), `lastSyncAt` timestamp NULL, `meta` text, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, UNIQUE KEY `uniq_user_provider` (`userId`, `provider`))",
           "CREATE TABLE IF NOT EXISTS `knowledge_bases` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `name` varchar(255) NOT NULL, `description` text, `status` varchar(50) DEFAULT 'training', `trainingProgress` int DEFAULT 0, `brandProfile` text, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
@@ -739,6 +740,7 @@ async function startServer() {
     const { CallSid, From, To } = req.body;
     const leadId = (req.query.leadId as string) || "";
     const sessionId = (req.query.sessionId as string) || CallSid || `session_${Date.now()}`;
+    let streamLeadParam = leadId;
 
     console.log(`[Voice] Call started: ${CallSid} from ${From}`);
 
@@ -822,6 +824,9 @@ async function startServer() {
           }
           lead = await db.getLeadById(insertId);
         }
+        if (lead && (lead as { id?: number }).id != null) {
+          streamLeadParam = String((lead as { id: number }).id);
+        }
         const vm = await import("./services/voiceSessionManager");
         const { getUserVoiceSettings } = await import("./services/voiceProfiles");
         const voiceSettings = ownerId ? await getUserVoiceSettings(ownerId) : { voiceProfileId: "cartesia-sarah-sales" };
@@ -860,7 +865,10 @@ async function startServer() {
     // <Start><Stream> is unidirectional only - cannot send audio back to caller
     // <Connect><Stream> blocks and enables full duplex bidirectional streaming
     const wsHost = process.env.RAILWAY_PUBLIC_DOMAIN || req.get("host");
-    const streamUrl = `wss://${wsHost}/api/voice-stream`;
+    const streamQs = new URLSearchParams();
+    streamQs.set("sessionId", sid);
+    if (streamLeadParam) streamQs.set("leadId", streamLeadParam);
+    const streamUrl = `wss://${wsHost}/api/voice-stream?${streamQs.toString()}`;
     console.log("[Voice] Stream URL:", streamUrl);
     console.log("[Voice] Session ID:", sid);
     // <Connect><Stream> is required for bidirectional audio (per SignalWire official example)
@@ -876,7 +884,7 @@ async function startServer() {
 ${ringXml}  <Connect action="${statusCallback}" method="POST">
     <Stream url="${streamUrl}" track="inbound_track">
       <Parameter name="sessionId" value="${sid}" />
-      <Parameter name="leadId" value="${leadId}" />
+      <Parameter name="leadId" value="${streamLeadParam}" />
     </Stream>
   </Connect>
   <Pause length="300" />
@@ -1071,7 +1079,10 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
 
     // DIRECT AI — no IVR, no menu, connect immediately
     const wsHost = process.env.RAILWAY_PUBLIC_DOMAIN || req.get("host");
-    const streamUrl = `wss://${wsHost}/api/voice-stream`;
+    const inboundStreamQs = new URLSearchParams();
+    inboundStreamQs.set("sessionId", sid);
+    if (inboundLeadId) inboundStreamQs.set("leadId", inboundLeadId);
+    const streamUrl = `wss://${wsHost}/api/voice-stream?${inboundStreamQs.toString()}`;
     const statusCallback = `https://${wsHost}/api/voice/status`;
     const baseHttps = ENV.publicUrl.replace(/\/$/, "");
     const ringXml =
@@ -1671,6 +1682,7 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
         let businessName: string | undefined;
         let industry: string | undefined;
         let voiceProfileId: string | undefined;
+        let voiceAgentDisplayName: string | undefined;
 
         if (sessionId) {
           try {
@@ -1725,6 +1737,7 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
             if (u?.voiceKeyPhrases?.trim()) o.voiceKeyPhrases = u.voiceKeyPhrases.trim();
             if (u?.voiceRestrictionNotes?.trim()) o.voiceRestrictionNotes = u.voiceRestrictionNotes.trim();
             if (Object.keys(o).length) tenantIndustryOverlay = o;
+            if (u?.voiceAgentDisplayName?.trim()) voiceAgentDisplayName = u.voiceAgentDisplayName.trim();
           } catch {}
         }
 
@@ -1751,6 +1764,7 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
           voiceProfileId,
           language: callLanguage,
           tenantIndustryOverlay,
+          voiceAgentDisplayName,
         });
 
       });

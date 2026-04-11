@@ -20,6 +20,7 @@ import {
   isResponseLooping,
   detectTopicDrift,
   isPitchAllowed,
+  getDriftRedirectResponse,
 } from "./responseGuardrails";
 import { tagCallFailureModes, isCallHealthy, formatFailureModes } from "./callQualityTagger";
 
@@ -357,6 +358,52 @@ describe("Full-Response Guardrails", () => {
 
     expect(result.wasModified).toBe(false);
     expect(result.violations).toHaveLength(0);
+  });
+
+  it("uses tenant agent name in robotic-phrase fallback (full response)", () => {
+    const robotic = "As an AI language model, I cannot answer that.";
+    const r = applyFullResponseGuardrails(robotic, "hello", [], "meta_question", "Jordan");
+    expect(r.wasModified).toBe(true);
+    expect(r.text).toContain("Jordan");
+    expect(r.text).not.toContain("Alex");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CATEGORY 8b: Tenant-configured spoken agent name (global product alignment)
+// Defaults remain "Alex" when unset; per-tenant overrides must propagate.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("Tenant agent display name", () => {
+  it("getSmallTalkResponse uses custom name for AI disclosure and name questions", () => {
+    const ai = getSmallTalkResponse("are_you_ai", 1, undefined, "Nora");
+    expect(ai).toContain("Nora");
+    expect(ai).not.toMatch(/\bAlex\b/);
+    const nm = getSmallTalkResponse("your_name", 0, undefined, "Sam");
+    expect(nm).toContain("Sam");
+    expect(nm).not.toMatch(/\bAlex\b/);
+  });
+
+  it("getDriftRedirectResponse test_abuse line uses custom agent", () => {
+    const line = getDriftRedirectResponse("test_abuse", "your inbound calls", "Riley");
+    expect(line).toContain("Riley");
+    expect(line).toContain("inbound calls");
+    expect(line).not.toContain("Alex");
+  });
+
+  it("checkClause robotic replacement uses custom agent", () => {
+    const r = checkClause(
+      "As an AI language model I should note that I'm an AI.",
+      "who are you",
+      [],
+      "meta_question",
+      "Casey"
+    );
+    expect(r.action).toBe("replace");
+    if (r.action === "replace") {
+      expect(r.text).toContain("Casey");
+      expect(r.text).not.toContain("Alex");
+    }
   });
 });
 

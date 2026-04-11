@@ -13,6 +13,8 @@ export type InboundGreetingInput = {
   industryLabel?: string;
   /** When true, use Apex platform-style openers */
   apexProductLine?: boolean;
+  /** Spoken name in greetings; defaults to Alex */
+  agentDisplayName?: string;
 };
 
 function stableIndex(key: string | undefined, modulo: number): number {
@@ -33,31 +35,33 @@ function cleanIndustryHint(label?: string): string | undefined {
   return t;
 }
 
-function tenantOpeners(businessName: string, industryHint?: string): string[] {
+function tenantOpeners(businessName: string, agent: string, industryHint?: string): string[] {
   const b = businessName.trim() || "us";
+  const a = agent.trim() || "Alex";
   if (industryHint) {
     return [
-      `Thanks for calling ${b}. This is Alex. How can I help with ${industryHint} today?`,
-      `${b}, Alex speaking. If this is about ${industryHint}, you're in the right place. What's going on?`,
-      `You've reached ${b}. I'm Alex. What can I help you with regarding ${industryHint}?`,
-      `Hi, ${b} here. This is Alex. What do you need help with today?`,
+      `Thanks for calling ${b}. This is ${a}. How can I help with ${industryHint} today?`,
+      `${b}, ${a} speaking. If this is about ${industryHint}, you're in the right place. What's going on?`,
+      `You've reached ${b}. I'm ${a}. What can I help you with regarding ${industryHint}?`,
+      `Hi, ${b} here. This is ${a}. What do you need help with today?`,
     ];
   }
   return [
-    `Thanks for calling ${b}. This is Alex. What can I help you with today?`,
-    `${b}, Alex speaking. How can I help?`,
-    `You've reached ${b}. I'm Alex. What's on your mind today?`,
-    `Hi there, ${b} here. This is Alex. What brought you in today?`,
+    `Thanks for calling ${b}. This is ${a}. What can I help you with today?`,
+    `${b}, ${a} speaking. How can I help?`,
+    `You've reached ${b}. I'm ${a}. What's on your mind today?`,
+    `Hi there, ${b} here. This is ${a}. What brought you in today?`,
   ];
 }
 
-function apexPlatformOpeners(businessName: string): string[] {
+function apexPlatformOpeners(businessName: string, agent: string): string[] {
   const b = businessName.trim() || "ApexAI";
+  const a = agent.trim() || "Alex";
   return [
-    `Thanks for calling ${b}. This is Alex. What would you like to know today?`,
-    `${b}, Alex speaking. What can I help you figure out today?`,
-    `Hi, this is Alex with ${b}. What would you like to go over today?`,
-    `Welcome to ${b}. I'm Alex. How can I help today?`,
+    `Thanks for calling ${b}. This is ${a}. What would you like to know today?`,
+    `${b}, ${a} speaking. What can I help you figure out today?`,
+    `Hi, this is ${a} with ${b}. What would you like to go over today?`,
+    `Welcome to ${b}. I'm ${a}. How can I help today?`,
   ];
 }
 
@@ -66,20 +70,22 @@ function apexPlatformOpeners(businessName: string): string[] {
  */
 export function selectInboundGreeting(input: InboundGreetingInput): string {
   const name = input.businessName.trim() || "our team";
+  const agent = (input.agentDisplayName ?? "").trim() || "Alex";
   const apex = input.apexProductLine ?? isApexPlatformDemoLine(name);
   const hint = cleanIndustryHint(input.industryLabel);
-  const pool = apex ? apexPlatformOpeners(name) : tenantOpeners(name, hint);
+  const pool = apex ? apexPlatformOpeners(name, agent) : tenantOpeners(name, agent, hint);
   const idx = stableIndex(input.sessionId ?? `call_${Date.now()}`, pool.length);
   return pool[idx]!;
 }
 
 /** Outbound cold intro — rotated so not identical every dial. */
-export function selectOutboundIntro(input: { businessName: string; sessionId?: string }): string {
+export function selectOutboundIntro(input: { businessName: string; sessionId?: string; agentDisplayName?: string }): string {
   const b = input.businessName.trim() || "our team";
+  const a = (input.agentDisplayName ?? "").trim() || "Alex";
   const pool = [
-    `Hi, this is Alex from ${b} — do you have a quick moment?`,
-    `Hey — Alex with ${b}. Got a minute for a quick call?`,
-    `${b}, Alex calling — is now a decent time for a short chat?`,
+    `Hi, this is ${a} from ${b} — do you have a quick moment?`,
+    `Hey — ${a} with ${b}. Got a minute for a quick call?`,
+    `${b}, ${a} calling — is now a decent time for a short chat?`,
   ];
   return pool[stableIndex(input.sessionId, pool.length)]!;
 }
