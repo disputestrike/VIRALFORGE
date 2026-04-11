@@ -868,8 +868,10 @@ async function startServer() {
     const streamQs = new URLSearchParams();
     streamQs.set("sessionId", sid);
     if (streamLeadParam) streamQs.set("leadId", streamLeadParam);
-    const streamUrl = `wss://${wsHost}/api/voice-stream?${streamQs.toString()}`;
-    console.log("[Voice] Stream URL:", streamUrl);
+    const streamUrlRaw = `wss://${wsHost}/api/voice-stream?${streamQs.toString()}`;
+    // `&` in query string must be &amp; inside XML attribute or TwiML parsers break / truncate the URL.
+    const streamUrl = streamUrlRaw.replace(/&/g, "&amp;");
+    console.log("[Voice] Stream URL (raw for logs):", streamUrlRaw);
     console.log("[Voice] Session ID:", sid);
     // <Connect><Stream> is required for bidirectional audio (per SignalWire official example)
     // <Start><Stream> is unidirectional only — cannot send AI audio back to caller
@@ -1082,7 +1084,8 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
     const inboundStreamQs = new URLSearchParams();
     inboundStreamQs.set("sessionId", sid);
     if (inboundLeadId) inboundStreamQs.set("leadId", inboundLeadId);
-    const streamUrl = `wss://${wsHost}/api/voice-stream?${inboundStreamQs.toString()}`;
+    const streamUrlRawInbound = `wss://${wsHost}/api/voice-stream?${inboundStreamQs.toString()}`;
+    const streamUrl = streamUrlRawInbound.replace(/&/g, "&amp;");
     const statusCallback = `https://${wsHost}/api/voice/status`;
     const baseHttps = ENV.publicUrl.replace(/\/$/, "");
     const ringXml =
