@@ -13,6 +13,7 @@
 import * as voiceSessionManager from "./voiceSessionManager";
 import { resolveVoiceProfile } from "./voiceProfiles";
 import { ENV } from "../env";
+import { cerebrasChatCompletion } from "../cerebras";
 import {
   FINAL_SILENCE_DEBOUNCE_MS,
   splitIntoSentences,
@@ -740,19 +741,19 @@ export class VoiceRealtimePipeline {
     ];
 
     const semantic = this.chooseRoute(transcript, this.customer.objectionHistory.length);
-    this.logger.log(`[PIPE] llm=groq semantic=${semantic} epoch=${epoch}`);
+    this.logger.log(`[PIPE] llm=cerebras semantic=${semantic} epoch=${epoch}`);
 
-    if (!(process.env.GROQ_API_KEY ?? "").trim()) {
+    if (!ENV.cerebrasApiKeys.length) {
       this.logger.error("[PIPE] GROQ_API_KEY missing — cannot run LLM");
       return;
     }
 
-    await this.streamGroq(messages, transcript, epoch);
+    await this.streamCerebras(messages, transcript, epoch);
   }
 
   // ── GROQ STREAMING → CARTESIA ─────────────────────────────────────────────
 
-  private async streamGroq(
+  private async streamCerebras(
     messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
     transcript: string,
     epoch: number
@@ -762,38 +763,23 @@ export class VoiceRealtimePipeline {
     this.cartesiaNeedsNewContext = true;
     this.lastCartesiaContinueWasTrue = false;
     this.assistantResponseInProgress = true;
-    const groqKey = (process.env.GROQ_API_KEY ?? "").trim();
-    if (!groqKey) {
-      this.logger.error("[PIPE] Missing GROQ_API_KEY");
+    if (!ENV.cerebrasApiKeys.length) {
+      this.logger.error("[PIPE] Missing CEREBRAS_API_KEY");
       this.assistantResponseInProgress = false;
       return;
     }
-    const { default: OpenAI } = await import("openai");
-    const client = new OpenAI({ apiKey: groqKey, baseURL: "https://api.groq.com/openai/v1" });
 
     const systemMsg = messages.find(m => m.role === "system")?.content ?? "";
     const chatMsgs = messages
       .filter(m => m.role !== "system")
       .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
 
-    const stream = await client.chat.completions.create({
-      model: ENV.groqModel,
-      max_tokens: Math.min(1024, Math.max(400, ENV.voiceLlmMaxTokens * 2)),
+    const { text: assembled } = await cerebrasChatCompletion({
+      model: ENV.cerebrasModel,
+      maxTokens: Math.min(1024, Math.max(400, ENV.voiceLlmMaxTokens * 2)),
       temperature: Math.min(0.75, Math.max(0.35, ENV.voiceLlmTemperature)),
       messages: [{ role: "system", content: systemMsg }, ...chatMsgs],
-      stream: true,
     });
-
-    let assembled = "";
-
-    for await (const chunk of stream) {
-      if (epoch !== this.generationEpoch) {
-        this.assistantResponseInProgress = false;
-        return;
-      }
-      const t = chunk.choices?.[0]?.delta?.content;
-      if (typeof t === "string" && t) assembled += t;
-    }
 
     if (epoch !== this.generationEpoch) {
       this.assistantResponseInProgress = false;

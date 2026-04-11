@@ -208,16 +208,7 @@ async function startServer() {
   console.log(`  STT:         ${ENV.sttEnabled ? `✅ Deepgram ready (model=${process.env.VOICE_DEEPGRAM_MODEL ?? "nova-3"})` : "⚠️  disabled (set DEEPGRAM_API_KEY)"}`);
   const activeTts = ENV.elevenLabsApiKey ? `Cartesia+ElevenLabs (TTS_PROVIDER=${ENV.ttsProvider})` : "Cartesia";
   console.log(`  TTS:         ${ENV.ttsEnabled || ENV.elevenLabsApiKey ? `✅ ${activeTts}` : "⚠️  disabled (set CARTESIA_API_KEY or ELEVENLABS_API_KEY)"}`);
-  const activeLlm =
-    ENV.llmProvider === "xai" && ENV.xaiApiKey
-      ? `xAI (${ENV.xaiModel})`
-      : ENV.groqApiKey
-        ? `Groq (${ENV.groqModel})`
-        : ENV.anthropicApiKey
-          ? "Anthropic Claude"
-          : ENV.xaiApiKey
-            ? `xAI (${ENV.xaiModel})`
-            : "NONE";
+  const activeLlm = ENV.aiEnabled ? `Cerebras (${ENV.cerebrasModel})` : "NONE";
   console.log(
     `  AI/LLM:      ${ENV.aiEnabled ? `✅ ${activeLlm} [LLM_PROVIDER=${ENV.llmProvider}]` : "⚠️  disabled — set GROQ_API_KEY and/or XAI_API_KEY (LLM_PROVIDER=xai) and/or ANTHROPIC_API_KEY"}`
   );

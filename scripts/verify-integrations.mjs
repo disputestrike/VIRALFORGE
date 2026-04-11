@@ -72,26 +72,38 @@ const groups = [
   {
     name: "Realtime voice AI core",
     mode: "required",
-    keys: ["DEEPGRAM_API_KEY", "GROQ_API_KEY", "XAI_API_KEY", "LLM_PROVIDER", "CARTESIA_API_KEY", "ELEVENLABS_API_KEY"],
+    keys: [
+      "DEEPGRAM_API_KEY",
+      "CEREBRAS_API_KEY",
+      "CEREBRAS_API_KEY_2",
+      "CEREBRAS_API_KEY_3",
+      "CEREBRAS_API_KEY_4",
+      "CEREBRAS_API_KEY_5",
+      "CARTESIA_API_KEY",
+      "ELEVENLABS_API_KEY",
+    ],
     validator: () => {
       const hasStt = !!String(process.env.DEEPGRAM_API_KEY ?? "").trim();
-      const provider = String(process.env.LLM_PROVIDER ?? "groq").trim().toLowerCase();
-      const usesXai = provider === "xai" || provider === "grok";
-      const hasLlm = usesXai
-        ? !!String(process.env.XAI_API_KEY ?? "").trim()
-        : !!String(process.env.GROQ_API_KEY ?? "").trim();
+      const cerebrasKeys = [
+        process.env.CEREBRAS_API_KEY,
+        process.env.CEREBRAS_API_KEY_2,
+        process.env.CEREBRAS_API_KEY_3,
+        process.env.CEREBRAS_API_KEY_4,
+        process.env.CEREBRAS_API_KEY_5,
+      ].filter((value) => !!String(value ?? "").trim());
+      const hasLlm = cerebrasKeys.length > 0;
       const hasTts =
         !!String(process.env.CARTESIA_API_KEY ?? "").trim() ||
         !!String(process.env.ELEVENLABS_API_KEY ?? "").trim();
       const missing = [];
       if (!hasStt) missing.push("DEEPGRAM_API_KEY");
-      if (!hasLlm) missing.push(usesXai ? "XAI_API_KEY" : "GROQ_API_KEY");
+      if (!hasLlm) missing.push("CEREBRAS_API_KEY");
       if (!hasTts) missing.push("CARTESIA_API_KEY or ELEVENLABS_API_KEY");
       return {
         ok: hasStt && hasLlm && hasTts,
         detail: missing.length
           ? `missing ${missing.join(", ")}`
-          : `provider=${usesXai ? "xai" : "groq"}; TTS=${String(process.env.CARTESIA_API_KEY ?? "").trim() ? "cartesia" : "elevenlabs"}`,
+          : `provider=cerebras (${cerebrasKeys.length} key${cerebrasKeys.length === 1 ? "" : "s"}); TTS=${String(process.env.CARTESIA_API_KEY ?? "").trim() ? "cartesia" : "elevenlabs"}`,
       };
     },
   },
@@ -187,7 +199,7 @@ console.log("  - required groups must be complete");
 console.log("  - optional groups may be fully absent, but partially configured groups fail");
 console.log("");
 console.log("Tip: copy Railway env into .env before running strict verification.");
-console.log("Live voice requires telephony + Deepgram + Groq/xAI + Cartesia/ElevenLabs to be complete.\n");
+console.log("Live voice requires telephony + Deepgram + Cerebras + Cartesia/ElevenLabs to be complete.\n");
 
 if (strictFail) {
   console.error("VERIFY_STRICT=1: one or more required groups are incomplete, or an optional provider is only partially configured.");

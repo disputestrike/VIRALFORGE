@@ -28,6 +28,7 @@ import {
 } from "../_core/services/voiceProfiles";
 import voiceSessionManager from "../_core/services/voiceSessionManager";
 import { ENV } from "../_core/env";
+import { cerebrasChatCompletionStream } from "../_core/cerebras";
 import {
   traceStart,
   traceEvent,
@@ -124,7 +125,7 @@ function voiceStackMissingEnvVars(): string[] {
   const m: string[] = [];
   if (!(ENV.deepgramApiKey ?? "").trim()) m.push("DEEPGRAM_API_KEY");
   if (!ENV.voiceLlmConfigured) {
-    m.push(ENV.llmProvider === "xai" ? "XAI_API_KEY (LLM_PROVIDER=xai)" : "GROQ_API_KEY");
+    m.push("CEREBRAS_API_KEY");
   }
   if (!(ENV.cartesiaApiKey ?? "").trim() && !(ENV.elevenLabsApiKey ?? "").trim()) {
     m.push("CARTESIA_API_KEY or ELEVENLABS_API_KEY");
@@ -1323,8 +1324,8 @@ export function createCallEngine(opts: EngineOptions): void {
 
     const reprompt =
       "I didn't quite catch that—could you say that again in a few words?";
-    const activeProvider = ENV.llmProvider === "xai" ? "xai" : "groq";
-    const activeModel = ENV.llmProvider === "xai" ? ENV.xaiModel : ENV.groqModel;
+    const activeProvider = "cerebras";
+    const activeModel = ENV.cerebrasModel;
     traceEvent(callId, "llm_route", {
       path: activeProvider,
       model: activeModel,
@@ -1510,16 +1511,6 @@ export function createCallEngine(opts: EngineOptions): void {
     traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
   }
 
-  /** xAI Grok uses OpenAI-compatible streaming format */
-  async function* openAiTextDeltas(stream: AsyncIterable<unknown>): AsyncGenerator<string, void, void> {
-    for await (const chunk of stream as AsyncIterable<{
-      choices?: { delta?: { content?: string | null } }[];
-    }>) {
-      const t = chunk.choices?.[0]?.delta?.content;
-      if (typeof t === "string" && t) yield t;
-    }
-  }
-
   async function respondVoiceLlm(
     epoch: number,
     userTranscript: string,
@@ -1527,7 +1518,7 @@ export function createCallEngine(opts: EngineOptions): void {
     recoveryPrefixDone: boolean,
     opts?: {
       blueprintIntentOverride?: BlueprintIntent;
-      /** User message for this Grok request only — never written to call transcript. */
+      /** User message for this Cerebras request only — never written to call transcript. */
       llmOnlyUserMessage?: string;
     }
   ): Promise<void> {
@@ -1562,28 +1553,17 @@ export function createCallEngine(opts: EngineOptions): void {
 
     const textForGuard = cue ? "" : userTranscript;
 
-    // ── Groq or xAI — streaming LLM (OpenAI-compatible chat/completions) ──
-    const useXai = ENV.llmProvider === "xai";
-    const apiKey = useXai ? ENV.xaiApiKey : ENV.groqApiKey;
-    if (!apiKey) {
-      throw new Error(useXai ? "XAI_API_KEY not configured" : "GROQ_API_KEY not configured");
-    }
-    const baseURL = useXai ? ENV.xaiBaseUrl : "https://api.groq.com/openai/v1";
-    const model = useXai ? ENV.xaiModel : ENV.groqModel;
-    const { default: OpenAI } = await import("openai");
-    const client = new OpenAI({ apiKey, baseURL });
-    const stream = await client.chat.completions.create({
-      model,
+    const { stream, model } = await cerebrasChatCompletionStream({
+      model: ENV.cerebrasModel,
       messages: [{ role: "system", content: prompt }, ...messages],
-      max_tokens: ENV.voiceLlmMaxTokens,
+      maxTokens: ENV.voiceLlmMaxTokens,
       temperature: ENV.voiceLlmTemperature,
-      stream: true,
     });
     traceEvent(callId, "llm_stream_start", {
-      provider: useXai ? "xai" : "groq",
+      provider: "cerebras",
       model,
     });
-    const { clean, full } = await streamToCartesia(openAiTextDeltas(stream), epoch, textForGuard);
+    const { clean, full } = await streamToCartesia(stream, epoch, textForGuard);
     if (!clean.trim() && !full.trim()) throw new Error("Empty LLM response");
   }
 
@@ -1740,7 +1720,7 @@ export function createCallEngine(opts: EngineOptions): void {
       return { clean: "", full: fullText };
     }
 
-    if (ENV.voiceGrokJsonEnvelope) {
+      if (ENV.voiceLlmJsonEnvelope) {
       const extracted = tryExtractJsonSpokenText(fullText);
       if (extracted) {
         // Re-process: flush the extracted text as streaming clauses

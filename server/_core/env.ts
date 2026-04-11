@@ -38,7 +38,6 @@ export const ENV = {
   redisUrl: process.env.REDIS_URL ?? "",
 
   // ── Anthropic (script generation, conversation engine, AI features) ──
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
 
   // ── SignalWire (voice calls + SMS) ───────────────────────────────────────
   signalwireProjectId:   process.env.SIGNALWIRE_PROJECT_ID ?? "",
@@ -138,7 +137,9 @@ export const ENV = {
   /** When true (default), block outbound dials to numbers on tenant `blocked_phone_numbers`. */
   voiceOutboundBlocklistCheck: process.env.VOICE_OUTBOUND_BLOCKLIST_CHECK !== "false",
   /** Parse JSON envelope from LLM output for TTS (see voiceResponseEnvelope.ts). */
-  voiceGrokJsonEnvelope: process.env.VOICE_GROK_JSON_ENVELOPE === "true",
+  voiceLlmJsonEnvelope:
+    process.env.VOICE_LLM_JSON_ENVELOPE === "true" ||
+    process.env.VOICE_GROK_JSON_ENVELOPE === "true",
   /** Send Cartesia `generation_config.emotion` when profile has `ttsEmotion` (disable if API rejects). */
   voiceCartesiaEmotion: process.env.VOICE_CARTESIA_EMOTION !== "false",
   /** External voice-metrics-service base URL (e.g. https://voice-metrics-production.up.railway.app). Events are POSTed fire-and-forget. Leave unset to disable. */
@@ -163,25 +164,36 @@ export const ENV = {
   pipedriveRedirectUri: process.env.PIPEDRIVE_REDIRECT_URI ?? "",
 
   // ── Groq (primary LLM: live voice streaming + invokeLLM) ────────────────────
-  groqApiKey: (process.env.GROQ_API_KEY ?? "").trim(),
-  groqModel: (process.env.GROQ_MODEL ?? "llama-3.1-8b-instant").trim(),
+  cerebrasApiKey: (process.env.CEREBRAS_API_KEY ?? "").trim(),
+  cerebrasApiKeys: (() => {
+    const keys = [
+      process.env.CEREBRAS_API_KEY,
+      process.env.CEREBRAS_API_KEY_2,
+      process.env.CEREBRAS_API_KEY_3,
+      process.env.CEREBRAS_API_KEY_4,
+      process.env.CEREBRAS_API_KEY_5,
+    ]
+      .map((value) => (value ?? "").trim())
+      .filter(Boolean);
+    return Array.from(new Set(keys));
+  })(),
+  cerebrasModel: (process.env.CEREBRAS_MODEL ?? "llama3.1-8b").trim(),
+  cerebrasBaseUrl: (process.env.CEREBRAS_BASE_URL ?? "https://api.cerebras.ai/v1").replace(/\/$/, ""),
 
   // ── xAI Grok (OpenAI-compatible chat/completions at api.x.ai) ───────────────
-  xaiApiKey: (process.env.XAI_API_KEY ?? "").trim(),
-  xaiModel: (process.env.XAI_MODEL ?? "grok-3-latest").trim(),
-  xaiBaseUrl: (process.env.XAI_BASE_URL ?? "https://api.x.ai/v1").replace(/\/$/, ""),
+  llmProvider: "cerebras" as "cerebras" | "xai" | "groq" | "anthropic",
+  // Deprecated compatibility shims while older diagnostics are simplified.
+  groqApiKey: (process.env.CEREBRAS_API_KEY ?? "").trim() ? "__cerebras__" : "",
+  groqModel: (process.env.CEREBRAS_MODEL ?? "llama3.1-8b").trim(),
+  xaiApiKey: "",
+  xaiModel: "",
+  anthropicApiKey: "",
 
   /**
    * LLM provider selection for routing / logging (batch + voiceRealtimePipeline).
    * groq (default) | xai | grok (alias for xai) | anthropic — legacy `LLM_PROVIDER=cerebras` → groq.
    * Live voice: Groq (`GROQ_API_KEY`) or xAI (`XAI_API_KEY` + `LLM_PROVIDER=xai`).
    */
-  llmProvider: (() => {
-    const p = (process.env.LLM_PROVIDER ?? "groq").trim().toLowerCase();
-    if (p === "cerebras") return "groq";
-    if (p === "grok") return "xai";
-    return p;
-  })(),
 
   /**
    * TTS provider selection.
@@ -221,10 +233,9 @@ export const ENV = {
   get emailEnabled()  { return this.resendApiKey !== ""; },
   get ttsEnabled()    { return (process.env.CARTESIA_API_KEY ?? "").trim() !== ""; },
   get sttEnabled()    { return this.deepgramApiKey !== ""; },
-  /** True when the configured voice LLM provider has an API key (Groq vs xAI). */
+  /** True when the configured voice LLM provider has at least one Cerebras API key. */
   get voiceLlmConfigured() {
-    if (this.llmProvider === "xai") return this.xaiApiKey !== "";
-    return this.groqApiKey !== "";
+    return this.cerebrasApiKeys.length > 0;
   },
   /** Live SignalWire streaming voice: requires Deepgram STT + voice LLM + any TTS. */
   get voiceRealtimeReady() {
@@ -248,6 +259,6 @@ export const ENV = {
   },
   /** AI enabled — true when any LLM provider key is configured. */
   get aiEnabled() {
-    return this.groqApiKey !== "" || this.xaiApiKey !== "" || this.anthropicApiKey !== "";
+    return this.cerebrasApiKeys.length > 0;
   },
 };
