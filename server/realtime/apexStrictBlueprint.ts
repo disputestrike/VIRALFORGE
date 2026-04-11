@@ -1,6 +1,6 @@
 /**
  * APEX AI — strict controller blueprint (conversation operating system).
- * Deterministic rules + prompt injection; telephony hooks live in realtimeVoiceEngine.
+ * Operational rails + prompt injection; telephony hooks live in realtimeVoiceEngine.
  *
  * Rule: USER ALWAYS WINS THE TURN — stop TTS / cancel stale generation on interrupt (caller).
  */
@@ -70,7 +70,7 @@ function contains(text: string, phrases: string[]): boolean {
   return phrases.some((p) => t.includes(p.toLowerCase()));
 }
 
-/** Phrase maps — deterministic, run before LLM. Order: specific buckets first in classifyDeterministic. */
+/** Phrase maps for routing, tracing, and prompt steering. */
 
 export const PHRASE_PRESSURE = [
   "so what",
@@ -233,24 +233,10 @@ export function classifyIntent(text: string): BlueprintIntent {
   }
 }
 
-/** Production copy — deterministic; app-wide (not vertical-specific). */
+/** Operational copy — used only for recovery, chaos handling, and other non-sales rails. */
 export const COPY_BLOCKS = {
-  core_explain:
-    "Apex AI answers inbound calls 24/7, qualifies leads, and books appointments on your calendar — so your team spends time closing, not chasing missed calls.",
-  benefit:
-    "You stop losing revenue to voicemail and speed-to-lead gaps: calls get answered instantly, qualified, and routed or booked without adding headcount.",
-  objection_staff:
-    "Totally fair — your team still owns the relationship. Apex removes the repetitive phone tag and qualification noise so your people focus on real conversations that close.",
   objection_ai_cant_sell:
     "The AI isn’t replacing judgment — it’s handling the high-volume, repetitive part so nothing slips through. Your team still closes; the line just stops bleeding leads.",
-  objection_messes_up:
-    "If the handoff’s messy, that’s on us to fix — the goal is clean qualification and booking, not a black box. We keep the workflow tight and measurable.",
-  pressure_level_1: "You get more booked appointments without adding staff.",
-  pressure_level_2:
-    "If your team is already capturing every single call perfectly, then you don't need this.",
-  pressure_level_3:
-    "But if even a few calls are missed or delayed, that's lost revenue every day.",
-  pressure_level_4: "Sounds like you're covered. No need to change anything.",
   /** Controlled recovery: acknowledge → reset frame → return control to caller. */
   recovery_controlled:
     "I hear you. Would you like me to end the call, or is there something specific I can help with?",
@@ -258,9 +244,6 @@ export const COPY_BLOCKS = {
   /** After “why aren’t you talking” — bridge then LLM continues the real thread. */
   silence_complaint_bridge:
     "Hey — I'm right here with you. Let me pick back up on what we were talking about.",
-  /** Continuation tone — assumptive, not a cold handoff. */
-  booking:
-    "Let's do this — I can show you exactly how this works for your business.\n\nI've got tomorrow at 10 or 2 — which works better?",
   close: "Thanks so much for calling. Have a great day, and feel free to call back anytime.",
 } as const;
 
@@ -457,7 +440,7 @@ export function buildApexBlueprintPromptBlock(state: ApexControllerState, intent
 }
 
 /**
- * Deterministic short-circuits. Runs before LLM. Booking uses strict gate.
+ * Operational short-circuits. Runs before LLM for safety, recovery, and call-control only.
  */
 export function routeBlueprintDeterministic(
   state: ApexControllerState,
@@ -465,11 +448,6 @@ export function routeBlueprintDeterministic(
   now: Date,
   opts: {
     bookingScoreThreshold: number;
-    /**
-     * When the voice stack has a real LLM (Groq/xAI), skip canned one-liners for
-     * “what do you do / tell me about” and “how does this help” so `dynamicPrompt`
-     * + domain packs control substance and pace instead of COPY_BLOCKS only.
-     */
     preferLlmForExplainAndBenefit?: boolean;
   }
 ): { next: ApexControllerState; route: BlueprintDeterministicResult } {
@@ -579,72 +557,28 @@ export function routeBlueprintDeterministic(
       lastQuestion: t,
       skepticismLatch: true,
     };
-    return {
-      next,
-      route: {
-        kind: "speak",
-        text: COPY_BLOCKS.objection_ai_cant_sell,
-        markAnswered: true,
-      },
-    };
+    return { next, route: { kind: "none" } };
   }
 
   if (bucket === "pressure") {
     const level = Math.min(4, next.escalationLevel + 1);
     next = { ...next, escalationLevel: level, lastUserIntent: "pressure", answered: false, lastQuestion: t };
-    const line =
-      level === 1
-        ? COPY_BLOCKS.pressure_level_1
-        : level === 2
-          ? COPY_BLOCKS.pressure_level_2
-          : level === 3
-            ? COPY_BLOCKS.pressure_level_3
-            : COPY_BLOCKS.pressure_level_4;
-    if (level >= 4) {
-      return {
-        next,
-        route: {
-          kind: "speak",
-          text: line,
-          markAnswered: true,
-          endCall: true,
-        },
-      };
-    }
-    return {
-      next,
-      route: { kind: "speak", text: line, markAnswered: true },
-    };
+    return { next, route: { kind: "none" } };
   }
 
   if (bucket === "objection_staff") {
     next = { ...next, lastUserIntent: "objection_staff", answered: false, lastQuestion: t };
-    return {
-      next,
-      route: { kind: "speak", text: COPY_BLOCKS.objection_staff, markAnswered: true },
-    };
+    return { next, route: { kind: "none" } };
   }
 
   if (bucket === "core_explain") {
     next = { ...next, lastUserIntent: "core_explain", answered: false, lastQuestion: t };
-    if (opts.preferLlmForExplainAndBenefit) {
-      return { next, route: { kind: "none" } };
-    }
-    return {
-      next,
-      route: { kind: "speak", text: COPY_BLOCKS.core_explain, markAnswered: true },
-    };
+    return { next, route: { kind: "none" } };
   }
 
   if (bucket === "benefit") {
     next = { ...next, lastUserIntent: "benefit", answered: false, lastQuestion: t };
-    if (opts.preferLlmForExplainAndBenefit) {
-      return { next, route: { kind: "none" } };
-    }
-    return {
-      next,
-      route: { kind: "speak", text: COPY_BLOCKS.benefit, markAnswered: true },
-    };
+    return { next, route: { kind: "none" } };
   }
 
   if (bucket === "pricing") {
@@ -654,14 +588,10 @@ export function routeBlueprintDeterministic(
 
   if (bucket === "booking_signal") {
     const gate = canEnterBooking(next, t, opts.bookingScoreThreshold);
-    if (gate.ok) {
-      next = { ...next, lastUserIntent: "booking", answered: false, lastQuestion: t };
-      return {
-        next,
-        route: { kind: "speak", text: COPY_BLOCKS.booking, markAnswered: true },
-      };
-    }
     next = { ...next, lastUserIntent: "booking", answered: false, lastQuestion: t };
+    if (gate.ok) {
+      return { next, route: { kind: "none" } };
+    }
     return { next, route: { kind: "none" } };
   }
 
@@ -678,14 +608,7 @@ export function routeBlueprintDeterministic(
     if (!gate.ok) {
       return { next, route: { kind: "none" } };
     }
-    return {
-      next,
-      route: {
-        kind: "speak",
-        text: COPY_BLOCKS.booking,
-        markAnswered: true,
-      },
-    };
+    return { next, route: { kind: "none" } };
   }
 
   return { next, route: { kind: "none" } };

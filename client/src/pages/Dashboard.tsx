@@ -2,6 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SELF_SERVE_PLANS } from "@/lib/pricing";
 import { Link } from "wouter";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
@@ -45,6 +46,7 @@ export default function Dashboard() {
   const { data: apptStats } = trpc.appointments.stats.useQuery();
   const { data: upcomingAppts } = trpc.appointments.list.useQuery({ upcoming: true });
   const { data: onboardingData } = trpc.onboarding.list.useQuery();
+  const starterPlan = SELF_SERVE_PLANS[0];
 
   const metricCards = [
     {
@@ -107,14 +109,14 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* 24/7 AI Assistant activation prompt */}
+      {/* 24/7 AI phone agent activation prompt */}
       <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-primary/20 bg-primary/5 text-sm">
         <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
-        <span className="text-primary font-medium">24/7 AI Assistant</span>
-        <span className="text-muted-foreground hidden sm:inline">· Activate to answer every inbound call automatically</span>
+        <span className="text-primary font-medium">24/7 AI Phone Agent</span>
+        <span className="text-muted-foreground hidden sm:inline">· Activate one platform for inbound calls, booking, follow-up, and outbound growth</span>
         <Link href="/settings#billing" className="ml-auto text-xs px-3 py-1 rounded-md font-medium flex-shrink-0"
           style={{ backgroundColor: "rgba(29,111,244,0.15)", color: "#60a5fa", border: "1px solid rgba(29,111,244,0.3)" }}>
-          Activate from $149/mo →
+          {`Activate from $${starterPlan.price}/mo →`}
         </Link>
       </div>
 

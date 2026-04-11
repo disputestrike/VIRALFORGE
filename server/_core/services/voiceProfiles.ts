@@ -12,6 +12,9 @@ export type VoiceProfile = {
   style?: string;
   presentation?: string;
   latencyProfile?: "fast" | "balanced" | "premium";
+  description?: string;
+  recommendedFor?: string;
+  sampleLine?: string;
   speed?: number;
   stability?: number;
   /** Cartesia Sonic generation_config.emotion override; else derived from useCase. */
@@ -30,6 +33,11 @@ export const VOICE_PROFILES: VoiceProfile[] = [
     style: "warm",
     presentation: "female",
     latencyProfile: "fast",
+    description: "Warm and upbeat without sounding like a script.",
+    recommendedFor: "Inbound sales, first-touch lead qualification, and premium front-desk calls.",
+    sampleLine: "Thanks for calling. This is Sarah with ApexAI. Tell me what you need and I'll get you moving.",
+    speed: 0.97,
+    ttsEmotion: "positivity:high",
   },
   {
     id: "cartesia-clyde-professional",
@@ -41,6 +49,11 @@ export const VOICE_PROFILES: VoiceProfile[] = [
     style: "professional",
     presentation: "male",
     latencyProfile: "fast",
+    description: "Steady, polished, and confident on practical support calls.",
+    recommendedFor: "Support, dispatch, and operations-heavy conversations.",
+    sampleLine: "You've reached the right place. This is Clyde. Let me get clear on what you need.",
+    speed: 0.95,
+    ttsEmotion: "calm:high",
   },
   {
     id: "cartesia-sonic-neutral",
@@ -52,6 +65,11 @@ export const VOICE_PROFILES: VoiceProfile[] = [
     style: "neutral",
     presentation: "neutral",
     latencyProfile: "fast",
+    description: "Balanced and versatile for mixed inbound workloads.",
+    recommendedFor: "General receptionist coverage across multiple call types.",
+    sampleLine: "Hi, this is Alex. I'm here to help. What can I do for you today?",
+    speed: 0.96,
+    ttsEmotion: "curiosity:medium",
   },
   {
     id: "cartesia-barbershop-male",
@@ -63,6 +81,11 @@ export const VOICE_PROFILES: VoiceProfile[] = [
     style: "confident",
     presentation: "male",
     latencyProfile: "fast",
+    description: "Direct and energetic with a stronger sales-floor presence.",
+    recommendedFor: "Outbound qualification, confident sales, and stronger closing energy.",
+    sampleLine: "Marcus here. Give me the quick version and I'll point you in the right direction fast.",
+    speed: 0.98,
+    ttsEmotion: "positivity:medium",
   },
   {
     id: "cartesia-laidback-female",
@@ -74,6 +97,11 @@ export const VOICE_PROFILES: VoiceProfile[] = [
     style: "friendly",
     presentation: "female",
     latencyProfile: "fast",
+    description: "Friendly and relaxed while still sounding competent on the phone.",
+    recommendedFor: "Service businesses, support lines, and softer relationship-first conversations.",
+    sampleLine: "Hi there, Nina here. I'm glad you called. What can I help you sort out today?",
+    speed: 0.95,
+    ttsEmotion: "positivity:medium",
   },
   {
     id: "cartesia-announcer-male",
@@ -85,6 +113,11 @@ export const VOICE_PROFILES: VoiceProfile[] = [
     style: "authoritative",
     presentation: "male",
     latencyProfile: "fast",
+    description: "Firm, clear delivery for urgent, time-sensitive, or higher-stakes calls.",
+    recommendedFor: "Escalations, urgent dispatch, and high-clarity appointment or status updates.",
+    sampleLine: "Jordan here. I'll keep this simple and clear. What's the situation?",
+    speed: 0.94,
+    ttsEmotion: "calm:medium",
   },
 ];
 

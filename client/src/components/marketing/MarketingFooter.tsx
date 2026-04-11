@@ -28,7 +28,7 @@ export default function MarketingFooter() {
               <ApexLogo variant="full" size="md" imgClassName="rounded-md border border-white/10 px-2 py-1" />
             </div>
             <p style={{ color: C.dim2, fontSize: 13, lineHeight: 1.65, maxWidth: 280 }}>
-              AI phone agents for inbound and outbound. Book more appointments without scaling headcount.
+              Premium AI phone agents for SMB and mid-market teams. Book more appointments without scaling headcount.
             </p>
             <p style={{ color: C.dim2, fontSize: 12, marginTop: 16 }}>© {new Date().getFullYear()} Starlight Global</p>
           </div>

@@ -15,7 +15,7 @@ const faqs = [
   { q: "Can I use my existing phone number?", a: "Yes. You can port your existing number to SignalWire, or set up call forwarding from your current carrier." },
   { q: "What industries does it work for?", a: "Solar, HVAC, roofing, real estate, insurance, and any phone-driven business. Industry packs come with tailored scripts and qualification flows." },
   { q: "Is there a contract or setup fee?", a: "No contract, no setup fee. Month-to-month billing. Cancel anytime." },
-  { q: "How does billing work?", a: "Inbound AI is billed by minutes per month. Outbound campaigns are billed per lead. Both include all features — no hidden add-ons." },
+  { q: "How does billing work?", a: "ApexAI uses one platform subscription with included monthly minutes. Higher tiers unlock more capacity, more numbers, outbound campaigns, and deeper automation." },
   { q: "Can the AI transfer to a human?", a: "Yes. You set a transfer number in Settings. When a caller asks for a human or the AI detects a complex situation, it warm-transfers immediately." },
   { q: "What about compliance?", a: "ApexAI is built with TCPA-aware outbound patterns, tenant-isolated data, encrypted transport, and audit trails. SOC 2 Ready, HIPAA Aligned." },
 ];
@@ -74,7 +74,7 @@ export default function Resources() {
           <div className="grid gap-4 sm:grid-cols-3">
             <Link href="/pricing" className="rounded-2xl border border-white/20 bg-white/[0.03] p-6 text-center transition-colors hover:border-blue-400/40">
               <h3 className="text-lg font-bold">Pricing</h3>
-              <p className="mt-2 text-sm text-zinc-400">Inbound minutes and outbound lead tiers.</p>
+              <p className="mt-2 text-sm text-zinc-400">One premium platform with clear plans and add-ons.</p>
             </Link>
             <Link href="/platform" className="rounded-2xl border border-white/20 bg-white/[0.03] p-6 text-center transition-colors hover:border-blue-400/40">
               <h3 className="text-lg font-bold">Platform</h3>

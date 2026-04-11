@@ -1185,13 +1185,6 @@ export function createCallEngine(opts: EngineOptions): void {
     apexState = bpRoute.next;
     let recoveryPrefixForLlm = false;
 
-    if (bpRoute.route.kind === "none" && classifyDeterministicBucket(transcript) === "booking_signal") {
-      logVoiceControllerEvent(callId, "failure", {
-        bucket: "premature_booking",
-        transcriptSnippet: transcript.slice(0, 100),
-      });
-    }
-
     if (bpRoute.route.kind === "speak_then_llm") {
       if (!ENV.voiceRealtimeReady) {
         appendHistory("user", transcript);

@@ -26,32 +26,29 @@ describe("classifyDeterministicBucket", () => {
 });
 
 describe("routeBlueprintDeterministic", () => {
-  it("escalates pressure to L4 and ends call", () => {
+  it("tracks pressure but defers the spoken answer to the LLM", () => {
     let s = createApexControllerState();
     for (let i = 0; i < 3; i++) {
       const r = routeBlueprintDeterministic(s, "so what", new Date(), {
         bookingScoreThreshold: 0.65,
       });
       s = r.next;
-      expect(r.route.kind).toBe("speak");
-      if (r.route.kind === "speak") expect(r.route.endCall).toBeFalsy();
+      expect(r.route.kind).toBe("none");
     }
     const last = routeBlueprintDeterministic(s, "so what", new Date(), {
       bookingScoreThreshold: 0.65,
     });
-    expect(last.route.kind).toBe("speak");
-    if (last.route.kind === "speak") {
-      expect(last.route.endCall).toBe(true);
-    }
+    expect(last.route.kind).toBe("none");
+    expect(last.next.escalationLevel).toBeGreaterThan(0);
   });
 
-  it("gates booking without explicit intent when unresolved", () => {
+  it("lets the LLM handle booking language once intent is detected", () => {
     let s = createApexControllerState();
     s = { ...s, answered: false };
     const r = routeBlueprintDeterministic(s, "I'm interested", new Date(), {
       bookingScoreThreshold: 0.65,
     });
-    expect(r.route.kind).toBe("speak");
+    expect(r.route.kind).toBe("none");
   });
 
   it("blocks soft booking when skepticism latch", () => {
@@ -65,22 +62,20 @@ describe("routeBlueprintDeterministic", () => {
     }
   });
 
-  it("defers core_explain to LLM when preferLlmForExplainAndBenefit", () => {
+  it("defers core_explain to the LLM", () => {
     const s = createApexControllerState();
     const r = routeBlueprintDeterministic(s, "tell me about ApexAI", new Date(), {
       bookingScoreThreshold: 0.65,
-      preferLlmForExplainAndBenefit: true,
     });
     expect(r.route.kind).toBe("none");
   });
 
-  it("keeps canned core_explain when LLM not preferred", () => {
+  it("defers benefit questions to the LLM too", () => {
     const s = createApexControllerState();
-    const r = routeBlueprintDeterministic(s, "what do you do", new Date(), {
+    const r = routeBlueprintDeterministic(s, "how does this help", new Date(), {
       bookingScoreThreshold: 0.65,
     });
-    expect(r.route.kind).toBe("speak");
-    if (r.route.kind === "speak") expect(r.route.text.length).toBeGreaterThan(20);
+    expect(r.route.kind).toBe("none");
   });
 });
 

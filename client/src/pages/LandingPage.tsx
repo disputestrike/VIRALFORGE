@@ -15,8 +15,8 @@ import {
   platformCapabilities,
   platformOverview,
   platformPillars,
-  pricingInboundBullets,
-  pricingOutboundBullets,
+  pricingPlatformBullets,
+  pricingScaleBullets,
   productFeatures,
   scaleWithApexSection,
   solutionsByIndustry,
@@ -379,7 +379,7 @@ export default function LandingPage() {
             <p className="text-xs font-bold uppercase tracking-wider text-blue-400">Features</p>
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">What ApexAI does in your account</h2>
             <p className="mt-4 text-lg text-zinc-300">
-              Voice AI capabilities from the product surface, plus the inbound and outbound capabilities listed on pricing — no generic “AI widget” list.
+              Voice AI capabilities from the product surface, plus the platform and scale capabilities listed on pricing — no generic "AI widget" list.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
@@ -409,9 +409,9 @@ export default function LandingPage() {
             <p className="mt-2 text-zinc-300">Everything that ships beside the live voice agent — how teams actually run revenue.</p>
             <div className="mt-8 grid gap-8 md:grid-cols-2">
               <div>
-                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-blue-400">Inbound (pricing)</p>
+                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-blue-400">Core platform</p>
                 <ul className="space-y-2">
-                  {pricingInboundBullets.map((x) => (
+                  {pricingPlatformBullets.map((x) => (
                     <li key={x} className="flex gap-2 text-sm text-zinc-300">
                       <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-400" />
                       {x}
@@ -420,9 +420,9 @@ export default function LandingPage() {
                 </ul>
               </div>
               <div>
-                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-blue-400">Outbound (pricing)</p>
+                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-blue-400">Scale and add-ons</p>
                 <ul className="space-y-2">
-                  {pricingOutboundBullets.map((x) => (
+                  {pricingScaleBullets.map((x) => (
                     <li key={x} className="flex gap-2 text-sm text-zinc-300">
                       <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-400" />
                       {x}

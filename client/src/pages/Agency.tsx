@@ -14,13 +14,15 @@ import {
   CheckCircle2, Clock, XCircle, TrendingUp
 } from "lucide-react";
 import { toast } from "sonner";
+import { SELF_SERVE_PLANS } from "@/lib/pricing";
 
 const INDUSTRIES = ["Solar","HVAC","Roofing","Real Estate","Insurance","Credit Repair","General"];
-const PLANS = [
-  { id: "starter", label: "Starter", minutes: 500, price: 149 },
-  { id: "growth",  label: "Growth",  minutes: 1500, price: 299 },
-  { id: "pro",     label: "Pro",     minutes: 4000, price: 599 },
-];
+const PLANS = SELF_SERVE_PLANS.map((plan) => ({
+  id: plan.id,
+  label: plan.name,
+  minutes: plan.minutes,
+  price: plan.price,
+}));
 
 const STATUS_CONFIG: Record<string, { color: string; icon: any; label: string }> = {
   active:    { color: "#34d399", icon: CheckCircle2, label: "Active" },

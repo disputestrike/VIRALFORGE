@@ -15,8 +15,9 @@ describe("clientConfig", () => {
     expect(Object.keys(c.faqAnswers).length).toBe(0);
   });
 
-  it("mergeClientConfig keeps Apex FAQs for platform demo line", () => {
-    const c = mergeClientConfig({ businessName: "ApexAI" });
-    expect(c.faqAnswers.what_is).toContain("ApexAI");
+  it("mergeClientConfig only keeps explicitly supplied FAQs for platform demo line", () => {
+    const c = mergeClientConfig({ businessName: "ApexAI", faqAnswers: { demo: "Book a live walkthrough." } });
+    expect(c.faqAnswers.demo).toContain("live walkthrough");
+    expect(Object.keys(c.faqAnswers)).toHaveLength(1);
   });
 });

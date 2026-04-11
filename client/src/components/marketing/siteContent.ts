@@ -58,7 +58,7 @@ export const SUPPORTED_LANGUAGES_MARKETING_LIST =
 export const platformOverview = {
   title: "The ApexAI platform",
   subtitle:
-    "Unified communications for revenue teams: inbound and outbound voice, SMS, and email — one knowledge base, one CRM, one place to measure outcomes. Built for businesses that win or lose on the phone. Run conversations in 12 languages (Spanish, French, German, and more); set your default in Settings.",
+    "A premium AI phone agent platform for SMB and mid-market teams: voice, SMS, and email with one knowledge base, one CRM, and one place to measure outcomes. Built for businesses that win or lose on the phone. Run conversations in 12 languages (Spanish, French, German, and more); set your default in Settings.",
 };
 
 /** Landing: omnichannel / “one brain” narrative (no competitor names). */
@@ -99,7 +99,7 @@ export const scaleWithApexSection = {
     {
       title: "Deploy and orchestrate",
       description:
-        "Spin up numbers, voice profiles, knowledge sources, and campaigns from one dashboard. Inbound and outbound share the same engine and analytics.",
+        "Spin up numbers, voice profiles, knowledge sources, and campaigns from one dashboard. Every conversation runs through the same engine, QA loop, and analytics.",
       icon: Layers,
     },
     {
@@ -288,7 +288,7 @@ export const productFeatures: NavMegaItem[] = [
   },
 ];
 
-/** Channel features — from Pricing inbound/outbound lists */
+/** Channel features — from the unified platform pricing model. */
 export const channelFeatures: NavMegaItem[] = [
   {
     href: "#features-channels",
@@ -303,8 +303,8 @@ export const resourcesNav: NavMegaItem[] = [
   { href: "#unified-comms", title: "Unified communications", description: "Voice, SMS, and email with one context and customer record." },
   { href: "#capabilities", title: "Platform stack", description: "Phones, CRM, Zapier, workflows, webchat, analytics — what ships in-app." },
   { href: "#faq", title: "FAQ", description: "Setup, compliance, and how billing maps to usage." },
-  { href: "/pricing", title: "Pricing", description: "Inbound minutes and outbound lead tiers." },
-  { href: "/about", title: "About ApexAI", description: "Why we built inbound + outbound in one product." },
+  { href: "/pricing", title: "Pricing", description: "One premium platform with clear plans and add-ons." },
+  { href: "/about", title: "About ApexAI", description: "Why we built one AI phone agent platform for revenue teams." },
 ];
 
 /** In-product capabilities surfaced in Settings and core flows (marketing grid). */
@@ -335,8 +335,8 @@ export const platformCapabilities: { title: string; blurb: string }[] = [
   },
 ];
 
-/** Exact bullets from Pricing.tsx — inbound / outbound plans */
-export const pricingInboundBullets = [
+/** Exact bullets from the canonical pricing model. */
+export const pricingPlatformBullets = [
   "24/7 AI phone answering",
   "Natural conversation (not a robot)",
   "Lead qualification & scoring",
@@ -347,13 +347,11 @@ export const pricingInboundBullets = [
   "Your own phone number included",
 ];
 
-export const pricingOutboundBullets = [
-  "AI voice outbound calls",
-  "SMS + Email outreach",
-  "Lead qualification engine",
-  "Appointment scheduling",
-  "Real-time analytics",
-  "Campaign management",
-  "Custom templates",
-  "30-day dedicated support",
+export const pricingScaleBullets = [
+  "Outbound campaigns on Growth and Scale",
+  "Industry packs for multi-vertical teams",
+  "More numbers and larger minute capacity",
+  "Escalation rules and warm handoff",
+  "CRM, calendar, and workflow integrations",
+  "Scale support for higher-volume operations",
 ];

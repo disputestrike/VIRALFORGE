@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, TrendingUp } from "lucide-react";
 import { Link } from "wouter";
+import { DEFAULT_ROI_PLAN_TIER, getSelfServePlanByCheckoutTier } from "@/lib/pricing";
 
 const D3 = "#000000";
 const BLUE = "#1d6ff4";
@@ -35,7 +36,7 @@ export default function ROICalculator() {
   const monthlyGap = dailyGap * 30;
   const annualGap = dailyGap * 365;
 
-  const apexCost = 299; // Growth plan
+  const apexCost = getSelfServePlanByCheckoutTier(DEFAULT_ROI_PLAN_TIER).price;
   const annualCost = apexCost * 12;
   const netAnnualProfit = annualGap - annualCost;
   const roi = annualCost > 0 ? Math.round((netAnnualProfit / annualCost) * 100) : 0;

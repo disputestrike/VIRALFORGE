@@ -2,6 +2,7 @@ import type { Request } from "express";
 import Stripe from "stripe";
 import { ENV } from "../env";
 import * as db from "../../db";
+import type { CheckoutTier } from "../../../shared/pricing";
 
 let stripeClient: Stripe | null | undefined;
 
@@ -15,7 +16,7 @@ export function getStripe(): Stripe | null {
   return stripeClient;
 }
 
-function priceIdForTier(tier: "starter" | "growth" | "enterprise"): string {
+function priceIdForTier(tier: CheckoutTier): string {
   const map = {
     starter: ENV.stripePriceStarter,
     growth: ENV.stripePriceGrowth,
@@ -54,7 +55,7 @@ export async function createCheckoutSession(opts: {
   userId: number;
   email: string | null | undefined;
   name: string | null | undefined;
-  tier: "starter" | "growth" | "enterprise";
+  tier: CheckoutTier;
 }) {
   const stripe = getStripe();
   if (!stripe) {

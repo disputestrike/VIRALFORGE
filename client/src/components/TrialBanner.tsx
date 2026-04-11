@@ -22,7 +22,7 @@ export default function TrialBanner() {
 
   const plan = (user as any)?.plan || "trial";
   // Don't show for paid users
-  if (plan === "starter" || plan === "growth" || plan === "pro" || plan === "enterprise") return null;
+  if (plan === "starter" || plan === "growth" || plan === "scale" || plan === "pro" || plan === "enterprise") return null;
   if (dismissed) return null;
 
   const daysLeft = getDaysRemaining((user as any)?.createdAt);

@@ -37,27 +37,27 @@ function tenantOpeners(businessName: string, industryHint?: string): string[] {
   const b = businessName.trim() || "us";
   if (industryHint) {
     return [
-      `Thanks for calling ${b} — this is Alex. I handle ${industryHint} calls here — what's going on today?`,
-      `${b}, Alex speaking. If this is about ${industryHint}, I can help — what do you need?`,
-      `You've reached ${b}. I'm Alex — what can I help you with regarding ${industryHint}?`,
-      `Hi, ${b}, Alex here. Are you calling about ${industryHint}, or something else I can route?`,
+      `Thanks for calling ${b}. This is Alex. How can I help with ${industryHint} today?`,
+      `${b}, Alex speaking. If this is about ${industryHint}, you're in the right place. What's going on?`,
+      `You've reached ${b}. I'm Alex. What can I help you with regarding ${industryHint}?`,
+      `Hi, ${b} here. This is Alex. What do you need help with today?`,
     ];
   }
   return [
-    `Thanks for calling ${b} — this is Alex. What can I help you with today?`,
+    `Thanks for calling ${b}. This is Alex. What can I help you with today?`,
     `${b}, Alex speaking. How can I help?`,
-    `You've reached ${b}. I'm Alex — what's on your mind today?`,
-    `Hi there — ${b}, Alex here. What brought you in today?`,
+    `You've reached ${b}. I'm Alex. What's on your mind today?`,
+    `Hi there, ${b} here. This is Alex. What brought you in today?`,
   ];
 }
 
 function apexPlatformOpeners(businessName: string): string[] {
   const b = businessName.trim() || "ApexAI";
   return [
-    `Hi, thanks for calling ${b}. This is Alex. What would you like to know today?`,
-    `${b}, Alex speaking. What can I help you with today?`,
-    `Thanks for calling ${b}. I'm Alex. How can I help?`,
+    `Thanks for calling ${b}. This is Alex. What would you like to know today?`,
+    `${b}, Alex speaking. What can I help you figure out today?`,
     `Hi, this is Alex with ${b}. What would you like to go over today?`,
+    `Welcome to ${b}. I'm Alex. How can I help today?`,
   ];
 }
 

@@ -100,15 +100,15 @@ export function isPureSmallTalk(text: string): boolean {
 // Never let the LLM generate these — they are hardcoded and safe.
 
 const HOW_ARE_YOU_RESPONSES = [
-  "I'm doing great, thanks for asking! What can I help you with today?",
+  "I'm doing great, thanks for asking. What can I help you with today?",
   "Doing well, thanks. What can I help you with today?",
-  "All good on my end — what can I do for you today?",
+  "All good on my end. What can I do for you today?",
 ];
 
 const HELLO_CHECK_RESPONSES = [
-  "I'm here. Go ahead.",
-  "Yes, I'm with you. Go ahead.",
-  "I'm here. What would you like to know?",
+  "I'm here with you. Go ahead.",
+  "Yes, I'm with you. What would you like to know?",
+  "Right here. Go ahead when you're ready.",
 ];
 
 const NEGATIVE_LABEL_RESPONSES = [
@@ -119,8 +119,8 @@ const NEGATIVE_LABEL_RESPONSES = [
 
 const ARE_YOU_AI_RESPONSES = [
   "Yes — I'm Alex, an AI assistant. I'm here to help with your calls and business. What can I do for you?",
-  "I am — I'm Alex, an AI. Happy to help. What are you looking for today?",
-  "Yes, I'm an AI assistant named Alex. What can I help you with?",
+  "I am — I'm Alex, an AI assistant on this line. What are you looking to figure out today?",
+  "Yes, I'm an AI assistant named Alex. What can I help you with today?",
 ];
 
 const NAME_RESPONSES = [
@@ -140,9 +140,9 @@ const LIGHT_TEASE_RESPONSES = [
 ];
 
 const META_CAPABILITY_RESPONSES = [
-  "Fair question — I'm built to handle typical customer questions clearly and stay on track, kind of like a well-trained rep. What would you like to dig into next?",
-  "I appreciate that — I'm an AI assistant tuned for phone conversations, so I can walk through options and answer common questions smoothly. What's on your mind right now?",
-  "Thanks for asking — I'm here to sound natural and be useful on calls like this, not to show off. What can I help you with next?",
+  "Fair question — I'm tuned for real phone conversations, so I can answer clearly and keep the call moving like a well-trained rep. What would you like to dig into next?",
+  "I appreciate that — I'm built to sound natural on the phone and stay useful, not scripted. What's on your mind right now?",
+  "Thanks for asking — the goal is to make this feel like a sharp front-desk conversation. What can I help you with next?",
 ];
 
 const WEATHER_RESPONSES = [

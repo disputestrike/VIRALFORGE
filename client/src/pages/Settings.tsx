@@ -34,6 +34,12 @@ import {
   Split,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  ENTERPRISE_PLAN,
+  PLATFORM_ADD_ONS,
+  SELF_SERVE_PLANS,
+  formatPlanLabel,
+} from "@/lib/pricing";
 
 const LANGUAGES = [
   { code: "en", name: "English" }, { code: "es", name: "Spanish (Español)" },
@@ -559,7 +565,7 @@ export default function Settings() {
           {/* Current plan status */}
           {billingStatus && typeof billingStatus === "object" && "stripeConfigured" in billingStatus && (
             <div className="rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm space-y-1">
-              <p><span className="text-muted-foreground">Current plan:</span> <span className="font-semibold capitalize">{String(billingStatus.plan ?? "Free Trial")}</span></p>
+              <p><span className="text-muted-foreground">Current plan:</span> <span className="font-semibold">{formatPlanLabel(String(billingStatus.plan ?? "Free Trial"))}</span></p>
               {billingStatus.subscriptionStatus && billingStatus.subscriptionStatus !== "none" && (
                 <p><span className="text-muted-foreground">Status:</span> <span className="capitalize">{billingStatus.subscriptionStatus}</span></p>
               )}
@@ -567,26 +573,32 @@ export default function Settings() {
           )}
 
           {/* Plan cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {[
-              { tier: "starter" as const, name: "Starter", price: "$149", desc: "500 min/mo · 1 number · 1 industry", color: "#60a5fa" },
-              { tier: "growth" as const, name: "Growth", price: "$299", desc: "1,500 min/mo · 1 number · 1 industry", color: "#22c55e" },
-              { tier: "enterprise" as const, name: "Pro", price: "$599", desc: "4,000 min/mo · 3 numbers · All industries", color: "#f59e0b" },
-            ].map((p) => (
-              <div key={p.tier} className="rounded-xl border border-border p-4 text-center">
-                <p className="font-bold" style={{ color: p.color }}>{p.name}</p>
-                <p className="text-2xl font-black mt-1">{p.price}<span className="text-xs text-muted-foreground font-normal">/mo</span></p>
-                <p className="text-xs text-muted-foreground mt-1">{p.desc}</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {SELF_SERVE_PLANS.map((p) => (
+              <div key={p.id} className="rounded-xl border border-border p-4 text-center">
+                <p className="font-bold" style={{ color: p.accentColor }}>{p.name}</p>
+                <p className="text-2xl font-black mt-1">${p.price}<span className="text-xs text-muted-foreground font-normal">/mo</span></p>
+                <p className="text-xs text-muted-foreground mt-1">{p.minutes.toLocaleString()} min/mo · {p.numbers} number{p.numbers > 1 ? "s" : ""} · {p.industriesIncluded}</p>
+                <p className="text-xs text-muted-foreground mt-2">{p.summary}</p>
                 <Button
                   type="button" size="sm" className="w-full mt-3"
-                  style={{ backgroundColor: p.color }}
+                  style={{ backgroundColor: p.accentColor }}
                   disabled={checkoutMut.isPending}
-                  onClick={() => checkoutMut.mutate({ tier: p.tier })}
+                  onClick={() => checkoutMut.mutate({ tier: p.checkoutTier })}
                 >
                   {checkoutMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Subscribe"}
                 </Button>
               </div>
             ))}
+            <div className="rounded-xl border border-border p-4 text-center">
+              <p className="font-bold" style={{ color: ENTERPRISE_PLAN.accentColor }}>{ENTERPRISE_PLAN.name}</p>
+              <p className="text-2xl font-black mt-1">{ENTERPRISE_PLAN.priceLabel}</p>
+              <p className="text-xs text-muted-foreground mt-1">{ENTERPRISE_PLAN.minutes} minutes · {ENTERPRISE_PLAN.numbers} numbers · {ENTERPRISE_PLAN.industriesIncluded}</p>
+              <p className="text-xs text-muted-foreground mt-2">{ENTERPRISE_PLAN.summary}</p>
+              <Button type="button" size="sm" variant="outline" className="w-full mt-3">
+                Contact sales
+              </Button>
+            </div>
           </div>
 
           {billingStatus?.stripeCustomerId && (
@@ -600,19 +612,22 @@ export default function Settings() {
 
           {/* Industry Packs Add-on */}
           <div className="border-t border-border pt-4 mt-4">
-            <p className="text-sm font-semibold mb-2">Industry Packs — $49/mo each</p>
+            <p className="text-sm font-semibold mb-2">Platform add-ons</p>
             <p className="text-xs text-muted-foreground mb-3">
-              Your plan includes 1 industry. Add more to let your AI handle calls for multiple business types.
+              Keep one platform, then add capacity, new industries, or enterprise rollout help only when you need it.
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {["Solar", "HVAC", "Roofing", "Insurance", "Real Estate", "General"].map((ind) => (
-                <div key={ind} className="flex items-center justify-between rounded-lg border border-border p-2.5 text-xs">
-                  <span className="font-medium">{ind}</span>
-                  <span className="text-emerald-400 text-[10px]">+$49/mo</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {PLATFORM_ADD_ONS.map((item) => (
+                <div key={item.name} className="flex items-start justify-between gap-3 rounded-lg border border-border p-2.5 text-xs">
+                  <div>
+                    <p className="font-medium">{item.name}</p>
+                    <p className="mt-1 text-muted-foreground">{item.description}</p>
+                  </div>
+                  <span className="text-emerald-400 text-[10px] whitespace-nowrap">{item.priceLabel}</span>
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-muted-foreground mt-2">Contact support to add industry packs to your subscription.</p>
+            <p className="text-[10px] text-muted-foreground mt-2">Growth unlocks outbound campaigns; Scale adds more numbers and all industry packs.</p>
           </div>
         </CardContent>
       </Card>
@@ -2246,7 +2261,7 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Choose the voice profile your AI uses on every live call.
+            Choose the voice profile your AI uses on every live call. Previews use the same backend voice profile that powers production calls.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2291,17 +2306,36 @@ export default function Settings() {
                       style={{ backgroundColor: `${styleColor}20`, color: styleColor }}>
                       {v.style}
                     </span>
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-white/10 text-zinc-300 capitalize">
+                      {v.useCase}
+                    </span>
                     <span className="text-xs text-muted-foreground capitalize">{v.presentation}</span>
                     <span className="text-xs text-muted-foreground">·</span>
                     <span
                       className={`text-xs font-medium ${v.telephonyOptimized ? "text-green-400" : "text-yellow-400"}`}
                     >
-                      {v.telephonyOptimized ? "⚡ Phone-optimized" : "✦ Studio"}
+                      {v.telephonyOptimized ? "Phone-optimized" : "Studio"}
+                    </span>
+                    <span className="text-xs text-muted-foreground">·</span>
+                    <span className="text-xs text-muted-foreground capitalize">
+                      {v.latencyProfile || "fast"}
                     </span>
                   </div>
+                  {v.description && (
+                    <p className="mt-2 text-xs text-zinc-300">{v.description}</p>
+                  )}
+                  {v.recommendedFor && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      <span className="text-foreground/90 font-medium">Best for:</span> {v.recommendedFor}
+                    </p>
+                  )}
                 </div>
               );
             })}
+          </div>
+
+          <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2.5 text-xs text-muted-foreground">
+            Premium voice systems win on testing, not guesswork. Preview two or three voices against the same intro, pricing answer, and objection-handling scenario before locking one in.
           </div>
 
           <div className="flex items-center gap-3 pt-1">
