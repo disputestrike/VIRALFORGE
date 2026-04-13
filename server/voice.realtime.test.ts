@@ -114,15 +114,20 @@ describe("VoiceRealtimePipeline", () => {
       },
     }));
 
-    await pipeline.handleRawMessage(JSON.stringify({
-      event: "media",
-      media: {
-        track: "inbound",
-        chunk: "1",
-        timestamp: "1",
-        payload: Buffer.alloc(3200, 0x01).toString("base64"),
-      },
-    }));
+    // Send multiple high-energy frames to trigger sustained barge-in detection
+    // (VOICE_BARGE_IN_SUSTAIN_FRAMES defaults to 4 — single-frame noise spikes are now ignored)
+    const highEnergyPayload = Buffer.alloc(3200, 0x01).toString("base64");
+    for (let i = 0; i < 5; i++) {
+      await pipeline.handleRawMessage(JSON.stringify({
+        event: "media",
+        media: {
+          track: "inbound",
+          chunk: String(i + 1),
+          timestamp: String(i + 1),
+          payload: highEnergyPayload,
+        },
+      }));
+    }
 
     await new Promise((resolve) => setTimeout(resolve, 3500));
 

@@ -1115,15 +1115,18 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
     res.type("text/xml");
 
     if (selection === 1) {
-      // Transfer to AI sales
+      // Transfer to AI sales — must use <Connect><Stream> for bidirectional audio
+      // (<Start><Stream> is unidirectional only — AI cannot speak back to caller)
+      const statusCallback = `https://${req.get("host")}/api/voice/status`;
       const dtmfStreamUrl = `wss://${req.get("host")}/api/voice-stream?sessionId=${CallSid}&amp;fromNumber=${From}&amp;inbound=true`;
       res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Start>
-    <Stream url="${dtmfStreamUrl}" />
-  </Start>
-  <Say>Connecting you to our AI sales agent now.</Say>
-  <Pause length="60" />
+  <Connect action="${statusCallback}" method="POST">
+    <Stream url="${dtmfStreamUrl}" track="inbound_track">
+      <Parameter name="sessionId" value="${CallSid}" />
+    </Stream>
+  </Connect>
+  <Pause length="300" />
 </Response>`);
     } else if (selection === 2) {
       // Transfer to support queue

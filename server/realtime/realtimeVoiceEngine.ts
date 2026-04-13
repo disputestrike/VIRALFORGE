@@ -693,15 +693,13 @@ export function createCallEngine(opts: EngineOptions): void {
           } else if (!cartesiaContextId) {
             return;
           }
-          // Cartesia returns pcm_s16le — convert to mulaw for SignalWire
+          // Cartesia returns pcm_mulaw — send directly to SignalWire (no conversion needed)
           if (streamSid && sigWs.readyState === WebSocket.OPEN) {
             if (greetingDone) logSttFinalToTtsLatencyIfPending(callId);
-            const pcm16 = Buffer.from(msg.data, "base64");
-            const mulaw = pcm16ToMulaw(pcm16);
             sigWs.send(JSON.stringify({
               event: "media",
               streamSid,
-              media: { payload: mulaw.toString("base64") },
+              media: { payload: msg.data },
             }));
             lastOutboundAudioAt = Date.now();
             isSpeaking = true;
@@ -758,7 +756,7 @@ export function createCallEngine(opts: EngineOptions): void {
     }
     if (!assistantPlaybackStartAt) assistantPlaybackStartAt = Date.now();
     const rawSpeed = Math.min(1.2, Math.max(0.55, voiceProfile.speed * ENV.voiceTtsSpeedScale));
-    const ttsSpeed = Math.min(0.98, Math.max(0.94, rawSpeed));
+    const ttsSpeed = rawSpeed;
     log(`cartesiaSend: "${text.slice(0,40)}" voiceId=${voiceProfile.cartesiaId} speed=${ttsSpeed}`);
     const hadNoContext = !cartesiaContextId;
     if (!cartesiaContextId) {
@@ -785,7 +783,7 @@ export function createCallEngine(opts: EngineOptions): void {
       speed: ttsSpeed,
       output_format: {
         container: "raw",
-        encoding: "pcm_s16le",
+        encoding: "pcm_mulaw",
         sample_rate: 8000,
       },
       continue: continueFlag,
@@ -798,7 +796,7 @@ export function createCallEngine(opts: EngineOptions): void {
     if (!cartesiaWs || cartesiaWs.readyState !== WebSocket.OPEN || !contextId) return;
     const voiceId = voiceProfile.cartesiaId?.trim() || "694f9389-aac1-45b6-b726-9d9369183238";
     const rawSpeed = Math.min(1.2, Math.max(0.55, voiceProfile.speed * ENV.voiceTtsSpeedScale));
-    const ttsSpeed = Math.min(0.98, Math.max(0.94, rawSpeed));
+    const ttsSpeed = rawSpeed;
     // Cartesia rejects bare `{ flush: true }` (no voice). Per WS docs: empty transcript + continue + flush.
     cartesiaWs.send(
       JSON.stringify({
@@ -809,7 +807,7 @@ export function createCallEngine(opts: EngineOptions): void {
         speed: ttsSpeed,
         output_format: {
           container: "raw",
-          encoding: "pcm_s16le",
+          encoding: "pcm_mulaw",
           sample_rate: 8000,
         },
         continue: true,

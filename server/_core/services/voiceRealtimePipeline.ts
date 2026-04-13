@@ -94,6 +94,8 @@ export class VoiceRealtimePipeline {
   private lastSttConfidence = 0.92;
   private assistantPlaybackStartAt: number | null = null;
   private assistantResponseInProgress = false;
+  /** Consecutive frames above energy threshold — requires sustained speech, not a single noise spike. */
+  private bargeInEnergyFrameCount = 0;
 
   constructor(options: VoiceRealtimeOptions) {
     this.socket = options.socket;
@@ -438,16 +440,28 @@ export class VoiceRealtimePipeline {
     const rawBytes = Buffer.from(payload, "base64");
     if (rawBytes.length === 0) return;
 
-    // Energy-based barge-in (from scaffold: estimateSpeechEnergyPcm16)
+    // Energy-based barge-in — require sustained speech above threshold to avoid false triggers
+    // from background noise, TV, coughs, or short sound bursts (matches realtimeVoiceEngine logic).
     if (this.isSpeaking) {
       const energy = this.estimateEnergy(rawBytes);
       const threshold = ENV.voiceBargeInEnergyThreshold;
+      const sustainRequired = ENV.voiceBargeInSustainFrames;
       if (energy > threshold) {
-        this.logger.log(`[PIPE] barge-in energy=${energy} (threshold=${threshold})`);
+        this.bargeInEnergyFrameCount++;
+      } else {
+        this.bargeInEnergyFrameCount = 0;
+        return; // quiet frame while speaking — drop
+      }
+      if (this.bargeInEnergyFrameCount >= sustainRequired) {
+        this.bargeInEnergyFrameCount = 0;
+        this.logger.log(`[PIPE] barge-in energy=${energy} (threshold=${threshold}, sustained=${sustainRequired}f)`);
         this.interruptSpeech();
       } else {
-        return;
+        return; // not enough sustained energy yet — drop
       }
+    } else {
+      // Not speaking — reset frame counter
+      this.bargeInEnergyFrameCount = 0;
     }
 
     // If Deepgram live WS is connected, stream audio to it
