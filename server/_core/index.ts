@@ -15,6 +15,14 @@ import * as voiceProcessingService from "./services/voiceProcessingService";
 import { startSessionPersistenceInterval } from "./services/voiceSessionManager";
 // Live calls: realtimeVoiceEngine — Deepgram STT → Groq (LLM) → Cartesia TTS.
 import { createCallEngine, notifyVoiceCallTerminalFromHttp } from "../realtime/realtimeVoiceEngine";
+import {
+  getPublicDemoConfig,
+  getPublicDemoOwnerId,
+  isPublicDemoPhoneNumber,
+  PUBLIC_DEMO_BUSINESS_NAME,
+  PUBLIC_DEMO_INDUSTRY,
+} from "../realtime/tenantVoiceRuntime";
+import { normalizeToE164US } from "./phoneE164";
 import { getUsRingtoneWav } from "./telephony/usRingtoneWav";
 import { registerWebchatPublicRoutes } from "./webchatPublicApi";
 
@@ -195,6 +203,24 @@ async function ensureCriticalVoiceSchema(connection: any) {
   }
 }
 
+function normalizeRoutingPhone(value: string | null | undefined): string {
+  return normalizeToE164US(String(value ?? "").trim());
+}
+
+async function resolveInboundOwnerForNumber(
+  toNumber: string | null | undefined
+): Promise<number | null> {
+  const normalized = normalizeRoutingPhone(toNumber);
+  if (!normalized) return null;
+  const dbMod = await import("../db");
+  const directOwner = await dbMod.getUserIdByPhoneNumber(normalized);
+  if (directOwner) return directOwner;
+  if (isPublicDemoPhoneNumber(normalized)) {
+    return getPublicDemoOwnerId();
+  }
+  return null;
+}
+
 async function startServer() {
   // Run migrations before starting the server
   await runMigrations();
@@ -242,7 +268,12 @@ async function startServer() {
 
     if (redisConnection) {
     // Call worker
-    type CallJobPayload = { leadId: number; campaignId?: number; script?: string };
+    type CallJobPayload = {
+      leadId: number;
+      campaignId?: number;
+      script?: string;
+      userId?: number;
+    };
     const callWorker = new Worker(
       "calls",
       async (job) => {
@@ -281,6 +312,11 @@ async function startServer() {
             script,
             blocklistUserId:
               typeof l.createdBy === "number" && Number.isFinite(l.createdBy) ? l.createdBy : undefined,
+            userId:
+              data.userId ??
+              (typeof l.createdBy === "number" && Number.isFinite(l.createdBy)
+                ? l.createdBy
+                : undefined),
           });
 
           await dbMod.updateLead(l.id as number, { status: "contacted" });
@@ -319,7 +355,15 @@ async function startServer() {
       "sms",
       async (job) => {
         const jobStart = Date.now();
-        const { phone, type, leadName, scheduledTime, msgId, body: bodyOverride } = job.data;
+        const {
+          phone,
+          type,
+          leadName,
+          scheduledTime,
+          msgId,
+          userId,
+          body: bodyOverride,
+        } = job.data;
         console.log(`[SMSWorker] ▶ QUEUED→PROCESSING | jobId: ${job.id} | type: ${type} | phone: ${phone} | leadId: ${job.data.leadId} | msgId: ${msgId || "none"}`);
         const dbMod = await import("../db");
         try {
@@ -342,7 +386,11 @@ async function startServer() {
             message = `Hi ${leadName || "there"}, this is a message from ApexAI.`;
           }
 
-          const result = await swService.sendSMS({ to: phone, body: message });
+          const result = await swService.sendSMS({
+            to: phone,
+            body: message,
+            userId,
+          });
 
           // ── Write final status back to messages table ──────────────────
           if (msgId) {
@@ -412,6 +460,7 @@ async function startServer() {
                       <p><strong>Date & Time:</strong> ${formattedTime}</p>
                       <p><strong>Duration:</strong> 30 minutes</p>
                     </div>
+                    ${calendarLink ? `<p><a href="${calendarLink}">Add this appointment to your calendar</a></p>` : ""}
                     <p>If you need to reschedule, just reply to this email.</p>
                     <p>Best regards,<br><strong>${SENDER_NAME} Team</strong></p>
                   </div>
@@ -773,10 +822,18 @@ async function startServer() {
 
         // Look up which user owns the called number (To) for proper tenant assignment
         if (!ownerId) {
-          ownerId = To ? await db.getUserIdByPhoneNumber(To) : null;
+          ownerId = await resolveInboundOwnerForNumber(To);
         }
         if (!ownerId) {
           console.warn("[Voice] No tenant owner match for inbound number", { to: To, from: From, sessionId });
+          if (!isOutboundDial) {
+            res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Thanks for calling. This line is not configured right now. Please try again later.</Say>
+  <Hangup/>
+</Response>`);
+            return;
+          }
         }
 
         // Load owner's settings (transfer number, language)
@@ -795,6 +852,9 @@ async function startServer() {
             };
           }
         } catch {}
+        if (!ownerSettings.businessName && ownerId === getPublicDemoOwnerId()) {
+          ownerSettings.businessName = PUBLIC_DEMO_BUSINESS_NAME;
+        }
 
         // Inbound calls create/find lead by caller phone. Outbound calls use explicit leadId.
         if (!lead) {
@@ -1000,14 +1060,9 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
     console.log(`[Inbound] Direct AI call from ${From}`);
 
     const dbMod = await import("../db");
-    const { normalizeToE164US } = await import("./phoneE164");
     const fromNorm = From ? normalizeToE164US(String(From)) : "";
-    let ownerForBlock = 1;
-    if (To) {
-      const byLine = await dbMod.getUserIdByPhoneNumber(String(To));
-      if (byLine) ownerForBlock = byLine;
-    }
-    if (fromNorm && (await dbMod.isPhoneBlocked(ownerForBlock, fromNorm))) {
+    const ownerForBlock = await resolveInboundOwnerForNumber(To);
+    if (ownerForBlock && fromNorm && (await dbMod.isPhoneBlocked(ownerForBlock, fromNorm))) {
       console.log(`[Inbound] Blocklist reject: ${From} (owner ${ownerForBlock})`);
       res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?><Response><Reject reason="busy"/></Response>`);
       return;
@@ -1028,10 +1083,19 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
     const sid = CallSid || `session_${Date.now()}`;
     let inboundLeadId = "";
     try {
-      let ownerId = 1;
-      if (To) {
-        const byLine = await dbMod.getUserIdByPhoneNumber(To);
-        if (byLine) ownerId = byLine;
+      let ownerId = await resolveInboundOwnerForNumber(To);
+      if (!ownerId) {
+        console.warn("[Inbound] No tenant owner match for inbound number", {
+          to: To,
+          from: From,
+          sid,
+        });
+        res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Thanks for calling. This line is not configured right now. Please try again later.</Say>
+  <Hangup/>
+</Response>`);
+        return;
       }
       let lead = await dbMod.getLeadByPhone(From);
       if (!lead) {
@@ -1316,10 +1380,11 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
     try {
       // Store message in DB — tenant from called number (To), same as voice
       const db = await import("../db");
-      let ownerId = 1;
-      if (To) {
-        const uid = await db.getUserIdByPhoneNumber(String(To));
-        if (uid) ownerId = uid;
+      let ownerId = await resolveInboundOwnerForNumber(To);
+      if (!ownerId) {
+        console.warn("[SMS] No tenant owner match for inbound number", { to: To, from: From });
+        res.type("text/xml").send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+        return;
       }
       let lead = await db.getLeadByPhone(From);
       if (!lead) {
@@ -1685,6 +1750,8 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
         let businessName: string | undefined;
         let industry: string | undefined;
         let voiceProfileId: string | undefined;
+        let callDirection: "inbound" | "outbound" | undefined;
+        let outboundScript: string | undefined;
         let voiceAgentDisplayName: string | undefined;
 
         if (sessionId) {
@@ -1694,6 +1761,8 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
               resolvedUserId = session.userId ?? undefined;
               resolvedLeadId = session.leadId ?? undefined;
               voiceProfileId = session.voiceProfileId ?? undefined;
+              callDirection = session.callDirection ?? undefined;
+              outboundScript = session.outboundScript ?? undefined;
             }
           } catch {}
         }
@@ -1725,12 +1794,19 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
         // Resolve user language + tenant voice domain fields (per-tenant industry adaptation)
         let callLanguage: string | undefined;
         let tenantIndustryOverlay: import("./services/domainPacks").TenantIndustryOverlay | undefined;
+        let voiceRuntimeProfile:
+          | import("../realtime/tenantVoiceRuntime").TenantVoiceRuntimeProfile
+          | undefined;
         if (resolvedUserId) {
           try {
             const db = await import("../db");
             const user = await db.getUserById(resolvedUserId);
+            const { getTenantVoiceRuntimeProfile } = await import(
+              "../realtime/tenantVoiceRuntime"
+            );
             const u = user as any;
             callLanguage = u?.language || "en";
+            voiceRuntimeProfile = await getTenantVoiceRuntimeProfile(resolvedUserId);
             if ((!businessName || !String(businessName).trim()) && u?.businessName?.trim()) {
               businessName = u.businessName.trim();
             }
@@ -1747,6 +1823,19 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
         // ── NEW: Real-time voice engine ─────────────────────────────────
         // Deepgram STT → Groq → Cartesia TTS
         // Streaming end-to-end, instant barge-in, clean hangup
+        if (
+          resolvedUserId === getPublicDemoOwnerId() &&
+          (!businessName || !String(businessName).trim())
+        ) {
+          businessName = PUBLIC_DEMO_BUSINESS_NAME;
+        }
+        if (
+          resolvedUserId === getPublicDemoOwnerId() &&
+          (!industry || !String(industry).trim())
+        ) {
+          industry = PUBLIC_DEMO_INDUSTRY;
+        }
+
         console.log("[VOICE-WS] tenant_context", {
           sessionId,
           leadId: resolvedLeadId ?? null,
@@ -1755,6 +1844,7 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
           industry: industry ?? null,
           language: callLanguage ?? null,
           voiceProfileId: voiceProfileId ?? null,
+          callDirection: callDirection ?? null,
         });
 
         createCallEngine({
@@ -1766,6 +1856,9 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
           industry,
           voiceProfileId,
           language: callLanguage,
+          callDirection,
+          outboundScript,
+          voiceRuntimeProfile,
           tenantIndustryOverlay,
           voiceAgentDisplayName,
         });

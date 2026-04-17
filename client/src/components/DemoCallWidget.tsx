@@ -30,6 +30,11 @@ export default function DemoCallWidget() {
   const [form, setForm] = useState({ firstName: "", phone: "", email: "", industry: "solar" });
   const [step, setStep] = useState<"form" | "calling" | "done">("form");
   const [error, setError] = useState("");
+  const { data: demoConfig } = trpc.demoCall.config.useQuery();
+  const supportsCallback = demoConfig?.mode !== "public-number";
+  const supportsCallNow = Boolean(
+    demoConfig?.phoneNumber && demoConfig.mode !== "call-me"
+  );
 
   const demoMutation = trpc.demoCall.request.useMutation({
     onSuccess: () => setStep("done"),
@@ -80,10 +85,12 @@ export default function DemoCallWidget() {
           </span>
         </div>
         <h2 className="text-2xl sm:text-3xl md:text-[2.125rem] font-black text-white mb-4 sm:mb-5 tracking-tight leading-[1.18] sm:leading-[1.22]">
-          Get called by the same voice your leads hear
+          Hear the live demo the same way your leads would
         </h2>
         <p className="text-base sm:text-lg leading-relaxed max-w-2xl mx-auto" style={{ color: "rgba(255,255,255,0.72)" }}>
-          Enter your number — a short demo call in seconds. No signup required.
+          {supportsCallNow
+            ? "Call the live demo number now, or enter your number and we’ll call you back in seconds."
+            : "Enter your number and we’ll place a short live demo call in seconds."}
         </p>
       </div>
 
@@ -93,7 +100,38 @@ export default function DemoCallWidget() {
           className="rounded-2xl sm:rounded-3xl py-10 px-6 sm:px-10 md:px-14 lg:px-16"
           style={formFrameStyle}
         >
-          {step === "form" && (
+          {supportsCallNow && step === "form" && (
+            <div
+              className="rounded-2xl border mb-8 p-5"
+              style={{ backgroundColor: "#0a0c12", borderColor: "rgba(29,111,244,0.28)" }}
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: BLUE_LIGHT }}>
+                Call the live demo line
+              </p>
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                  <p className="text-xl font-black text-white">
+                    {demoConfig?.formattedPhoneNumber || demoConfig?.phoneNumber}
+                  </p>
+                  <p className="text-sm mt-1" style={{ color: DIM2 }}>
+                    This routes to ApexAI’s public demo experience, not a customer account.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  className="border-white/20 text-white"
+                  onClick={() => {
+                    if (demoConfig?.telHref) window.location.href = demoConfig.telHref;
+                  }}
+                >
+                  <Phone className="w-4 h-4 mr-2" />
+                  Call now
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {step === "form" && supportsCallback && (
             <div className="space-y-7 sm:space-y-8 max-w-none w-full">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8">
                 <div>
@@ -152,7 +190,7 @@ export default function DemoCallWidget() {
 
               <div className="pt-2 space-y-4">
                 <p className="text-center text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>
-                  No credit card. No account required for this demo.
+                  No credit card. One demo call only. No signup required.
                 </p>
                 <Button
                   className="w-full min-h-[56px] text-base font-bold"
@@ -167,9 +205,15 @@ export default function DemoCallWidget() {
                   className="text-center text-xs sm:text-sm leading-relaxed px-1 sm:px-4"
                   style={{ color: "rgba(255,255,255,0.52)" }}
                 >
-                  By submitting you agree to one demo call. No spam. Unsubscribe anytime.
+                  By submitting, you agree to one demo callback from ApexAI. No spam. Opt out anytime.
                 </p>
               </div>
+            </div>
+          )}
+
+          {step === "form" && !supportsCallback && supportsCallNow && (
+            <div className="text-center py-8 text-sm" style={{ color: DIM2 }}>
+              Use the live demo number above to test the voice experience instantly.
             </div>
           )}
 

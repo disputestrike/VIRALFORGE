@@ -11,6 +11,7 @@ import {
   callRecordings,
   campaignContacts,
   campaigns,
+  knowledgeBases,
   leads,
   messages,
   onboardings,
@@ -628,6 +629,16 @@ export async function setSystemConfig(key: string, value: string, category = "ge
     .onDuplicateKeyUpdate({ set: { value, category } });
 }
 
+export async function listKnowledgeBases(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(knowledgeBases)
+    .where(eq(knowledgeBases.userId, userId))
+    .orderBy(desc(knowledgeBases.updatedAt));
+}
+
 // ── Appointments ──────────────────────────────────────────────────────────────
 export async function getAppointments(opts?: { leadId?: number; status?: string; upcoming?: boolean; userId?: number }): Promise<any[]> {
   const conn = await import("mysql2/promise");
@@ -700,26 +711,8 @@ export async function createManualAppointment(data: { leadId: number; scheduledT
 // Look up which user owns a given phone number (for inbound call routing)
 export type { UserPhoneNumber };
 
-export async function listUserPhoneNumbers(userId: number): Promise<UserPhoneNumber[]> {
-  const db = await getDb();
-  if (!db) return [];
-  try {
-    return await db
-      .select()
-      .from(userPhoneNumbers)
-      .where(eq(userPhoneNumbers.userId, userId))
-      .orderBy(desc(userPhoneNumbers.createdAt));
-  } catch (e) {
-    console.warn("[DB] listUserPhoneNumbers:", e);
-    return [];
-  }
-}
-
-export async function insertUserPhoneNumber(data: InsertUserPhoneNumber): Promise<{ insertId: number }> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  const insertId = await insertAndGetId(db, userPhoneNumbers, data);
-  return { insertId };
+function normalizeStoredPhoneNumber(raw: string): string {
+  return normalizeToE164US(raw) || raw.trim();
 }
 
 /**
@@ -765,26 +758,15 @@ export async function registerBringYourOwnPhoneNumber(
   return { insertId, phoneNumber: normalized, alreadyLinked: false };
 }
 
-export async function setUserPhoneNumberActive(id: number, userId: number, isActive: boolean): Promise<void> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  await db
-    .update(userPhoneNumbers)
-    .set({ isActive })
-    .where(and(eq(userPhoneNumbers.id, id), eq(userPhoneNumbers.userId, userId)));
-}
-
-export async function getUserIdByPhoneNumber(phoneNumber: string): Promise<number | null> {
-  const db = await getDb();
-  if (!db) return null;
-  const raw = String(phoneNumber ?? "").trim();
-  if (!raw) return null;
-  const digits = raw.replace(/\D/g, "");
+function buildPhoneCandidates(raw: string): string[] {
+  const normalized = normalizeStoredPhoneNumber(raw);
+  const digits = normalized.replace(/\D/g, "");
   const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
-  const candidates = Array.from(
+  return Array.from(
     new Set(
       [
-        raw,
+        normalized,
+        raw.trim(),
         digits ? `+${digits}` : "",
         digits.length === 10 ? `+1${digits}` : "",
         digits.length === 11 && digits.startsWith("1") ? `+${digits}` : "",
@@ -792,6 +774,104 @@ export async function getUserIdByPhoneNumber(phoneNumber: string): Promise<numbe
       ].filter(Boolean)
     )
   );
+}
+
+export async function listUserPhoneNumbers(userId: number): Promise<UserPhoneNumber[]> {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    const rows = await db
+      .select()
+      .from(userPhoneNumbers)
+      .where(eq(userPhoneNumbers.userId, userId))
+      .orderBy(desc(userPhoneNumbers.createdAt));
+    return rows.map((row) => ({
+      ...row,
+      phoneNumber: normalizeStoredPhoneNumber(row.phoneNumber),
+    }));
+  } catch (e) {
+    console.warn("[DB] listUserPhoneNumbers:", e);
+    return [];
+  }
+}
+
+export async function getPreferredActiveUserPhoneNumber(
+  userId: number
+): Promise<UserPhoneNumber | null> {
+  const rows = await listUserPhoneNumbers(userId);
+  return (
+    rows.find((row) => row.isActive && row.isPrimary) ??
+    rows.find((row) => row.isActive) ??
+    null
+  );
+}
+
+export async function insertUserPhoneNumber(data: InsertUserPhoneNumber): Promise<{ insertId: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const phoneNumber = normalizeStoredPhoneNumber(data.phoneNumber);
+  const [existing] = await db
+    .select({ id: userPhoneNumbers.id })
+    .from(userPhoneNumbers)
+    .where(
+      and(
+        eq(userPhoneNumbers.userId, data.userId),
+        eq(userPhoneNumbers.phoneNumber, phoneNumber)
+      )
+    )
+    .limit(1);
+  if (existing?.id) {
+    return { insertId: existing.id };
+  }
+  const insertId = await insertAndGetId(db, userPhoneNumbers, {
+    ...data,
+    phoneNumber,
+  });
+  return { insertId };
+}
+
+export async function setUserPhoneNumberActive(id: number, userId: number, isActive: boolean): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [currentRow] = await db
+    .select()
+    .from(userPhoneNumbers)
+    .where(and(eq(userPhoneNumbers.id, id), eq(userPhoneNumbers.userId, userId)))
+    .limit(1);
+  if (!currentRow) return;
+  await db
+    .update(userPhoneNumbers)
+    .set({ isActive })
+    .where(and(eq(userPhoneNumbers.id, id), eq(userPhoneNumbers.userId, userId)));
+  if (!isActive && currentRow.isPrimary) {
+    const [replacement] = await db
+      .select({ id: userPhoneNumbers.id })
+      .from(userPhoneNumbers)
+      .where(
+        and(
+          eq(userPhoneNumbers.userId, userId),
+          eq(userPhoneNumbers.isActive, true)
+        )
+      )
+      .orderBy(desc(userPhoneNumbers.createdAt))
+      .limit(1);
+    if (replacement?.id) {
+      await db
+        .update(userPhoneNumbers)
+        .set({ isPrimary: true })
+        .where(eq(userPhoneNumbers.id, replacement.id));
+    }
+  }
+}
+
+export async function getUserIdByPhoneNumber(phoneNumber: string): Promise<number | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const raw = String(phoneNumber ?? "").trim();
+  if (!raw) return null;
+  const digits = normalizeStoredPhoneNumber(raw).replace(/\D/g, "");
+  const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
+  const candidates = buildPhoneCandidates(raw);
   try {
     // Check user_phone_numbers table (provisioned numbers) with relaxed normalization.
     for (const candidate of candidates) {

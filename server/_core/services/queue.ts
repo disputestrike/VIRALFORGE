@@ -47,6 +47,7 @@ export async function addCallJob(data: {
   campaignId?: number;
   script?: string;
   sessionId?: string;
+  userId?: number;
 }): Promise<{ jobId: string; status: string }> {
   const queues = await getQueues();
   const jobId = `call_${data.leadId}_${Date.now()}`;
@@ -76,6 +77,7 @@ export async function addSmsJob(data: {
   scheduledTime?: string;
   delay?: number;
   msgId?: number;
+  userId?: number;
   /** When set, worker sends this exact body (product copy for voice bookings / reminders). */
   body?: string;
 }): Promise<{ jobId: string; status: string }> {

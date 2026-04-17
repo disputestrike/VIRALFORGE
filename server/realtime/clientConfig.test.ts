@@ -15,10 +15,20 @@ describe("clientConfig", () => {
     expect(Object.keys(c.faqAnswers).length).toBe(0);
   });
 
-  it("mergeClientConfig only keeps explicitly supplied FAQs for platform demo line", () => {
-    const c = mergeClientConfig({ businessName: "ApexAI", faqAnswers: { demo: "Book a live walkthrough." } });
+  it("mergeClientConfig injects ApexAI defaults for the platform demo line", () => {
+    const c = mergeClientConfig({ businessName: "ApexAI" });
+    expect(c.faqAnswers.overview).toContain("AI phone agent");
+    expect(c.faqAnswers.crm).toContain("CRM");
+    expect(Object.keys(c.faqAnswers).length).toBeGreaterThan(3);
+  });
+
+  it("mergeClientConfig keeps explicit FAQs alongside ApexAI defaults", () => {
+    const c = mergeClientConfig({
+      businessName: "ApexAI",
+      faqAnswers: { demo: "Book a live walkthrough." },
+    });
     expect(c.faqAnswers.demo).toContain("live walkthrough");
-    expect(Object.keys(c.faqAnswers)).toHaveLength(1);
+    expect(c.faqAnswers.overview).toContain("AI phone agent");
   });
 
   it("mergeClientConfig carries voiceAgentDisplayName for voice prompts", () => {

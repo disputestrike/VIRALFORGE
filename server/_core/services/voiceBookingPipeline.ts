@@ -116,7 +116,13 @@ export async function finalizeVoiceAppointmentBooking(opts: {
   businessName?: string;
   toolArgs: VoiceBookingToolArgs;
   transcriptSnippet?: string;
-}): Promise<{ insertId: number; scheduledTime: Date; leadId: number } | null> {
+}): Promise<{
+  insertId: number;
+  scheduledTime: Date;
+  leadId: number;
+  calendarLink: string | null;
+  calendarEventId: string | null;
+} | null> {
   const a = opts.toolArgs;
   const scheduledTime = parseVoiceAppointmentDateTime(a.date, a.time);
 
@@ -189,6 +195,56 @@ export async function finalizeVoiceAppointmentBooking(opts: {
 
   const lead = await db.getLeadById(leadId);
   const l = lead as Record<string, unknown> | null;
+  const ownerUser = opts.userId ? await db.getUserById(opts.userId) : null;
+  let calendarEventId: string | null = null;
+  let calendarLink: string | null = null;
+  try {
+    const { createCalendarEvent, generateGcalAddLink } = await import(
+      "./googleCalendar"
+    );
+    const businessLabel = (opts.businessName || "ApexAI").trim();
+    const appointmentTitle = `${businessLabel} appointment`;
+    const calendarDescription = [
+      namePart ? `Name: ${namePart}` : null,
+      phonePart ? `Phone: ${phonePart}` : null,
+      servicePart ? `Service: ${servicePart}` : null,
+      notesPart ? `Notes: ${notesPart}` : null,
+      opts.transcriptSnippet
+        ? `Transcript excerpt: ${opts.transcriptSnippet.slice(0, 1200)}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const refreshToken = (ownerUser as { gcalRefreshToken?: string | null } | null)
+      ?.gcalRefreshToken;
+    if (refreshToken) {
+      const event = await createCalendarEvent({
+        refreshToken,
+        summary: appointmentTitle,
+        description: calendarDescription,
+        startTime: scheduledTime,
+        durationMinutes: 30,
+        attendeeEmail: typeof l?.email === "string" ? l.email : undefined,
+        attendeePhone: phonePart || (typeof l?.phone === "string" ? l.phone : undefined),
+        timezone: "America/New_York",
+      });
+      calendarEventId = event?.eventId || null;
+      calendarLink = event?.htmlLink || null;
+    }
+
+    if (!calendarLink) {
+      calendarLink = generateGcalAddLink({
+        title: appointmentTitle,
+        startTime: scheduledTime,
+        durationMinutes: 30,
+        description: calendarDescription,
+      });
+    }
+  } catch (e) {
+    console.warn("[VoiceBooking] Calendar wiring failed:", e);
+  }
+
   const smsTo = phonePart || (l?.phone as string) || opts.callerPhone?.trim() || "";
   const customerSms = formatBookingLineForSms(scheduledTime);
   const queues = await getQueues();
@@ -204,11 +260,12 @@ export async function finalizeVoiceAppointmentBooking(opts: {
           type: "appointment_confirmation",
           leadName: namePart || (l?.firstName as string) || "there",
           scheduledTime: formatReminderTime(scheduledTime),
+          userId: opts.userId,
           body: customerSms,
         });
       } else {
-        await sendSMS({ to: smsTo, body: customerSms });
-        console.log("[VoiceBooking] Customer SMS sent (direct — no REDIS_URL)");
+        await sendSMS({ to: smsTo, body: customerSms, userId: opts.userId });
+        console.log("[VoiceBooking] Customer SMS sent (direct - no REDIS_URL)");
       }
     } catch (e) {
       console.error("[VoiceBooking] Customer SMS failed:", e);
@@ -226,6 +283,7 @@ export async function finalizeVoiceAppointmentBooking(opts: {
           type: "appointment_confirmation",
           leadName: namePart || (l?.firstName as string) || "there",
           scheduledTime: scheduledTime.toISOString(),
+          calendarLink: calendarLink ?? undefined,
         });
       } else {
         const { Resend } = await import("resend");
@@ -233,8 +291,8 @@ export async function finalizeVoiceAppointmentBooking(opts: {
         await resend.emails.send({
           from: ENV.resendFromHeader,
           to: leadEmail,
-          subject: `Appointment confirmed — ${formattedTime}`,
-          html: `<p>Hi ${escapeHtml(namePart || "there")},</p><p>Your appointment is confirmed for <strong>${escapeHtml(formattedTime)}</strong>.</p><p>We look forward to speaking with you.</p>`,
+          subject: `Appointment confirmed - ${formattedTime}`,
+          html: `<p>Hi ${escapeHtml(namePart || "there")},</p><p>Your appointment is confirmed for <strong>${escapeHtml(formattedTime)}</strong>.</p>${calendarLink ? `<p><a href="${escapeHtml(calendarLink)}">Add it to your calendar</a></p>` : ""}<p>We look forward to speaking with you.</p>`,
         });
         console.log("[VoiceBooking] Customer email sent (direct)");
       }
@@ -245,35 +303,30 @@ export async function finalizeVoiceAppointmentBooking(opts: {
 
   if (opts.userId && ENV.resendApiKey) {
     try {
-      const { getDb } = await import("../../db");
-      const { users } = await import("../../../drizzle/schema");
-      const { eq } = await import("drizzle-orm");
-      const database = await getDb();
-      if (database) {
-        const [owner] = await database.select().from(users).where(eq(users.id, opts.userId)).limit(1);
-        const ownerEmail = owner?.email?.trim();
-        if (ownerEmail) {
-          const biz = opts.businessName || "Your business";
-          const subj = `New voice booking — ${namePart || "Caller"} — ${formatReminderTime(scheduledTime)}`;
-          const html = `<h2>Voice AI booking</h2>
+      const ownerEmail = (ownerUser as { email?: string | null } | null)?.email?.trim();
+      if (ownerEmail) {
+        const biz = opts.businessName || "Your business";
+        const subj = `New voice booking - ${namePart || "Caller"} - ${formatReminderTime(scheduledTime)}`;
+        const html = `<h2>Voice AI booking</h2>
 <p><strong>Business:</strong> ${escapeHtml(biz)}</p>
 <p><strong>When:</strong> ${escapeHtml(formatReminderTime(scheduledTime))}</p>
 <p><strong>Lead ID:</strong> ${leadId} | <strong>Appointment ID:</strong> ${insertId}</p>
-<p><strong>Name:</strong> ${escapeHtml(namePart || "—")}<br/>
-<strong>Phone:</strong> ${escapeHtml(phonePart || String(l?.phone || "—"))}<br/>
-<strong>Service:</strong> ${escapeHtml(servicePart || "—")}</p>
+<p><strong>Name:</strong> ${escapeHtml(namePart || "-")}<br/>
+<strong>Phone:</strong> ${escapeHtml(phonePart || String(l?.phone || "-"))}<br/>
+<strong>Service:</strong> ${escapeHtml(servicePart || "-")}</p>
 <p><strong>Notes:</strong> ${escapeHtml(notesPart || notes)}</p>
+${calendarLink ? `<p><strong>Calendar:</strong> <a href="${escapeHtml(calendarLink)}">${escapeHtml(calendarLink)}</a></p>` : ""}
+${calendarEventId ? `<p><strong>Calendar event ID:</strong> ${escapeHtml(calendarEventId)}</p>` : ""}
 ${opts.transcriptSnippet ? `<p><strong>Transcript excerpt:</strong></p><pre style="white-space:pre-wrap">${escapeHtml(opts.transcriptSnippet.slice(0, 4000))}</pre>` : ""}`;
-          const { Resend } = await import("resend");
-          const resend = new Resend(ENV.resendApiKey);
-          await resend.emails.send({
-            from: ENV.resendFromHeader,
-            to: ownerEmail,
-            subject: subj,
-            html,
-          });
-          console.log("[VoiceBooking] Owner internal email sent");
-        }
+        const { Resend } = await import("resend");
+        const resend = new Resend(ENV.resendApiKey);
+        await resend.emails.send({
+          from: ENV.resendFromHeader,
+          to: ownerEmail,
+          subject: subj,
+          html,
+        });
+        console.log("[VoiceBooking] Owner internal email sent");
       }
     } catch (e) {
       console.error("[VoiceBooking] Owner email failed:", e);
@@ -304,6 +357,7 @@ ${opts.transcriptSnippet ? `<p><strong>Transcript excerpt:</strong></p><pre styl
           type: "appointment_reminder",
           leadName: namePart || (l?.firstName as string) || "there",
           scheduledTime: fullFmt,
+          userId: opts.userId,
           delay: delayMs,
           body,
         });
@@ -311,7 +365,7 @@ ${opts.transcriptSnippet ? `<p><strong>Transcript excerpt:</strong></p><pre styl
         const { sendSMS } = await import("./signalwireService");
         const cap = Math.min(delayMs, 2147483647);
         setTimeout(() => {
-          sendSMS({ to: reminderPhone, body }).catch((err) =>
+          sendSMS({ to: reminderPhone, body, userId: opts.userId }).catch((err) =>
             console.error(`[VoiceBooking] ${label} reminder failed:`, err)
           );
         }, cap);
@@ -325,5 +379,5 @@ ${opts.transcriptSnippet ? `<p><strong>Transcript excerpt:</strong></p><pre styl
   await scheduleReminder(ms24h, "24h");
   await scheduleReminder(ms2h, "2h");
 
-  return { insertId, scheduledTime, leadId };
+  return { insertId, scheduledTime, leadId, calendarLink, calendarEventId };
 }

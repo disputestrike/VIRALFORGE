@@ -7,6 +7,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import LandingPage from "./pages/LandingPage";
 import { useAuth } from "./_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
 import Campaigns from "./pages/Campaigns";
@@ -37,12 +38,22 @@ import IntegrationsPage from "@/pages/IntegrationsPage";
 
 function RootPage() {
   const { user, loading } = useAuth();
+  const { data: setupStatus, isLoading: setupLoading } =
+    trpc.settings.setupStatus.useQuery(undefined, {
+      enabled: Boolean(user),
+      refetchOnWindowFocus: false,
+    });
   if (loading) return (
     <div style={{minHeight:"100vh",background:"#0a0c12",display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{color:"rgba(255,255,255,0.5)",fontSize:14}}>Loading...</div>
     </div>
   );
-  if (user) return <Redirect to="/dashboard" />;
+  if (user && setupLoading) return (
+    <div style={{minHeight:"100vh",background:"#0a0c12",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{color:"rgba(255,255,255,0.5)",fontSize:14}}>Preparing your workspace...</div>
+    </div>
+  );
+  if (user) return <Redirect to={setupStatus?.needsSetup ? "/onboarding" : "/dashboard"} />;
   return <LandingPage />;
 }
 

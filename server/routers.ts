@@ -30,7 +30,12 @@ import { webchatRouter } from "./routers/webchatRouter";
 import { rcsRouter } from "./routers/rcsRouter";
 import { abTestingRouter } from "./routers/abTestingRouter";
 import { ENV } from "./_core/env";
+import { normalizeToE164US } from "./_core/phoneE164";
 import { scoreFromRules, type RuleEntry } from "./_core/services/leadScoringApply";
+import {
+  getPublicDemoConfig,
+  getPublicDemoOwnerId,
+} from "./realtime/tenantVoiceRuntime";
 
 // ─── Admin guard ──────────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -1033,6 +1038,37 @@ const onboardingRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       try {
+        const existingNums = await db.listUserPhoneNumbers(ctx.user.id);
+        const activeExisting =
+          existingNums.find((row) => row.isActive && row.isPrimary) ??
+          existingNums.find((row) => row.isActive);
+        if (activeExisting?.phoneNumber) {
+          const normalizedExisting =
+            normalizeToE164US(activeExisting.phoneNumber) ||
+            activeExisting.phoneNumber;
+          return {
+            success: true,
+            phoneNumber: normalizedExisting,
+            formattedNumber: normalizedExisting.replace(
+              /(\+1)(\d{3})(\d{3})(\d{4})/,
+              "($2) $3-$4"
+            ),
+            sid: activeExisting.signalwireSid ?? null,
+            reusedExisting: true,
+          };
+        }
+
+        if (
+          !process.env.SIGNALWIRE_PROJECT_ID ||
+          !process.env.SIGNALWIRE_TOKEN ||
+          !process.env.SIGNALWIRE_SPACE_URL
+        ) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Phone provisioning is not configured yet.",
+          });
+        }
+
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { RestClient } = require("@signalwire/compatibility-api");
         const client = RestClient(
@@ -1053,7 +1089,8 @@ const onboardingRouter = router({
           available.push(fallback[0]);
         }
 
-        const numberToBuy = available[0].phoneNumber;
+        const numberToBuy =
+          normalizeToE164US(available[0].phoneNumber) || available[0].phoneNumber;
         const baseUrl = ENV.publicUrl;
 
         // Purchase the number
@@ -1075,7 +1112,6 @@ const onboardingRouter = router({
           metadata: { phoneNumber: numberToBuy, sid: purchased.sid, industry: input.industry }
         });
 
-        const existingNums = await db.listUserPhoneNumbers(ctx.user.id);
         try {
           await db.insertUserPhoneNumber({
             userId: ctx.user.id,
@@ -1087,7 +1123,23 @@ const onboardingRouter = router({
             industry: input.industry ?? null,
           });
         } catch (e) {
-          console.warn("[Onboarding] user_phone_numbers insert failed (schema mismatch or duplicate):", e);
+          console.warn("[Onboarding] user_phone_numbers insert failed:", e);
+          const recovered = (await db.listUserPhoneNumbers(ctx.user.id)).find(
+            (row) =>
+              normalizeToE164US(row.phoneNumber) === numberToBuy ||
+              row.signalwireSid === purchased.sid
+          );
+          if (!recovered) {
+            try {
+              await client.incomingPhoneNumbers(purchased.sid).remove();
+            } catch (cleanupErr) {
+              console.warn(
+                "[Onboarding] Failed to roll back purchased number after DB error:",
+                cleanupErr
+              );
+            }
+            throw e;
+          }
         }
 
         console.log(`[Onboarding] Provisioned ${numberToBuy} for user ${ctx.user.id}`);
@@ -1274,9 +1326,112 @@ const settingsRouter = router({
   get: protectedProcedure.query(async ({ ctx }) => {
     const db_mod = await import("./db");
     const { getUserVoiceSettings } = await import("./_core/services/voiceProfiles");
+    const {
+      getTenantVoiceRuntimeProfile,
+      pronunciationHintsToText,
+    } = await import("./realtime/tenantVoiceRuntime");
     const user = await db_mod.getUserById(ctx.user.id);
     const voiceSettings = await getUserVoiceSettings(ctx.user.id);
-    return { ...(user ?? ctx.user), ...voiceSettings };
+    const voiceRuntimeProfile = await getTenantVoiceRuntimeProfile(ctx.user.id);
+    return {
+      ...(user ?? ctx.user),
+      ...voiceSettings,
+      voiceRuntimeProfile,
+      pronunciationHintsText: pronunciationHintsToText(
+        voiceRuntimeProfile.pronunciationHints
+      ),
+    };
+  }),
+
+  setupStatus: protectedProcedure.query(async ({ ctx }) => {
+    const db_mod = await import("./db");
+    const { getUserVoiceSettings } = await import("./_core/services/voiceProfiles");
+    const { getTenantVoiceRuntimeProfile } = await import(
+      "./realtime/tenantVoiceRuntime"
+    );
+    const { resolveTenantMessagingStatus } = await import(
+      "./realtime/tenantMessagingStatus"
+    );
+    const [user, phoneNumbers, kbList, voiceSettings, voiceRuntimeProfile, crmConnections] =
+      await Promise.all([
+        db_mod.getUserById(ctx.user.id),
+        db.listUserPhoneNumbers(ctx.user.id),
+        db.listKnowledgeBases(ctx.user.id),
+        getUserVoiceSettings(ctx.user.id),
+        getTenantVoiceRuntimeProfile(ctx.user.id),
+        db.listCrmConnections(ctx.user.id),
+      ]);
+
+    const activePhoneNumbers = phoneNumbers.filter((row) => row.isActive);
+    const readyKnowledgeBases = kbList.filter(
+      (row) =>
+        row.status === "active" ||
+        Number(row.trainingProgress ?? 0) >= 100
+    );
+
+    const profileReady = Boolean(
+      user?.businessName?.trim() &&
+        (user?.primaryIndustryLabel?.trim() ||
+          user?.voiceIndustryContext?.trim() ||
+          user?.agencyName?.trim())
+    );
+    const voiceReady = Boolean(
+      voiceSettings.voiceProfileId && voiceRuntimeProfile.assistantName.trim()
+    );
+    const numberReady = activePhoneNumbers.length > 0;
+    const routingReady = Boolean(
+      user?.transferNumber?.trim() ||
+        user?.gcalBookingUrl?.trim() ||
+        user?.gcalRefreshToken
+    );
+    const knowledgeReady = readyKnowledgeBases.length > 0;
+    const crmConnectedCount = crmConnections.filter(
+      (row) => row.status === "connected"
+    ).length;
+
+    const steps = {
+      profile: profileReady,
+      voice: voiceReady,
+      number: numberReady,
+      routing: routingReady,
+      knowledge: knowledgeReady,
+      launch: profileReady && voiceReady && numberReady,
+    };
+
+    const recommendedNextStep = !steps.profile
+      ? "profile"
+      : !steps.voice
+      ? "voice"
+      : !steps.number
+      ? "number"
+      : !steps.routing
+      ? "routing"
+      : !steps.knowledge
+      ? "knowledge"
+      : "launch";
+
+    const primaryPhone =
+      activePhoneNumbers.find((row) => row.isPrimary) ?? activePhoneNumbers[0] ?? null;
+    const messagingStatus = resolveTenantMessagingStatus(
+      primaryPhone?.phoneNumber ?? null
+    );
+
+    return {
+      needsSetup: !steps.launch,
+      recommendedNextStep,
+      steps,
+      businessName: user?.businessName ?? "",
+      language: user?.language ?? "en",
+      voiceProfileId: voiceSettings.voiceProfileId,
+      voiceRuntimeProfile,
+      activePhoneCount: activePhoneNumbers.length,
+      primaryPhoneNumber: primaryPhone?.phoneNumber ?? null,
+      knowledgeBaseCount: kbList.length,
+      readyKnowledgeBaseCount: readyKnowledgeBases.length,
+      calendarConnected: Boolean(user?.gcalRefreshToken),
+      crmConnectedCount,
+      messagingStatus,
+    };
   }),
 
   voiceProfiles: protectedProcedure.query(async () => {
@@ -1333,11 +1488,26 @@ const settingsRouter = router({
       voiceRestrictionNotes: z.string().max(8000).optional().nullable(),
       /** Spoken name on live calls; null clears (default Alex in prompts) */
       voiceAgentDisplayName: z.string().max(80).optional().nullable(),
+      voiceRuntimeProfile: z.object({
+        assistantName: z.string().min(1).max(40).optional(),
+        tonePreset: z.string().min(1).max(200).optional(),
+        warmth: z.enum(["steady", "warm", "premium"]).optional(),
+        formality: z.enum(["conversational", "professional", "executive"]).optional(),
+        pace: z.enum(["relaxed", "balanced", "fast"]).optional(),
+        pauseStyle: z.enum(["tight", "balanced", "patient"]).optional(),
+        fillerPolicy: z.enum(["none", "minimal", "natural"]).optional(),
+        interruptionSensitivity: z.enum(["aggressive", "balanced", "patient"]).optional(),
+        pronunciationHints: z.array(z.string()).optional(),
+        pronunciationHintsText: z.string().max(2000).optional().nullable(),
+      }).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db_mod = await import("./db");
       const { setUserVoiceProfileId } = await import("./_core/services/voiceProfiles");
-      const { voiceProfileId, ...userInput } = input;
+      const { setTenantVoiceRuntimeProfile } = await import(
+        "./realtime/tenantVoiceRuntime"
+      );
+      const { voiceProfileId, voiceRuntimeProfile, ...userInput } = input;
 
       try {
         await db_mod.updateUserById(ctx.user.id, { ...userInput });
@@ -1347,6 +1517,9 @@ const settingsRouter = router({
 
       if (voiceProfileId) {
         await setUserVoiceProfileId(ctx.user.id, voiceProfileId);
+      }
+      if (voiceRuntimeProfile) {
+        await setTenantVoiceRuntimeProfile(ctx.user.id, voiceRuntimeProfile);
       }
 
       await db_mod.logActivity({
@@ -1419,6 +1592,18 @@ const settingsRouter = router({
       connected: !!(user as any)?.gcalRefreshToken,
       bookingUrl: (user as any)?.gcalBookingUrl ?? null,
     };
+  }),
+
+  messagingStatus: protectedProcedure.query(async ({ ctx }) => {
+    const { resolveTenantMessagingStatus } = await import(
+      "./realtime/tenantMessagingStatus"
+    );
+    const phoneNumbers = await db.listUserPhoneNumbers(ctx.user.id);
+    const primaryPhone =
+      phoneNumbers.find((row) => row.isActive && row.isPrimary) ??
+      phoneNumbers.find((row) => row.isActive) ??
+      null;
+    return resolveTenantMessagingStatus(primaryPhone?.phoneNumber ?? null);
   }),
 
   calendarConnectUrl: protectedProcedure.mutation(async ({ ctx }) => {
@@ -1661,6 +1846,8 @@ function checkDemoRate(phone: string): boolean {
 }
 
 const demoCallRouter = router({
+  config: publicProcedure.query(() => getPublicDemoConfig()),
+
   // Trigger an outbound AI demo call from the landing page — captures lead data
   request: publicProcedure
     .input(z.object({
@@ -1670,27 +1857,59 @@ const demoCallRouter = router({
       industry: z.string().optional().default("general"),
     }))
     .mutation(async ({ input }) => {
+      const normalizedPhone = normalizeToE164US(input.phone);
+      if (!normalizedPhone || normalizedPhone.replace(/\D/g, "").length < 11) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Please enter a valid US phone number.",
+        });
+      }
+
+      const dbInst = await db.getDb();
+      if (dbInst) {
+        const { leads } = await import("../drizzle/schema");
+        const { and, eq, gte, sql } = await import("drizzle-orm");
+        const oneHourAgo = new Date(Date.now() - 3600_000);
+        const [row] = await (dbInst as any)
+          .select({ count: sql<number>`count(*)` })
+          .from(leads)
+          .where(
+            and(
+              eq(leads.phone, normalizedPhone),
+              eq(leads.source, "demo_call"),
+              gte(leads.createdAt, oneHourAgo)
+            )
+          );
+        if (Number(row?.count ?? 0) >= 3) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many demo requests. Please try again later.",
+          });
+        }
+      }
+
       // Rate limit check
-      const cleanPhone = input.phone.replace(/\D/g, "");
+      const cleanPhone = normalizedPhone.replace(/\D/g, "");
       if (!checkDemoRate(cleanPhone)) {
         throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many demo requests. Please try again later." });
       }
       try {
+        const demoOwnerId = getPublicDemoOwnerId();
         // Save as a lead first
         const leadResult = await db.createLead({
           firstName: input.firstName,
           lastName: "Demo",
-          phone: input.phone,
+          phone: normalizedPhone,
           email: input.email,
           source: "demo_call",
           status: "new",
           score: 70,
           segment: "hot",
           industry: input.industry,
-          createdBy: 1, // system account — demo leads
+          createdBy: demoOwnerId,
         });
         const { runEmailSequencesForLeadCreated } = await import("./_core/services/emailSequenceTrigger");
-        void runEmailSequencesForLeadCreated(1, {
+        void runEmailSequencesForLeadCreated(demoOwnerId, {
           id: leadResult.insertId,
           firstName: input.firstName,
           lastName: "Demo",
@@ -1699,22 +1918,46 @@ const demoCallRouter = router({
           company: null,
         }).catch((e) => console.warn("[EmailSequence] demo:", e));
 
+        const messageRow = await db.createMessage({
+          leadId: leadResult.insertId,
+          channel: "voice",
+          direction: "outbound",
+          status: "queued",
+          body: "Public demo callback requested from landing page",
+          metadata: JSON.stringify({
+            type: "public_demo_callback",
+            requestedAt: new Date().toISOString(),
+            industry: input.industry,
+          }),
+          createdBy: demoOwnerId,
+        });
+
         // Trigger outbound call immediately
         const { initiateCall } = await import("./_core/services/signalwireService");
         const result = await initiateCall({
           leadId: leadResult.insertId,
-          phoneNumber: input.phone,
+          phoneNumber: normalizedPhone,
+          userId: demoOwnerId,
+        });
+        await db.updateMessageStatus(messageRow.insertId, "sent", {
+          sentAt: new Date(),
         });
 
         await db.logActivity({
+          userId: demoOwnerId,
           entityType: "demo_call",
           entityId: leadResult.insertId,
           action: "demo_requested",
-          description: `Demo call requested by ${input.firstName} (${input.phone}) — industry: ${input.industry}`,
-          metadata: { callSid: result.callSid, phone: input.phone, email: input.email },
+          description: `Demo call requested by ${input.firstName} (${normalizedPhone}) — industry: ${input.industry}`,
+          metadata: {
+            callSid: result.callSid,
+            phone: normalizedPhone,
+            email: input.email,
+            messageId: messageRow.insertId,
+          },
         });
 
-        console.log(`[DemoCall] Triggered for ${input.firstName} at ${input.phone} | callSid: ${result.callSid}`);
+        console.log(`[DemoCall] Triggered for ${input.firstName} at ${normalizedPhone} | callSid: ${result.callSid}`);
         return { success: true, message: "Your AI demo call is connecting now!" };
       } catch (err: any) {
         console.error("[DemoCall] Failed:", err);

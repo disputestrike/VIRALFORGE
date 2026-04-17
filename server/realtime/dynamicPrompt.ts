@@ -4,6 +4,10 @@
  */
 import { canOfferBooking, type ConversationMode, type ConversationPolicyState } from "./callPolicy";
 import { isApexPlatformDemoLine, type ClientConfig } from "./clientConfig";
+import {
+  buildConversationDirective,
+  DEFAULT_TENANT_VOICE_RUNTIME,
+} from "./tenantVoiceRuntime";
 
 function formatMandatoryFaqBlock(client: ClientConfig): string {
   const rows = Object.entries(client.faqAnswers)
@@ -31,8 +35,9 @@ const MODE_HINTS: Record<ConversationMode, string> = {
     "They want a human. Say you will connect them (if your system supports it) or offer to take a message / schedule a callback. Stay calm and short.",
 };
 
-function buildCorePersonaHead(agent: string): string {
-  const n = agent.trim() || "Alex";
+/** Locked production persona - extended with tenant facts and tools below. */
+function buildCorePersonaHead(assistantName: string): string {
+  const n = assistantName.trim() || "Alex";
   return `You are ${n}, a fast, sharp, professional AI phone assistant. You sound like a calm, experienced human sales rep - not a chatbot.
 
 PHONE OPENING: The system already plays a short, varied intro with [BUSINESS] and your name before your first generated reply.
@@ -126,8 +131,8 @@ const CORE_PERSONA_TENANT_BUSINESS = `=== YOUR BUSINESS (the company the caller 
 
 `;
 
-function buildCorePersonaTail(agent: string): string {
-  const n = agent.trim() || "Alex";
+function buildCorePersonaTail(assistantName: string): string {
+  const n = assistantName.trim() || "Alex";
   return `=== FACTUAL QUESTIONS (VOICE) ===
 - For who / what / when factual questions, name the entity and add at least one concrete detail (role, time period, or one short context sentence).
 - Never answer with a single word unless the caller explicitly asked for just one word.
@@ -170,12 +175,11 @@ If caller says: "demo", "show me", "how does this work", "can I try", "walk me t
 7. Close the demo: "That's how I'd handle calls like this for you" and offer one next step (for example: book, questions, or human handoff).`;
 }
 
-function buildCorePersona(apexProductLine: boolean, agentDisplayName: string): string {
-  const agent = agentDisplayName.trim() || "Alex";
+function buildCorePersona(apexProductLine: boolean, assistantName: string): string {
   return (
-    buildCorePersonaHead(agent) +
+    buildCorePersonaHead(assistantName) +
     (apexProductLine ? CORE_PERSONA_APEX_PRODUCT : CORE_PERSONA_TENANT_BUSINESS) +
-    buildCorePersonaTail(agent)
+    buildCorePersonaTail(assistantName)
   );
 }
 
@@ -200,7 +204,11 @@ export function buildVoiceSystemPrompt(
   domainPackBlock?: string
 ): string {
   const apexProductLine = isApexPlatformDemoLine(businessName);
-  const agentName = (client.voiceAgentDisplayName ?? "").trim() || "Alex";
+  const runtimeProfile = client.voiceRuntimeProfile ?? DEFAULT_TENANT_VOICE_RUNTIME;
+  const assistantName =
+    (client.voiceAgentDisplayName ?? "").trim() ||
+    runtimeProfile.assistantName ||
+    "Alex";
   const bookingLocked = !canOfferBooking(state);
   const bookingRule = bookingLocked
     ? "DO NOT offer appointment times or calendar slots. Answer first; one non-booking next step only."
@@ -214,9 +222,20 @@ export function buildVoiceSystemPrompt(
     ? 'MANDATORY FACTS (ApexAI product - for "what is ApexAI?" / how the platform works):'
     : `BUSINESS SCRIPT (for "${businessName}" - use for "what do you do?"; if the list is empty, rely on DOMAIN PACK + INDUSTRY only - do not invent ApexAI product pitch):`;
 
-  return `${buildCorePersona(apexProductLine, agentName)}
+  const conversationDirective = buildConversationDirective({
+    mode: client.campaignMode ?? (apexProductLine ? "platform_demo" : "inbound_support"),
+    profile: runtimeProfile,
+    businessName,
+    industry,
+    language: null,
+    isApexDemo: apexProductLine,
+  });
+
+  return `${buildCorePersona(apexProductLine, assistantName)}
 
 ${BEHAVIORAL_HARDENING}
+
+${conversationDirective}
 
 BUSINESS: ${businessName}
 INDUSTRY (session): ${industry}${domainSection}

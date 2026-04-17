@@ -25,8 +25,30 @@ function getSignalWireClient() {
 }
 
 // ── Local presence: get best caller number for destination area code ───────
-export async function getOptimalCallerNumber(destinationPhone: string): Promise<string> {
+export async function getOptimalCallerNumber(
+  destinationPhone: string,
+  userId?: number,
+  explicitFromNumber?: string
+): Promise<string> {
   const defaultNumber = ENV.signalwirePhoneNumber;
+  const explicit = normalizeToE164US(explicitFromNumber ?? "") || explicitFromNumber?.trim();
+  if (explicit) return explicit;
+
+  if (userId) {
+    try {
+      const db = await import("../../db");
+      const preferred = await db.getPreferredActiveUserPhoneNumber(userId);
+      const tenantNumber =
+        normalizeToE164US(preferred?.phoneNumber ?? "") ||
+        preferred?.phoneNumber?.trim();
+      if (tenantNumber) {
+        return tenantNumber;
+      }
+    } catch (err) {
+      console.warn("[SignalWire] Tenant number lookup failed, falling back:", err);
+    }
+  }
+
   if (!destinationPhone || !defaultNumber) return defaultNumber;
 
   try {
@@ -60,6 +82,9 @@ export async function initiateCall(data: {
   script?: string;
   /** Tenant owner — when set, outbound destination is checked against `blocked_phone_numbers`. */
   blocklistUserId?: number;
+  /** Tenant owner — when set, prefer the tenant's active number as caller ID. */
+  userId?: number;
+  fromNumber?: string;
 }): Promise<{ callSid: string; status: string }> {
   const client = getSignalWireClient();
   if (!ENV.signalwirePhoneNumber) throw new Error("SIGNALWIRE_PHONE_NUMBER is required");
@@ -77,7 +102,11 @@ export async function initiateCall(data: {
     campaignId: data.campaignId,
   });
   const toNumber = normalizeToE164US(data.phoneNumber) || data.phoneNumber.trim();
-  const callerNumber = await getOptimalCallerNumber(toNumber);
+  const callerNumber = await getOptimalCallerNumber(
+    toNumber,
+    data.userId,
+    data.fromNumber
+  );
 
   // Build webhook URL — same routes as before, no changes needed
   const baseUrl = ENV.publicUrl;
@@ -100,12 +129,18 @@ export async function initiateCall(data: {
 export async function sendSMS(data: {
   to: string;
   body: string;
+  userId?: number;
+  fromNumber?: string;
 }): Promise<{ messageSid: string; status: string }> {
   const client = getSignalWireClient();
   if (!ENV.signalwirePhoneNumber) throw new Error("SIGNALWIRE_PHONE_NUMBER is required");
 
   const toNumber = normalizeToE164US(data.to) || data.to.trim();
-  const fromNumber = await getOptimalCallerNumber(toNumber);
+  const fromNumber = await getOptimalCallerNumber(
+    toNumber,
+    data.userId,
+    data.fromNumber
+  );
 
   const message = await client.messages.create({
     body: data.body,
@@ -156,6 +191,8 @@ export async function initiateCallWithAMD(data: {
   script?: string;
   blocklistUserId?: number;
   voicemailMessage?: string; // if set, leaves VM instead of hanging up
+  userId?: number;
+  fromNumber?: string;
 }): Promise<{ callSid: string; status: string }> {
   const client = getSignalWireClient();
   if (!ENV.signalwirePhoneNumber) throw new Error("SIGNALWIRE_PHONE_NUMBER required");
@@ -169,10 +206,15 @@ export async function initiateCallWithAMD(data: {
     script: data.script,
     campaignId: data.campaignId,
   });
-  const callerNumber = await getOptimalCallerNumber(data.phoneNumber);
+  const toNumber = normalizeToE164US(data.phoneNumber) || data.phoneNumber.trim();
+  const callerNumber = await getOptimalCallerNumber(
+    toNumber,
+    data.userId,
+    data.fromNumber
+  );
 
   const call = await client.calls.create({
-    to: data.phoneNumber,
+    to: toNumber,
     from: callerNumber,
     url: `${baseUrl}/api/voice/start?leadId=${data.leadId}&sessionId=${sessionId}&campaignId=${data.campaignId || ""}`,
     statusCallback: `${baseUrl}/api/voice/status`,

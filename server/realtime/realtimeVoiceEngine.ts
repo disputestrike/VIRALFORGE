@@ -52,6 +52,15 @@ import {
 } from "./turnController";
 import { isApexPlatformDemoLine, mergeClientConfig, type ClientConfig } from "./clientConfig";
 import { selectInboundGreeting, selectOutboundIntro } from "./voiceOpeningLines";
+import {
+  DEFAULT_TENANT_VOICE_RUNTIME,
+  getInterruptAckMinSpeechMs,
+  getLatencyBudgetForMode,
+  getUserSilenceReengageMs,
+  resolveSessionConversationMode,
+  type SessionConversationMode,
+  type TenantVoiceRuntimeProfile,
+} from "./tenantVoiceRuntime";
 import type { TenantIndustryOverlay } from "../_core/services/domainPacks";
 import {
   formatDomainPackForVoicePrompt,
@@ -240,6 +249,9 @@ interface EngineOptions {
   industry?: string;
   voiceProfileId?: string;
   language?: string;
+  callDirection?: "inbound" | "outbound";
+  outboundScript?: string | null;
+  voiceRuntimeProfile?: TenantVoiceRuntimeProfile;
   /** Merged from `users` voice domain columns at WS connect */
   tenantIndustryOverlay?: TenantIndustryOverlay;
   /** From `users.voiceAgentDisplayName`; empty uses "Alex" in prompts and greetings */
@@ -256,6 +268,9 @@ export function createCallEngine(opts: EngineOptions): void {
     industry: optIndustry = "business services",
     voiceProfileId,
     language: optLanguage = "en",
+    callDirection: optCallDirection = "inbound",
+    outboundScript: optOutboundScript,
+    voiceRuntimeProfile: optVoiceRuntimeProfile,
     tenantIndustryOverlay,
     voiceAgentDisplayName: optVoiceAgentDisplayName,
   } = opts;
@@ -269,6 +284,8 @@ export function createCallEngine(opts: EngineOptions): void {
   let businessName = optBusinessName;
   let industry = optIndustry;
   const callLanguage = optLanguage;
+  const voiceRuntimeProfile =
+    optVoiceRuntimeProfile ?? DEFAULT_TENANT_VOICE_RUNTIME;
   const tenantPartial: Partial<ClientConfig> = {};
   if (tenantIndustryOverlay?.primaryIndustryLabel?.trim()) {
     tenantPartial.primaryIndustryLabel = tenantIndustryOverlay.primaryIndustryLabel.trim();
@@ -286,9 +303,61 @@ export function createCallEngine(opts: EngineOptions): void {
     businessName,
     industry,
     voiceAgentDisplayName: optVoiceAgentDisplayName?.trim() || undefined,
+    callDirection: optCallDirection,
+    outboundScript: optOutboundScript ?? undefined,
+    voiceRuntimeProfile,
+    campaignMode: resolveSessionConversationMode({
+      businessName,
+      callDirection: optCallDirection,
+      outboundScript: optOutboundScript,
+    }),
     ...tenantPartial,
   });
-  const spokenAgent = (): string => (clientConfig.voiceAgentDisplayName ?? "").trim() || "Alex";
+  const spokenAgent = (): string =>
+    (clientConfig.voiceAgentDisplayName ??
+      clientConfig.voiceRuntimeProfile?.assistantName ??
+      "")
+      .trim() || "Alex";
+  let sessionConversationMode: SessionConversationMode =
+    clientConfig.campaignMode ?? "inbound_support";
+
+  function refreshClientConfig(
+    overrides?: Partial<ClientConfig> & {
+      businessName?: string;
+      industry?: string;
+      callDirection?: "inbound" | "outbound";
+      outboundScript?: string;
+    }
+  ): void {
+    businessName = overrides?.businessName ?? businessName;
+    industry = overrides?.industry ?? industry;
+    clientConfig = mergeClientConfig({
+      ...clientConfig,
+      ...overrides,
+      businessName,
+      industry,
+      callDirection: overrides?.callDirection ?? clientConfig.callDirection ?? optCallDirection,
+      outboundScript: overrides?.outboundScript ?? clientConfig.outboundScript ?? optOutboundScript ?? undefined,
+      voiceAgentDisplayName:
+        overrides?.voiceAgentDisplayName ??
+        clientConfig.voiceAgentDisplayName ??
+        optVoiceAgentDisplayName?.trim() ??
+        undefined,
+      voiceRuntimeProfile,
+      campaignMode: resolveSessionConversationMode({
+        businessName,
+        callDirection:
+          overrides?.callDirection ??
+          clientConfig.callDirection ??
+          optCallDirection,
+        outboundScript:
+          overrides?.outboundScript ??
+          clientConfig.outboundScript ??
+          optOutboundScript,
+      }),
+    });
+    sessionConversationMode = clientConfig.campaignMode ?? sessionConversationMode;
+  }
   log(`[TENANT] init businessName=${JSON.stringify(clientConfig.businessName)} industry=${JSON.stringify(clientConfig.industry)} userId=${userId ?? null} leadId=${leadId ?? null} voiceProfileId=${voiceProfileId ?? null} agent=${spokenAgent()}`);
 
   // State
@@ -410,7 +479,10 @@ export function createCallEngine(opts: EngineOptions): void {
     if (!greetingDone || !callerHasSpokenOnce) return;
     if (silenceReengageAlreadySent) return;
     if (!voiceStreamReady()) return;
-    const ms = ENV.voiceUserSilenceReengageMs;
+    const ms = getUserSilenceReengageMs({
+      mode: sessionConversationMode,
+      pauseStyle: voiceRuntimeProfile.pauseStyle,
+    });
     if (ms <= 0) return;
     const playbackDoneAt = Date.now();
     userSilenceReengageTimer = setTimeout(() => {
@@ -459,6 +531,9 @@ export function createCallEngine(opts: EngineOptions): void {
       speechMs,
       sttConfidence,
       assistantResponseInProgress: inProg,
+      minSpeechMs: getInterruptAckMinSpeechMs(
+        voiceRuntimeProfile.interruptionSensitivity
+      ),
     });
     if (!play) {
       if (ENV.interruptAckOnLowConfidenceOnly) {
@@ -467,7 +542,10 @@ export function createCallEngine(opts: EngineOptions): void {
           detail: "low_confidence_only_mode",
           extra: { speechMs },
         });
-      } else if (speechMs < ENV.interruptAckMinSpeechMs && sttConfidence >= ENV.voiceSttConfidenceLowThreshold) {
+      } else if (
+        speechMs < getInterruptAckMinSpeechMs(voiceRuntimeProfile.interruptionSensitivity) &&
+        sttConfidence >= ENV.voiceSttConfidenceLowThreshold
+      ) {
         logVoiceControllerEvent(callId, "info", {
           bucket: "tts_ack_too_talky",
           detail: "silent_stop_short_playback",
@@ -1349,7 +1427,15 @@ export function createCallEngine(opts: EngineOptions): void {
 
     // Latency budget enforcement — sub-700ms end-to-end target from research spec.
     // After 700ms total turn time with no TTS audio, speak a brief hold line.
-    const LATENCY_BUDGET_MS = parseInt(process.env.VOICE_LATENCY_BUDGET_MS ?? "900", 10) || 900;
+    const configuredLatencyBudget =
+      parseInt(process.env.VOICE_LATENCY_BUDGET_MS ?? "", 10) || 0;
+    const LATENCY_BUDGET_MS =
+      configuredLatencyBudget > 0
+        ? configuredLatencyBudget
+        : getLatencyBudgetForMode({
+            mode: sessionConversationMode,
+            pace: voiceRuntimeProfile.pace,
+          });
     const latencyBudgetTimer = setTimeout(() => {
       if (epoch !== generationEpoch || isEnded || isSpeaking || assistantPlaybackStartAt) return;
       latencyBudgetExceededCount++;
@@ -2054,41 +2140,10 @@ export function createCallEngine(opts: EngineOptions): void {
         // ── CRM Auto-Sync: push qualified leads to connected CRMs post-call ──
         if (uid && lid && (opts.outcome === "interested" || opts.outcome === "scheduled")) {
           try {
-            const { listCrmConnections, getCrmTokens, getLeadById } = await import("../db");
-            const connections = await listCrmConnections(uid);
-            const connected = connections.filter((c: any) => c.status === "connected");
-            if (connected.length > 0) {
-              const lead = await getLeadById(lid);
-              if (lead) {
-                for (const conn of connected) {
-                  try {
-                    const tokens = await getCrmTokens(uid, conn.provider);
-                    if (!tokens) continue;
-                    if (conn.provider === "hubspot") {
-                      // Use global fetch (Node 18+)
-                      await globalThis.fetch("https://api.hubapi.com/crm/v3/objects/contacts", {
-                        method: "POST",
-                        headers: { Authorization: `Bearer ${tokens.accessToken}`, "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          properties: {
-                            email: lead.email ?? undefined,
-                            firstname: lead.firstName,
-                            lastname: lead.lastName,
-                            phone: lead.phone ?? undefined,
-                            company: lead.company ?? undefined,
-                            hs_lead_status: "IN_PROGRESS",
-                          },
-                        }),
-                      }).catch(() => {});
-                    }
-                    // Salesforce sync handled similarly — skipped here for brevity; crmRouter.syncAll covers bulk
-                    log(`[CRM] Auto-synced lead ${lid} to ${conn.provider}`);
-                  } catch (ce) {
-                    log(`[CRM] Auto-sync to ${conn.provider} failed: ${ce instanceof Error ? ce.message : String(ce)}`);
-                  }
-                }
-              }
-            }
+            const { syncLeadToConnectedCrms } = await import(
+              "../_core/services/crmAutoSync"
+            );
+            await syncLeadToConnectedCrms(uid, lid, log);
           } catch (e) { log(`[CRM] Auto-sync setup failed: ${e instanceof Error ? e.message : String(e)}`); }
         }
       });
@@ -2272,17 +2327,18 @@ export function createCallEngine(opts: EngineOptions): void {
             const lead = await getLeadById(activeLeadId);
             if (lead) {
               const l = lead as { industry?: string | null };
-              if (l.industry) industry = l.industry;
-              clientConfig = mergeClientConfig({
-                ...clientConfig,
-                businessName,
-                industry,
-              });
+              if (l.industry) {
+                refreshClientConfig({ industry: l.industry });
+              }
             }
           }
           const sess = activeSessionId ? voiceSessionManager.getSession(activeSessionId) : null;
           if (sess?.voiceProfileId) voiceProfile = resolveVoiceProfileForEngine(sess.voiceProfileId);
           if (sess?.userId) activeUserId = sess.userId ?? undefined;
+          refreshClientConfig({
+            callDirection: sess?.callDirection ?? clientConfig.callDirection,
+            outboundScript: sess?.outboundScript ?? clientConfig.outboundScript,
+          });
           // ── Inbound caller phone → leadId lookup (persistent memory requires leadId) ──
           if (!activeLeadId && activeUserId && sess?.callerPhone) {
             try {
@@ -2357,7 +2413,7 @@ export function createCallEngine(opts: EngineOptions): void {
             const intro = selectOutboundIntro({
               businessName: bname,
               sessionId: activeSessionId || callId,
-              agentDisplayName: spokenAgent(),
+              assistantName: spokenAgent(),
             });
             greeting = sessGreet?.complianceRecordingPending
               ? `This call may be recorded for quality assurance. ${intro}`
@@ -2372,7 +2428,8 @@ export function createCallEngine(opts: EngineOptions): void {
               sessionId: activeSessionId || callId,
               industryLabel: vertical,
               apexProductLine: isApexPlatformDemoLine(bname),
-              agentDisplayName: spokenAgent(),
+              assistantName: spokenAgent(),
+              mode: sessionConversationMode,
             });
             greeting = sessGreet?.complianceRecordingPending
               ? `This call may be recorded for quality assurance. ${base}`

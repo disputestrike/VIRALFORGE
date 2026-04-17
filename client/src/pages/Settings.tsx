@@ -56,6 +56,42 @@ const STYLE_COLORS: Record<string, string> = {
   premium: "#fbbf24", direct: "#fb923c",
 };
 
+const WARMTH_OPTIONS = [
+  { value: "steady", label: "Steady" },
+  { value: "warm", label: "Warm" },
+  { value: "premium", label: "Premium" },
+];
+
+const FORMALITY_OPTIONS = [
+  { value: "conversational", label: "Conversational" },
+  { value: "professional", label: "Professional" },
+  { value: "executive", label: "Executive" },
+];
+
+const PACE_OPTIONS = [
+  { value: "relaxed", label: "Relaxed" },
+  { value: "balanced", label: "Balanced" },
+  { value: "fast", label: "Fast" },
+];
+
+const PAUSE_STYLE_OPTIONS = [
+  { value: "tight", label: "Tight" },
+  { value: "balanced", label: "Balanced" },
+  { value: "patient", label: "Patient" },
+];
+
+const FILLER_POLICY_OPTIONS = [
+  { value: "none", label: "None" },
+  { value: "minimal", label: "Minimal" },
+  { value: "natural", label: "Natural" },
+];
+
+const INTERRUPTION_OPTIONS = [
+  { value: "aggressive", label: "Aggressive" },
+  { value: "balanced", label: "Balanced" },
+  { value: "patient", label: "Patient" },
+];
+
 const SCORE_FIELDS = [
   "email",
   "phone",
@@ -76,7 +112,11 @@ export default function Settings() {
   const utils = trpc.useUtils();
   const { data: userSettings } = trpc.settings.get.useQuery();
   const { data: voiceProfiles } = trpc.settings.voiceProfiles.useQuery();
+  const { data: setupStatus } = trpc.settings.setupStatus.useQuery();
+  const { data: messagingStatus } = trpc.settings.messagingStatus.useQuery();
+  const { data: demoConfig } = trpc.demoCall.config.useQuery();
 
+  const [businessName, setBusinessName] = useState("");
   const [transferNumber, setTransferNumber] = useState("");
   const [language, setLanguage] = useState("en");
   const [agencyName, setAgencyName] = useState("");
@@ -88,9 +128,20 @@ export default function Settings() {
   const [voiceKeyPhrases, setVoiceKeyPhrases] = useState("");
   const [voiceRestrictionNotes, setVoiceRestrictionNotes] = useState("");
   const [voiceAgentDisplayName, setVoiceAgentDisplayName] = useState("");
+  const [assistantName, setAssistantName] = useState("Alex");
+  const [tonePreset, setTonePreset] = useState("warm, concise, competent");
+  const [warmth, setWarmth] = useState("warm");
+  const [formality, setFormality] = useState("professional");
+  const [pace, setPace] = useState("balanced");
+  const [pauseStyle, setPauseStyle] = useState("balanced");
+  const [fillerPolicy, setFillerPolicy] = useState("minimal");
+  const [interruptionSensitivity, setInterruptionSensitivity] = useState("balanced");
+  const [pronunciationHintsText, setPronunciationHintsText] = useState("");
 
   useEffect(() => {
     if (userSettings) {
+      const runtime = (userSettings as any).voiceRuntimeProfile || {};
+      setBusinessName((userSettings as any).businessName || "");
       setTransferNumber((userSettings as any).transferNumber || "");
       setLanguage((userSettings as any).language || "en");
       setAgencyName((userSettings as any).agencyName || "");
@@ -100,16 +151,35 @@ export default function Settings() {
       setVoiceKeyPhrases((userSettings as any).voiceKeyPhrases || "");
       setVoiceRestrictionNotes((userSettings as any).voiceRestrictionNotes || "");
       setVoiceAgentDisplayName((userSettings as any).voiceAgentDisplayName || "");
+      setAssistantName(runtime.assistantName || "Alex");
+      setTonePreset(runtime.tonePreset || "warm, concise, competent");
+      setWarmth(runtime.warmth || "warm");
+      setFormality(runtime.formality || "professional");
+      setPace(runtime.pace || "balanced");
+      setPauseStyle(runtime.pauseStyle || "balanced");
+      setFillerPolicy(runtime.fillerPolicy || "minimal");
+      setInterruptionSensitivity(runtime.interruptionSensitivity || "balanced");
+      setPronunciationHintsText((userSettings as any).pronunciationHintsText || "");
     }
   }, [userSettings]);
 
   const updateMutation = trpc.settings.update.useMutation({
-    onSuccess: () => { utils.settings.get.invalidate(); toast.success("Settings saved"); setSaving(false); },
+    onSuccess: () => {
+      utils.settings.get.invalidate();
+      utils.settings.setupStatus.invalidate();
+      toast.success("Settings saved");
+      setSaving(false);
+    },
     onError: (e: any) => { toast.error(e.message); setSaving(false); },
   });
 
   const voiceMutation = trpc.settings.update.useMutation({
-    onSuccess: () => { utils.settings.get.invalidate(); toast.success('Voice saved'); setSavingVoice(false); },
+    onSuccess: () => {
+      utils.settings.get.invalidate();
+      utils.settings.setupStatus.invalidate();
+      toast.success("Voice saved");
+      setSavingVoice(false);
+    },
     onError: (e: any) => { toast.error(e.message); setSavingVoice(false); },
   });
   const voicePreviewMutation = trpc.settings.voicePreview.useMutation();
@@ -454,6 +524,7 @@ export default function Settings() {
   const handleSave = () => {
     setSaving(true);
     updateMutation.mutate({
+      businessName: businessName || undefined,
       transferNumber: transferNumber || undefined,
       language: language as any,
       agencyName: agencyName || undefined,
@@ -461,6 +532,17 @@ export default function Settings() {
       voiceIndustryContext: voiceIndustryContext.trim() ? voiceIndustryContext.trim() : null,
       voiceKeyPhrases: voiceKeyPhrases.trim() ? voiceKeyPhrases.trim() : null,
       voiceRestrictionNotes: voiceRestrictionNotes.trim() ? voiceRestrictionNotes.trim() : null,
+      voiceRuntimeProfile: {
+        assistantName: assistantName.trim() || "Alex",
+        tonePreset: tonePreset.trim() || "warm, concise, competent",
+        warmth: warmth as any,
+        formality: formality as any,
+        pace: pace as any,
+        pauseStyle: pauseStyle as any,
+        fillerPolicy: fillerPolicy as any,
+        interruptionSensitivity: interruptionSensitivity as any,
+        pronunciationHintsText: pronunciationHintsText.trim() || null,
+      },
       voiceAgentDisplayName: voiceAgentDisplayName.trim() ? voiceAgentDisplayName.trim() : null,
     });
   };
@@ -510,6 +592,117 @@ export default function Settings() {
         <h1 className="text-2xl font-bold">Account Settings</h1>
         <p className="text-muted-foreground text-sm mt-1">Configure your AI assistant behavior</p>
       </div>
+
+      {setupStatus && (
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Gauge className="w-4 h-4 text-primary" />
+              Launch readiness
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {[
+                { key: "profile", label: "Business profile", done: setupStatus.steps.profile },
+                { key: "voice", label: "Voice identity", done: setupStatus.steps.voice },
+                { key: "routing", label: "Routing", done: setupStatus.steps.routing },
+                { key: "number", label: "Phone number", done: setupStatus.steps.number },
+                { key: "knowledge", label: "Knowledge", done: setupStatus.steps.knowledge },
+                { key: "launch", label: "Launch", done: setupStatus.steps.launch },
+              ].map((item) => (
+                <div
+                  key={item.key}
+                  className={`rounded-lg border px-3 py-2 text-sm ${
+                    item.done
+                      ? "border-emerald-500/30 bg-emerald-500/5"
+                      : "border-border bg-secondary/30"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2
+                      className={`w-4 h-4 ${item.done ? "text-emerald-400" : "text-muted-foreground"}`}
+                    />
+                    <span className="font-medium">{item.label}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm">
+              <p>
+                <span className="text-muted-foreground">Recommended next step:</span>{" "}
+                <span className="font-semibold capitalize">{setupStatus.recommendedNextStep}</span>
+              </p>
+              <p className="text-muted-foreground text-xs mt-1">
+                Active numbers: {setupStatus.activePhoneCount} · Ready knowledge bases:{" "}
+                {setupStatus.readyKnowledgeBaseCount}
+              </p>
+              <p className="text-muted-foreground text-xs mt-1">
+                Calendar: {setupStatus.calendarConnected ? "connected" : "not connected"} · CRM:{" "}
+                {setupStatus.crmConnectedCount} connected · SMS:{" "}
+                {messagingStatus?.headline || "checking"}
+              </p>
+            </div>
+            {messagingStatus?.recommendedAction ? (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-muted-foreground">
+                <span className="font-semibold text-foreground">SMS next step:</span>{" "}
+                {messagingStatus.recommendedAction}
+              </div>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" onClick={() => { window.location.href = "/onboarding"; }}>
+                Continue setup
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => { window.location.href = "/knowledge-base"; }}
+              >
+                Open knowledge base
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {demoConfig?.enabled && (
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Radio className="w-4 h-4 text-primary" />
+              Public demo line
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <p className="text-muted-foreground">
+              The landing page demo now supports a public dial-in number, callback requests, or both depending on the environment configuration.
+            </p>
+            <div className="rounded-lg border border-border bg-secondary/30 px-4 py-3 space-y-1">
+              <p>
+                <span className="text-muted-foreground">Mode:</span>{" "}
+                <span className="font-semibold capitalize">{demoConfig.mode.replace("-", " ")}</span>
+              </p>
+              <p>
+                <span className="text-muted-foreground">Website number:</span>{" "}
+                <span className="font-mono">{demoConfig.formattedPhoneNumber || "Not configured"}</span>
+              </p>
+            </div>
+            {demoConfig.telHref && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  if (demoConfig.telHref) window.location.href = demoConfig.telHref;
+                }}
+              >
+                Call public demo line
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── DEDICATED PHONE NUMBERS — Part 1 #1 ─────────────────────── */}
       <Card className="bg-card border-border">
@@ -2473,6 +2666,132 @@ export default function Settings() {
       <Card className="bg-card border-border">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
+            <MessageCircle className="w-4 h-4 text-primary" />
+            Conversation behavior
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            These controls shape how human the agent feels on live calls: pacing, repair style, interruption handling, and how consistently it sounds like one person.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Assistant name</Label>
+              <Input
+                value={assistantName}
+                onChange={(e) => setAssistantName(e.target.value)}
+                className="bg-secondary border-border"
+                placeholder="Alex"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Tone preset</Label>
+              <Input
+                value={tonePreset}
+                onChange={(e) => setTonePreset(e.target.value)}
+                className="bg-secondary border-border"
+                placeholder="warm, concise, competent"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Warmth</Label>
+              <select
+                value={warmth}
+                onChange={(e) => setWarmth(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg text-sm bg-secondary border border-border"
+              >
+                {WARMTH_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Formality</Label>
+              <select
+                value={formality}
+                onChange={(e) => setFormality(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg text-sm bg-secondary border border-border"
+              >
+                {FORMALITY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Pace</Label>
+              <select
+                value={pace}
+                onChange={(e) => setPace(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg text-sm bg-secondary border border-border"
+              >
+                {PACE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Pause style</Label>
+              <select
+                value={pauseStyle}
+                onChange={(e) => setPauseStyle(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg text-sm bg-secondary border border-border"
+              >
+                {PAUSE_STYLE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Filler policy</Label>
+              <select
+                value={fillerPolicy}
+                onChange={(e) => setFillerPolicy(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg text-sm bg-secondary border border-border"
+              >
+                {FILLER_POLICY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Interrupt sensitivity</Label>
+              <select
+                value={interruptionSensitivity}
+                onChange={(e) => setInterruptionSensitivity(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg text-sm bg-secondary border border-border"
+              >
+                {INTERRUPTION_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">Pronunciation hints</Label>
+            <Textarea
+              value={pronunciationHintsText}
+              onChange={(e) => setPronunciationHintsText(e.target.value)}
+              className="bg-secondary border-border min-h-[88px] text-sm"
+              placeholder={"ApexAI\nHVAC\nDaikin\nNunez"}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              One phrase per line. Use this for names, products, neighborhoods, or brand terms the voice should pronounce consistently.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
             <Phone className="w-4 h-4 text-primary" />
             Live Transfer Number
           </CardTitle>
@@ -2517,12 +2836,18 @@ export default function Settings() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Building2 className="w-4 h-4 text-primary" />
-            Agency Settings
+            Business identity
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1.5">
-            <Label className="text-xs">Agency name</Label>
+            <Label className="text-xs">Business name</Label>
+            <Input placeholder="Apex Home Services" value={businessName}
+              onChange={e => setBusinessName(e.target.value)}
+              className="bg-secondary border-border" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Agency / operator name</Label>
             <Input placeholder="Your Agency LLC" value={agencyName}
               onChange={e => setAgencyName(e.target.value)}
               className="bg-secondary border-border" />

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Activity, AlertTriangle, BarChart3, CheckCircle, Database, Mic, Pencil, Save, Settings, Shield, Users, X } from "lucide-react";
+import { Activity, AlertTriangle, BarChart3, CheckCircle, Database, Mic, Pencil, Phone, Save, Settings, Shield, Users, X } from "lucide-react";
 import { useLocation } from "wouter";
 
 const DEFAULT_CONFIG = [
@@ -66,6 +66,7 @@ export default function Admin() {
   const { data: savedConfig } = trpc.admin.getConfig.useQuery();
   const { data: voiceMetrics } = trpc.admin.voiceMetricEvents.useQuery({ limit: 200 });
   const { data: voiceLatency } = trpc.admin.voiceMetricLatencySummary.useQuery({ sampleLimit: 500 });
+  const { data: demoConfig } = trpc.demoCall.config.useQuery();
 
   const promoteUserMutation = trpc.admin.updateUserRole.useMutation({
     onSuccess: () => { utils.admin.users.invalidate(); toast.success("User role updated"); },
@@ -344,6 +345,25 @@ export default function Admin() {
                     <div className="text-lg font-semibold tabular-nums">{cell.value}</div>
                   </div>
                 ))}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-4">
+                {[
+                  { label: "Demo line", value: demoConfig?.enabled ? "Enabled" : "Disabled" },
+                  { label: "Demo mode", value: demoConfig?.mode ?? "unknown" },
+                  { label: "Public number", value: demoConfig?.formattedPhoneNumber ?? "not set" },
+                  { label: "Dial-in ready", value: demoConfig?.telHref ? "Yes" : "No" },
+                ].map((cell) => (
+                  <div key={cell.label} className="rounded-lg border border-border bg-secondary/20 px-3 py-2">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{cell.label}</div>
+                    <div className="text-sm font-semibold break-all">{cell.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-lg border border-border bg-secondary/20 px-3 py-2 mb-4 flex items-start gap-2">
+                <Phone className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                <p className="text-[11px] text-muted-foreground">
+                  Public demo configuration is surfaced here so admins can confirm the website test path is actually live before traffic hits the landing page.
+                </p>
               </div>
               <p className="text-[10px] text-muted-foreground mb-2">
                 Percentiles use persisted <code className="text-[10px]">latency_stt_final_to_tts_first</code> rows (after calls produce audio).

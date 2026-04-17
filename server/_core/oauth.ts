@@ -107,7 +107,7 @@ export function registerOAuthRoutes(app: Express) {
       }
 
       await handleGoogleUser(payload.sub, payload.email, payload.name, payload.picture, req, res);
-      res.redirect("/dashboard");
+      res.redirect("/");
     } catch (err) {
       console.error("[Google Auth] Callback GET failed:", err);
       res.redirect("/?auth_error=callback_failed");
