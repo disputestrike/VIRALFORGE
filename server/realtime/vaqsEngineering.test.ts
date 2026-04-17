@@ -1,12 +1,12 @@
 /**
- * VAQS (Voice Agent Quality Spec) — automated engineering verification.
+ * VAQS (Voice Agent Quality Spec) - automated engineering verification.
  * @see docs/internal/VOICE_AGENT_QUALITY_SPEC_SHEET.md
  *
  * Run: pnpm run test:vaqs
  * Full suite: pnpm test (includes this file)
  *
- * This file proves **implementation crosswalk** (code + telemetry contracts). It does not replace
- * live PSTN scenarios §7 of the spec sheet (listening rubric, noise fixtures).
+ * This file proves implementation crosswalk (code + telemetry contracts). It does not replace
+ * live PSTN scenarios section 7 of the spec sheet (listening rubric, noise fixtures).
  */
 
 import { readFileSync, existsSync } from "fs";
@@ -76,9 +76,9 @@ describe("VAQS telemetry contract (LA / RT)", () => {
     }
   });
 
-  it("FINAL_SILENCE_DEBOUNCE_MS stays in VAQS hangover band (500–800ms)", () => {
-    expect(FINAL_SILENCE_DEBOUNCE_MS).toBeGreaterThanOrEqual(500);
-    expect(FINAL_SILENCE_DEBOUNCE_MS).toBeLessThanOrEqual(800);
+  it("FINAL_SILENCE_DEBOUNCE_MS stays in the low-latency production band (<=200ms)", () => {
+    expect(FINAL_SILENCE_DEBOUNCE_MS).toBeGreaterThanOrEqual(120);
+    expect(FINAL_SILENCE_DEBOUNCE_MS).toBeLessThanOrEqual(200);
   });
 
   it("Deepgram endpointing and utterance-end are within env clamps (orchestration sanity)", () => {

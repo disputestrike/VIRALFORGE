@@ -81,8 +81,8 @@ export const ENV = {
   voicePlayRingBeforeStream: process.env.VOICE_PLAY_RING_BEFORE_STREAM !== "false",
   /** Multiply Cartesia voice profile speed (~0.91 default; override with VOICE_TTS_SPEED_SCALE). */
   voiceTtsSpeedScale: Math.min(1.25, Math.max(0.55, parseFloat(process.env.VOICE_TTS_SPEED_SCALE ?? "1.0") || 1.0)),
-  /** After Deepgram speech_final, pause before LLM — keep small so the agent feels sharp. */
-  voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "40", 10) || 0),
+  /** After Deepgram speech_final, pause before LLM — default to zero for the tightest live-call feel. */
+  voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "0", 10) || 0),
   /**
    * After assistant audio finishes, if the caller stays quiet, prompt one upbeat check-in (sales tempo).
    * Set VOICE_USER_SILENCE_REENGAGE_ENABLED=false to disable.
@@ -98,22 +98,22 @@ export const ENV = {
    * Lower = easier interrupt. Values above 127 are treated as legacy mis-scaled (e.g. 600) and mapped with /5 so they still work.
    */
   voiceBargeInEnergyThreshold: (() => {
-    // Default 118 — fewer false barge-ins from background noise than 110; lower = easier interrupt.
+    // Default 104 — easier interrupt so callers do not feel trapped while the agent is still talking.
     // Raise VOICE_BARGE_IN_ENERGY_THRESHOLD if callers struggle to interrupt; lower if noise still chops TTS.
     const raw =
-      parseInt(process.env.VOICE_BARGE_IN_ENERGY_THRESHOLD || process.env.INTERRUPTION_ENERGY_THRESHOLD || "118", 10) || 118;
+      parseInt(process.env.VOICE_BARGE_IN_ENERGY_THRESHOLD || process.env.INTERRUPTION_ENERGY_THRESHOLD || "104", 10) || 104;
     const scaled = raw > 127 ? Math.round(raw / 5) : raw;
     return Math.max(12, Math.min(125, scaled));
   })(),
   /** Frames of sustained energy required to trigger barge-in (prevents single-frame noise spikes). */
-  voiceBargeInSustainFrames: Math.max(1, Math.min(10, parseInt(process.env.VOICE_BARGE_IN_SUSTAIN_FRAMES ?? "4", 10) || 4)),
+  voiceBargeInSustainFrames: Math.max(1, Math.min(10, parseInt(process.env.VOICE_BARGE_IN_SUSTAIN_FRAMES ?? "2", 10) || 2)),
   /** Deepgram streaming: ms of silence before end-of-turn (lower = faster replies; too low may clip words). */
-  // Default 250ms keeps the system sharper on clean calls while still allowing override per deployment.
-  voiceDeepgramEndpointingMs: Math.max(100, Math.min(2000, parseInt(process.env.VOICE_DEEPGRAM_ENDPOINTING_MS ?? "250", 10) || 250)),
+  // Default 180ms aims for sub-200ms turn commit while still allowing override per deployment.
+  voiceDeepgramEndpointingMs: Math.max(100, Math.min(2000, parseInt(process.env.VOICE_DEEPGRAM_ENDPOINTING_MS ?? "180", 10) || 180)),
   /** Deepgram utterance_end_ms — cap wait for utterance boundary. */
   voiceDeepgramUtteranceEndMs: Math.max(300, Math.min(3000, parseInt(process.env.VOICE_DEEPGRAM_UTTERANCE_END_MS ?? "1000", 10) || 1000)),
   /** Minimum STT confidence to process a turn (below this = likely noise, ignored). */
-  voiceSttMinConfidence: Math.max(0, Math.min(1, parseFloat(process.env.VOICE_STT_MIN_CONFIDENCE ?? "0.55") || 0.55)),
+  voiceSttMinConfidence: Math.max(0, Math.min(1, parseFloat(process.env.VOICE_STT_MIN_CONFIDENCE ?? "0.38") || 0.38)),
   /** Voice LLM max tokens per turn. */
   voiceLlmMaxTokens: Math.min(1200, Math.max(200, parseInt(process.env.VOICE_LLM_MAX_TOKENS ?? "600", 10) || 350)),
   /** Voice LLM temperature. */

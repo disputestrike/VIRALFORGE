@@ -38,7 +38,11 @@ import {
   logSttFinalToTtsLatencyIfPending,
   registerCallSessionForMetrics,
 } from "./voiceMetrics";
-import { fastIntentFromInterim, optOutFromFinal } from "./fastIntentRouter";
+import {
+  fastIntentFromInterim,
+  optOutFromFinal,
+  predictiveTurnFromInterim,
+} from "./fastIntentRouter";
 import { patchOrchestrationSnapshot } from "./callOrchestrationTypes";
 import { speakableLine } from "./speakability";
 import { floorAfterAgentStops, floorAfterUserBargeIn } from "./turnManager";
@@ -404,6 +408,9 @@ export function createCallEngine(opts: EngineOptions): void {
   /** Deepgram: wait for true end-of-utterance (debounce finals — ignore rapid partial finals). */
   let deepgramFinalDebounceTimer: NodeJS.Timeout | null = null;
   let pendingDeepgramFinalText = "";
+  /** Predictive commit from strong interim speech so obvious requests do not wait for full speech_final. */
+  let predictiveCommitTimer: NodeJS.Timeout | null = null;
+  let pendingPredictiveTranscript = "";
   /** Optional μ-law jitter buffer before Deepgram (WS11). */
   let inboundJitterQueue: Buffer[] = [];
   /** APEX strict blueprint state (intent lock, escalation, recovery). */
@@ -508,6 +515,20 @@ export function createCallEngine(opts: EngineOptions): void {
       }
     }
     pendingDeepgramFinalText = "";
+  }
+
+  function clearPredictiveCommit(reason: string): void {
+    if (predictiveCommitTimer) {
+      clearTimeout(predictiveCommitTimer);
+      predictiveCommitTimer = null;
+      if (pendingPredictiveTranscript.trim() && reason !== "finalize") {
+        traceEvent(callId, "predictive_interim_superseded", {
+          reason,
+          textLen: pendingPredictiveTranscript.trim().length,
+        });
+      }
+    }
+    pendingPredictiveTranscript = "";
   }
 
   function resetAssistantPlaybackClock(): void {
@@ -1058,6 +1079,39 @@ export function createCallEngine(opts: EngineOptions): void {
             }
           }
 
+          // Predictive commit: when the interim speech already expresses a clear ask,
+          // start the turn from interim text instead of waiting for the slower final boundary.
+          if (
+            !isFinal &&
+            greetingDone &&
+            !isSpeaking &&
+            !assistantResponseInProgress &&
+            !userTurnBusy
+          ) {
+            const predictive = predictiveTurnFromInterim(transcript);
+            if (predictive.commitEarly) {
+              pendingPredictiveTranscript = transcript.trim();
+              if (predictiveCommitTimer) clearTimeout(predictiveCommitTimer);
+              traceEvent(callId, "predictive_interim_armed", {
+                hints: predictive.hints,
+                textLen: pendingPredictiveTranscript.length,
+              });
+              predictiveCommitTimer = setTimeout(() => {
+                predictiveCommitTimer = null;
+                const text = pendingPredictiveTranscript.trim();
+                pendingPredictiveTranscript = "";
+                if (!text || isEnded || isSpeaking || assistantResponseInProgress || userTurnBusy) return;
+                traceEvent(callId, "predictive_interim_commit", {
+                  textLen: text.length,
+                  ms: 120,
+                });
+                void enqueueUserTurn(text, lastFinalSttConfidence).catch((e) =>
+                  log(`predictive enqueue failed: ${e instanceof Error ? e.message : String(e)}`)
+                );
+              }, 120);
+            }
+          }
+
           /**
            * STT backup barge-in only on **finalized** text chunks.
            * Interim results (interim_results=true) often contain noise, "uh", coughs, or 1–2 chars —
@@ -1093,6 +1147,7 @@ export function createCallEngine(opts: EngineOptions): void {
           }
 
           if (isFinal && speechFinal && greetingDone) {
+            clearPredictiveCommit("deepgram_final");
             traceEvent(callId, "stt_final", { textLen: transcript.length });
             log(`[STT] Final: "${transcript}"`);
             markSttFinalForLatency(callId);
@@ -1245,8 +1300,9 @@ export function createCallEngine(opts: EngineOptions): void {
       smallTalkTurnCount = 0;
     }
 
-    // 1d. Low STT confidence — skip LLM, ask for clarification
-    if (_sttConfidence > 0 && _sttConfidence < 0.55 && transcript.length < 30) {
+    // 1d. Low STT confidence — only reprompt when confidence is materially weak.
+    // Phone audio often lands in the mid-confidence band on short answers, and dropping those turns feels like deafness.
+    if (_sttConfidence > 0 && _sttConfidence < Math.max(0.24, ENV.voiceSttMinConfidence - 0.08) && transcript.length < 24) {
       appendHistory("user", transcript);
       await speak("I didn't quite catch that — could you say that again?", epoch);
       logVoiceControllerEvent(callId, "guardrail", { bucket: "low_stt_confidence", confidence: _sttConfidence });
@@ -2047,6 +2103,7 @@ export function createCallEngine(opts: EngineOptions): void {
     clearUserSilenceReengageTimer();
     clearInterruptAckPending();
     clearDeepgramFinalDebounce("finalize");
+    clearPredictiveCommit("finalize");
     unregisterEngineFromMap();
     log(`Call finalize: ${opts.reason}`);
 

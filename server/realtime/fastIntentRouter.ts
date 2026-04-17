@@ -8,6 +8,11 @@ export type FastInterimResult = {
   hints: string[];
 };
 
+export type PredictiveInterimResult = {
+  commitEarly: boolean;
+  hints: string[];
+};
+
 /** Final transcript: user wants no further contact (compliance / WS8). */
 export function optOutFromFinal(text: string): boolean {
   const t = text.toLowerCase();
@@ -30,4 +35,35 @@ export function fastIntentFromInterim(text: string): FastInterimResult {
     return { semanticInterrupt: false, hints: ["booking"] };
   }
   return { semanticInterrupt: false, hints: [] };
+}
+
+export function predictiveTurnFromInterim(text: string): PredictiveInterimResult {
+  const t = text.toLowerCase().trim();
+  if (t.length < 12) return { commitEarly: false, hints: [] };
+  if (/^(uh+|um+|hm+|hmm+|mm+|ah+|oh+|well)\b/.test(t) && t.length < 20) {
+    return { commitEarly: false, hints: [] };
+  }
+
+  const hints: string[] = [];
+  if (/\b(what|how|why|when|where|who|can|do|does|is|are)\b/.test(t)) {
+    hints.push("question_shape");
+  }
+  if (/\b(price|pricing|cost|how much|plan|book|schedule|appointment|calendar|demo|crm|sms|text|inbound|outbound|number|website|integrat)\b/.test(t)) {
+    hints.push("product_or_action");
+  }
+  if (/\b(i need|i want|i'm calling|im calling|looking for|trying to|tell me|walk me through|show me)\b/.test(t)) {
+    hints.push("explicit_request");
+  }
+  if (/\b(real person|human|representative|agent)\b/.test(t)) {
+    hints.push("human_request");
+  }
+
+  const wordCount = t.split(/\s+/).filter(Boolean).length;
+  const commitEarly =
+    wordCount >= 3 &&
+    (hints.includes("explicit_request") ||
+      (hints.includes("question_shape") && hints.includes("product_or_action")) ||
+      (hints.includes("question_shape") && wordCount >= 5));
+
+  return { commitEarly, hints };
 }

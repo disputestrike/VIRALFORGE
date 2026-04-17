@@ -8,8 +8,8 @@
 export const USER_ALWAYS_WINS_THE_TURN = true;
 
 /** After Deepgram speech_final, wait this long before treating utterance as final (true end-of-turn). */
-// Keep within the validated hangover band while relying on faster endpointing and tighter prompts for sharpness.
-export const FINAL_SILENCE_DEBOUNCE_MS = 500;
+// Keep the commit delay extremely tight so live calls do not feel deaf after the caller stops speaking.
+export const FINAL_SILENCE_DEBOUNCE_MS = 180;
 
 /** Post-process clamp for spoken replies (voice). Elite phone answers should stay compact. */
 export const MAX_SENTENCES = 3;

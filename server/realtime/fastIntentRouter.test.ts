@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fastIntentFromInterim, optOutFromFinal } from "./fastIntentRouter";
+import { fastIntentFromInterim, optOutFromFinal, predictiveTurnFromInterim } from "./fastIntentRouter";
 
 describe("fastIntentFromInterim", () => {
   it("detects semantic interrupt phrases", () => {
@@ -28,5 +28,18 @@ describe("optOutFromFinal", () => {
 
   it("returns false for normal questions", () => {
     expect(optOutFromFinal("What hours are you open?")).toBe(false);
+  });
+});
+
+describe("predictiveTurnFromInterim", () => {
+  it("commits early for clear product questions", () => {
+    const r = predictiveTurnFromInterim("what do you do for inbound and outbound calls");
+    expect(r.commitEarly).toBe(true);
+    expect(r.hints).toContain("question_shape");
+  });
+
+  it("does not commit early for short filler", () => {
+    const r = predictiveTurnFromInterim("um okay");
+    expect(r.commitEarly).toBe(false);
   });
 });
