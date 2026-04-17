@@ -444,6 +444,9 @@ export function createCallEngine(opts: EngineOptions): void {
   let deadStreamSendCount = 0;
   let streamDropCount = 0;
   let placeholderAckCount = 0;
+  let signalWireConnectedSeen = false;
+  let signalWireStartSeen = false;
+  let greetingBootInFlight = false;
 
   // A/B variant is selected in waitForCartesia() once SignalWire callSid + tenant userId are known (stable hash per real call).
 
@@ -742,6 +745,102 @@ export function createCallEngine(opts: EngineOptions): void {
   function ensureAudioPipeline(): void {
     if (!cartesiaWs || cartesiaWs.readyState !== WebSocket.OPEN) connectCartesia();
     if (!dgWs || dgWs.readyState !== WebSocket.OPEN) connectDeepgram();
+  }
+
+  function hydrateStreamIdentity(msg: any): void {
+    const maybeStreamSid =
+      msg?.streamSid ||
+      msg?.start?.streamSid ||
+      msg?.media?.streamSid ||
+      "";
+    const maybeCallSid =
+      msg?.start?.callSid ||
+      msg?.callSid ||
+      maybeStreamSid ||
+      "";
+    if (!streamSid && maybeStreamSid) streamSid = maybeStreamSid;
+    if (!callSid && maybeCallSid) {
+      callSid = maybeCallSid;
+      registerEngineForCallSid(callSid);
+    }
+  }
+
+  async function maybeSendInitialGreeting(reason: string): Promise<void> {
+    if (greetingPlayed || greetingBootInFlight || isEnded) return;
+    greetingBootInFlight = true;
+    try {
+      let waited = 0;
+      while (!cartesiaWs || cartesiaWs.readyState !== WebSocket.OPEN) {
+        if (waited > 3000 || isEnded) return;
+        await new Promise((r) => setTimeout(r, 50));
+        waited += 50;
+      }
+      await new Promise((r) => setTimeout(r, 100));
+      if (isEnded || greetingPlayed) return;
+      greetingPlayed = true;
+      const sessGreet = activeSessionId ? voiceSessionManager.getSession(activeSessionId) : null;
+      const outboundScript = sessGreet?.outboundScript?.trim();
+      const isOutbound = sessGreet?.callDirection === "outbound";
+      let greeting: string;
+      const bname = clientConfig.businessName;
+      if (isOutbound && outboundScript) {
+        const scriptLine = speakableLine(outboundScript);
+        greeting = sessGreet?.complianceRecordingPending
+          ? `This call may be recorded for quality assurance. ${scriptLine}`
+          : scriptLine;
+      } else if (isOutbound) {
+        const intro = selectOutboundIntro({
+          businessName: bname,
+          sessionId: activeSessionId || callId,
+          assistantName: spokenAgent(),
+        });
+        greeting = sessGreet?.complianceRecordingPending
+          ? `This call may be recorded for quality assurance. ${intro}`
+          : intro;
+      } else {
+        const vertical = resolveDomainPack(
+          clientConfig.primaryIndustryLabel || industry,
+          tenantOverlayFromClientConfig(clientConfig)
+        ).displayName;
+        const base = selectInboundGreeting({
+          businessName: bname,
+          sessionId: activeSessionId || callId,
+          industryLabel: vertical,
+          apexProductLine: isApexPlatformDemoLine(bname),
+          assistantName: spokenAgent(),
+          mode: sessionConversationMode,
+        });
+        greeting = sessGreet?.complianceRecordingPending
+          ? `This call may be recorded for quality assurance. ${base}`
+          : base;
+      }
+      log(
+        `[GREETING] boot=${reason} businessName=${JSON.stringify(bname)} apexDemo=${isApexPlatformDemoLine(
+          bname
+        )} text=${JSON.stringify(greeting)}`
+      );
+      await speak(greeting, generationEpoch);
+      if (
+        activeSessionId &&
+        sessGreet?.complianceRecordingPending &&
+        greeting.includes("recorded")
+      ) {
+        const s = voiceSessionManager.getSession(activeSessionId);
+        voiceSessionManager.updateSession(activeSessionId, {
+          orchestrationSnapshot: patchOrchestrationSnapshot(s?.orchestrationSnapshot, {
+            recordingDisclosureGiven: true,
+          }),
+        });
+      }
+      traceEvent(callId, "greeting_sent", { bootReason: reason });
+      log(`[GREETING] Sent (${reason})`);
+      setTimeout(() => {
+        greetingDone = true;
+        log("[GREETING] Barge-in enabled");
+      }, 1200);
+    } finally {
+      greetingBootInFlight = false;
+    }
   }
 
   // ── Cartesia ────────────────────────────────────────────────────────────────
@@ -2293,6 +2392,8 @@ export function createCallEngine(opts: EngineOptions): void {
     const event = msg.event;
 
     if (event === "connected") {
+      signalWireConnectedSeen = true;
+      hydrateStreamIdentity(msg);
       log("SignalWire connected");
       traceEvent(callId, "ws_connected");
       ensureAudioPipeline();
@@ -2314,11 +2415,10 @@ export function createCallEngine(opts: EngineOptions): void {
     }
 
     else if (event === "start") {
+      signalWireStartSeen = true;
       // Pipeline already started on "connected" — don't call again or we get duplicate connections
-      streamSid = msg.streamSid || msg.start?.streamSid || "";
-      callSid = msg.start?.callSid || msg.callSid || streamSid;
+      hydrateStreamIdentity(msg);
       clearStreamRecoveryTimer();
-      if (callSid) registerEngineForCallSid(callSid);
       const params = msg.start?.customParameters || msg.customParameters || {};
       if (params.sessionId) {
         activeSessionId = String(params.sessionId);
@@ -2346,12 +2446,6 @@ export function createCallEngine(opts: EngineOptions): void {
       log(`Stream started: ${streamSid} session=${activeSessionId} lead=${activeLeadId}`);
 
       const waitForCartesia = async () => {
-        let waited = 0;
-        while (!cartesiaWs || cartesiaWs.readyState !== 1) {
-          if (waited > 3000 || isEnded) return;
-          await new Promise((r) => setTimeout(r, 50));
-          waited += 50;
-        }
         try {
           const sessEarly = activeSessionId ? voiceSessionManager.getSession(activeSessionId) : null;
           if (sessEarly?.userId) {
@@ -2438,7 +2532,6 @@ export function createCallEngine(opts: EngineOptions): void {
         }
         await new Promise((r) => setTimeout(r, 200));
         if (!isEnded && !greetingPlayed) {
-          greetingPlayed = true;
           if (!ENV.voiceRealtimeReady) {
             const missing = voiceStackMissingEnvVars();
             log(
@@ -2456,62 +2549,7 @@ export function createCallEngine(opts: EngineOptions): void {
             }, 1200);
             return;
           }
-          const sessGreet = activeSessionId ? voiceSessionManager.getSession(activeSessionId) : null;
-          const outboundScript = sessGreet?.outboundScript?.trim();
-          const isOutbound = sessGreet?.callDirection === "outbound";
-          let greeting: string;
-          const bname = clientConfig.businessName;
-          if (isOutbound && outboundScript) {
-            const scriptLine = speakableLine(outboundScript);
-            greeting = sessGreet?.complianceRecordingPending
-              ? `This call may be recorded for quality assurance. ${scriptLine}`
-              : scriptLine;
-          } else if (isOutbound) {
-            const intro = selectOutboundIntro({
-              businessName: bname,
-              sessionId: activeSessionId || callId,
-              assistantName: spokenAgent(),
-            });
-            greeting = sessGreet?.complianceRecordingPending
-              ? `This call may be recorded for quality assurance. ${intro}`
-              : intro;
-          } else {
-            const vertical = resolveDomainPack(
-              clientConfig.primaryIndustryLabel || industry,
-              tenantOverlayFromClientConfig(clientConfig)
-            ).displayName;
-            let base = selectInboundGreeting({
-              businessName: bname,
-              sessionId: activeSessionId || callId,
-              industryLabel: vertical,
-              apexProductLine: isApexPlatformDemoLine(bname),
-              assistantName: spokenAgent(),
-              mode: sessionConversationMode,
-            });
-            greeting = sessGreet?.complianceRecordingPending
-              ? `This call may be recorded for quality assurance. ${base}`
-              : base;
-          }
-          log(`[GREETING] selected businessName=${JSON.stringify(bname)} apexDemo=${isApexPlatformDemoLine(bname)} text=${JSON.stringify(greeting)}`);
-          await speak(greeting, generationEpoch);
-          if (
-            activeSessionId &&
-            sessGreet?.complianceRecordingPending &&
-            greeting.includes("recorded")
-          ) {
-            const s = voiceSessionManager.getSession(activeSessionId);
-            voiceSessionManager.updateSession(activeSessionId, {
-              orchestrationSnapshot: patchOrchestrationSnapshot(s?.orchestrationSnapshot, {
-                recordingDisclosureGiven: true,
-              }),
-            });
-          }
-          traceEvent(callId, "greeting_sent");
-          log("[GREETING] Sent");
-          setTimeout(() => {
-            greetingDone = true;
-            log("[GREETING] Barge-in enabled");
-          }, 1200);
+          await maybeSendInitialGreeting("signalwire_start");
         } else if (!isEnded && greetingPlayed) {
           log("[GREETING] Skipped duplicate start");
         }
@@ -2520,11 +2558,26 @@ export function createCallEngine(opts: EngineOptions): void {
     }
 
     else if (event === "media") {
+      hydrateStreamIdentity(msg);
       const payload = msg.media?.payload;
       if (!payload) return;
       if (!firstMediaLogged) {
         firstMediaLogged = true;
         traceEvent(callId, "first_media_in");
+        if (!signalWireConnectedSeen || !signalWireStartSeen) {
+          traceEvent(callId, "stream_start", {
+            streamSid,
+            callSid,
+            sessionId: activeSessionId,
+            leadId: activeLeadId,
+            fallback: "media_first",
+          });
+          log(
+            `[STREAM] Media arrived before full handshake (connected=${signalWireConnectedSeen}, start=${signalWireStartSeen}) — booting fallback`
+          );
+          ensureAudioPipeline();
+          void maybeSendInitialGreeting("media_first_fallback");
+        }
       }
 
       const audio = Buffer.from(payload, "base64");
