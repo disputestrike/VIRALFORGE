@@ -411,6 +411,8 @@ export function createCallEngine(opts: EngineOptions): void {
   /** Predictive commit from strong interim speech so obvious requests do not wait for full speech_final. */
   let predictiveCommitTimer: NodeJS.Timeout | null = null;
   let pendingPredictiveTranscript = "";
+  let lastPredictiveCommittedTranscript = "";
+  let lastPredictiveCommittedAt = 0;
   /** Optional μ-law jitter buffer before Deepgram (WS11). */
   let inboundJitterQueue: Buffer[] = [];
   /** APEX strict blueprint state (intent lock, escalation, recovery). */
@@ -532,6 +534,61 @@ export function createCallEngine(opts: EngineOptions): void {
       }
     }
     pendingPredictiveTranscript = "";
+  }
+
+  function normalizeTranscriptForDedup(text: string): string {
+    return text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function isNearDuplicateOfPredictiveFinal(text: string): boolean {
+    if (!lastPredictiveCommittedTranscript || !lastPredictiveCommittedAt) return false;
+    if (Date.now() - lastPredictiveCommittedAt > 1800) return false;
+    const finalNorm = normalizeTranscriptForDedup(text);
+    const predictiveNorm = normalizeTranscriptForDedup(lastPredictiveCommittedTranscript);
+    if (!finalNorm || !predictiveNorm) return false;
+    return (
+      finalNorm === predictiveNorm ||
+      finalNorm.startsWith(predictiveNorm) ||
+      predictiveNorm.startsWith(finalNorm)
+    );
+  }
+
+  function buildIndustryFitAnswer(transcript: string): string | null {
+    const t = transcript.toLowerCase();
+    if (!/\b(can you help|do you help|help)\b/.test(t)) return null;
+
+    const solarFit =
+      /\bsolar\b/.test(t) ||
+      strictFacts.industry === "solar" ||
+      /\bsolar\b/.test(clientConfig.primaryIndustryLabel || "") ||
+      /\bsolar\b/.test(industry);
+
+    if (solarFit) {
+      return "Yes. ApexAI works well for solar companies. We can handle inbound calls, outbound lead follow-up, appointment setting, and SMS reminders in a voice that sounds like your team. If you want, I can walk you through how it would work for solar.";
+    }
+
+    const genericIndustryMatch = t.match(/\bhelp\s+([a-z][a-z\s&/-]{2,40}?)\s+(companies|businesses)\b/i);
+    if (genericIndustryMatch?.[1]) {
+      const sector = genericIndustryMatch[1].trim();
+      return `Yes. ApexAI can support ${sector} businesses with inbound calls, outbound follow-up, appointment setting, and SMS workflows. We give each company its own number, voice, and business knowledge so it sounds like that company, not like a generic bot.`;
+    }
+
+    return null;
+  }
+
+  function buildAudioRepairAnswer(transcript: string): string | null {
+    const t = transcript.toLowerCase();
+    if (!/\b(you didn'?t say anything|you were quiet|you didn'?t answer|can you hear me|are you there)\b/.test(t)) {
+      return null;
+    }
+    if (strictFacts.industry === "solar" || /\bsolar\b/.test(industry)) {
+      return "I am with you now, and yes, ApexAI can help solar companies. We can handle inbound calls, outbound lead follow-up, appointment booking, and SMS reminders. Which part do you want to hear first?";
+    }
+    return "I am with you now. Go ahead, and I will answer directly.";
   }
 
   function resetAssistantPlaybackClock(): void {
@@ -1200,6 +1257,8 @@ export function createCallEngine(opts: EngineOptions): void {
                 const text = pendingPredictiveTranscript.trim();
                 pendingPredictiveTranscript = "";
                 if (!text || isEnded || isSpeaking || assistantResponseInProgress || userTurnBusy) return;
+                lastPredictiveCommittedTranscript = text;
+                lastPredictiveCommittedAt = Date.now();
                 traceEvent(callId, "predictive_interim_commit", {
                   textLen: text.length,
                   ms: 120,
@@ -1258,6 +1317,12 @@ export function createCallEngine(opts: EngineOptions): void {
               const finalConf = lastFinalSttConfidence;
               pendingDeepgramFinalText = "";
               if (!text) return;
+              if (isNearDuplicateOfPredictiveFinal(text)) {
+                traceEvent(callId, "deepgram_final_deduped_after_predictive", {
+                  textLen: text.length,
+                });
+                return;
+              }
               traceEvent(callId, "deepgram_turn_committed", {
                 debounceMs: FINAL_SILENCE_DEBOUNCE_MS,
                 textLen: text.length,
@@ -1380,6 +1445,26 @@ export function createCallEngine(opts: EngineOptions): void {
       appendHistory("user", transcript);
       await speak(driftResponse, epoch);
       logVoiceControllerEvent(callId, "guardrail", { bucket: "topic_drift", driftClass: driftResult.driftClass });
+      traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+      return;
+    }
+
+    const audioRepair = buildAudioRepairAnswer(transcript);
+    if (audioRepair) {
+      appendHistory("user", transcript);
+      await speak(audioRepair, epoch);
+      logVoiceControllerEvent(callId, "guardrail", { bucket: "audio_repair_answer" });
+      traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+      return;
+    }
+
+    const industryFit = buildIndustryFitAnswer(transcript);
+    if (industryFit) {
+      appendHistory("user", transcript);
+      await speak(industryFit, epoch);
+      apexState = markBlueprintAnswered(apexState, industryFit);
+      policyState = markQuestionAnswered(policyState);
+      syncPolicySnapshot(transcript, { intent: "question", mode: "answer" });
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
       return;
     }

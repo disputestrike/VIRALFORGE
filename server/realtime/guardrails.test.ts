@@ -266,6 +266,7 @@ describe("Topic Drift Detector", () => {
       "How many calls can you handle at once?",
       "What's your pricing for the starter plan?",
       "We need help qualifying solar leads faster.",
+      "I just asked if you can help solar companies.",
     ];
     for (const input of safe) {
       const drift = detectTopicDrift(input);

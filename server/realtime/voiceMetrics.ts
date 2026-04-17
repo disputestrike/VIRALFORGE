@@ -83,6 +83,7 @@ export type VoiceTracePhase =
   | "predictive_interim_armed"
   | "predictive_interim_commit"
   | "predictive_interim_superseded"
+  | "deepgram_final_deduped_after_predictive"
   | "latency_stt_final_to_tts_first"
   | "compliance_opt_out"
   | "llm_json_envelope_applied"

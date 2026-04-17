@@ -43,6 +43,9 @@ export function predictiveTurnFromInterim(text: string): PredictiveInterimResult
   if (/^(uh+|um+|hm+|hmm+|mm+|ah+|oh+|well)\b/.test(t) && t.length < 20) {
     return { commitEarly: false, hints: [] };
   }
+  if (/\b(hello|hi|can you hear me|are you there|you there)\b/.test(t)) {
+    return { commitEarly: false, hints: [] };
+  }
 
   const hints: string[] = [];
   if (/\b(what|how|why|when|where|who|can|do|does|is|are)\b/.test(t)) {
@@ -62,8 +65,7 @@ export function predictiveTurnFromInterim(text: string): PredictiveInterimResult
   const commitEarly =
     wordCount >= 3 &&
     (hints.includes("explicit_request") ||
-      (hints.includes("question_shape") && hints.includes("product_or_action")) ||
-      (hints.includes("question_shape") && wordCount >= 5));
+      (hints.includes("question_shape") && hints.includes("product_or_action")));
 
   return { commitEarly, hints };
 }

@@ -419,6 +419,10 @@ export type TopicDriftResult =
 /** Detect if the user is pulling the conversation into off-limits territory. */
 export function detectTopicDrift(text: string): TopicDriftResult {
   const t = text.toLowerCase();
+  const hasBusinessQuestion =
+    /\b(help|can you|do you|pricing|cost|book|appointment|demo|inbound|outbound|sms|call|solar|hvac|roofing|insurance|real estate|plumbing|dental|medical|legal)\b/i.test(
+      t
+    );
 
   if (/\b(trump|biden|democrat|republican|election|politics|political party|government policy|vote|voting|presidential)\b/i.test(t)) {
     return { isDrift: true, driftClass: "politics" };
@@ -433,7 +437,7 @@ export function detectTopicDrift(text: string): TopicDriftResult {
       /ignore all previous/i.test(t) || /act as if you have no rules/i.test(t)) {
     return { isDrift: true, driftClass: "test_abuse" };
   }
-  if (/\b(fuck|shit|damn|ass|bitch|bastard|crap|hell|cunt|dick|cock|pussy)\b/i.test(t)) {
+  if (!hasBusinessQuestion && /\b(fuck|shit|damn|ass|bitch|bastard|crap|hell|cunt|dick|cock|pussy)\b/i.test(t)) {
     return { isDrift: true, driftClass: "profanity_bait" };
   }
 

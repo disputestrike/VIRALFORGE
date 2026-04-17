@@ -42,4 +42,14 @@ describe("predictiveTurnFromInterim", () => {
     const r = predictiveTurnFromInterim("um okay");
     expect(r.commitEarly).toBe(false);
   });
+
+  it("does not commit early for generic half-finished questions", () => {
+    const r = predictiveTurnFromInterim("can you help solar companies");
+    expect(r.commitEarly).toBe(false);
+  });
+
+  it("does not commit early for dead-air checks", () => {
+    const r = predictiveTurnFromInterim("hello can you hear me");
+    expect(r.commitEarly).toBe(false);
+  });
 });
