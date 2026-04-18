@@ -67,6 +67,12 @@ const MISPLACED_PITCH_PATTERNS = [
   /increase (your )?(revenue|conversion|bookings)/i,
 ];
 
+const MISPLACED_PLEASANTRY_PATTERNS = [
+  /i'?m doing great[, ]+thanks for asking/i,
+  /doing well[, ]+thanks/i,
+  /all good on my end/i,
+];
+
 /** Robotic / model-speak phrases that break the illusion of a human professional. */
 const ROBOTIC_PHRASE_PATTERNS = [
   /as an ai (language )?(model|assistant)/i,
@@ -106,7 +112,10 @@ export function detectConversationContext(userTranscript: string): ConversationC
   if (stClass !== "none") return "small_talk";
 
   // Meta questions about the agent
-  if (/\b(who are you|what are you|tell me about yourself|what can you do|what do you do|are you real|are you ai|are you a bot|how do you work|what'?s? apexai)\b/i.test(t)) {
+  if (
+    /\b(who are you|what are you|tell me about yourself|what can you do|what do you do|are you real|are you ai|are you a bot|how do you work|what'?s? apexai)\b/i.test(t) &&
+    !/\b(solar|hvac|roofing|insurance|real estate|plumbing|dental|medical|legal|company|business|calls?|appointments?|booking|sms|crm|inbound|outbound)\b/i.test(t)
+  ) {
     return "meta_question";
   }
 
@@ -116,7 +125,7 @@ export function detectConversationContext(userTranscript: string): ConversationC
   }
 
   // Business context signals — only here are pitches allowed
-  if (/\b(miss(ing|ed)? calls?|los(e|ing|t) leads?|our phone|business|sales|revenue|appointment|book|schedule|qualify|lead|customer|client|staff|team|handle calls?|inbound|outbound|volume|conversion|answer fast|answer quick|not answer|don't answer|don't respond|respond fast|response time)\b/i.test(t)) {
+  if (/\b(miss(ing|ed)? calls?|los(e|ing|t) leads?|our phone|business|sales|revenue|appointment|book|schedule|qualify|lead|customer|client|staff|team|handle calls?|inbound|outbound|volume|conversion|answer fast|answer quick|not answer|don't answer|don't respond|respond fast|response time|solar|hvac|roofing|insurance|real estate|plumbing|dental|medical|legal|what can you do|what do you do)\b/i.test(t)) {
     return "business_context";
   }
 
@@ -218,6 +227,20 @@ export function checkClause(
         text: `I'm ${agent}, an AI assistant. What can I help you with today?`,
         reason: "identity_instability",
       };
+    }
+  }
+
+  if (
+    context !== "small_talk" &&
+    !/\bhow are you|how'?s it going|how are you doing|how have you been\b/i.test(userTranscript)
+  ) {
+    for (const pattern of MISPLACED_PLEASANTRY_PATTERNS) {
+      if (pattern.test(text)) {
+        return {
+          action: "block",
+          reason: "misplaced_pleasantry",
+        };
+      }
     }
   }
 
@@ -346,6 +369,30 @@ export function applyFullResponseGuardrails(
     }
   }
 
+  if (
+    !wasModified &&
+    context !== "small_talk" &&
+    !/\bhow are you|how'?s it going|how are you doing|how have you been\b/i.test(userTranscript)
+  ) {
+    const sentences = text.split(/(?<=[.!?])\s+/);
+    const filtered = sentences.filter((s) => {
+      for (const pattern of MISPLACED_PLEASANTRY_PATTERNS) {
+        if (pattern.test(s)) {
+          violations.push("misplaced_pleasantry");
+          return false;
+        }
+      }
+      return true;
+    });
+    if (filtered.length < sentences.length) {
+      text = filtered.join(" ").trim();
+      wasModified = true;
+      if (!text) {
+        text = "I hear you. What would you like to know?";
+      }
+    }
+  }
+
   return { text, violations, wasModified };
 }
 
@@ -411,6 +458,15 @@ export function getLoopBreakResponse(loopCount: number): string {
 }
 
 // ── Topic drift detector ──────────────────────────────────────────────────────
+
+export function getProfessionalLoopBreakResponse(loopCount: number): string {
+  const LOOP_BREAKS = [
+    "Let me answer that more directly. Tell me the exact part you want me to cover.",
+    "I want to be precise here. Which exact point do you want me to answer?",
+    "Let me tighten that up. What is the one thing you want me to explain clearly?",
+  ];
+  return LOOP_BREAKS[loopCount % LOOP_BREAKS.length]!;
+}
 
 export type TopicDriftResult =
   | { isDrift: boolean; driftClass: "none" }

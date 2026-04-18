@@ -2,7 +2,7 @@
  * VoiceRealtimePipeline — Full scaffold implementation
  *
  * Deepgram live WebSocket STT with VAD
- * xAI Grok (OpenAI-compatible) streaming → Cartesia streaming TTS (clause by clause)
+ * Configured LLM provider streaming → Cartesia streaming TTS (clause by clause)
  * Energy-based barge-in detection (PCM energy, not mulaw heuristics)
  * generationEpoch: stale generation loops abort immediately on barge-in
  * Silence fallback line: "one moment" if no reply starts within 700ms

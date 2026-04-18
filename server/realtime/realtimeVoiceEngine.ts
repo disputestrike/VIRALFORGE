@@ -113,7 +113,7 @@ import {
   checkClause,
   applyFullResponseGuardrails,
   isResponseLooping,
-  getLoopBreakResponse,
+  getProfessionalLoopBreakResponse,
   detectTopicDrift,
   getDriftRedirectResponse,
   type ConversationContext,
@@ -559,7 +559,12 @@ export function createCallEngine(opts: EngineOptions): void {
 
   function buildIndustryFitAnswer(transcript: string): string | null {
     const t = transcript.toLowerCase();
-    if (!/\b(can you help|do you help|help)\b/.test(t)) return null;
+    const asksForCapability =
+      /\b(can you help|do you help|help)\b/.test(t) ||
+      (/\b(tell me|show me|walk me through|explain)\b/.test(t) &&
+        /\b(what you can do|what do you do|what you do)\b/.test(t)) ||
+      /\bwhat can you do\b/.test(t);
+    if (!asksForCapability) return null;
 
     const solarFit =
       /\bsolar\b/.test(t) ||
@@ -568,7 +573,10 @@ export function createCallEngine(opts: EngineOptions): void {
       /\bsolar\b/.test(industry);
 
     if (solarFit) {
-      return "Yes. ApexAI works well for solar companies. We can handle inbound calls, outbound lead follow-up, appointment setting, and SMS reminders in a voice that sounds like your team. If you want, I can walk you through how it would work for solar.";
+      if (/\bexact|exactly|tell me more|what you can do|what do you do\b/.test(t)) {
+        return "For solar companies, ApexAI answers inbound calls, follows up with new leads in seconds, qualifies homeowners, books appointments on the calendar, and sends text confirmations and reminders. We can also answer common solar questions, reactivate old leads, and route hot prospects to your team right away.";
+      }
+      return "Yes. ApexAI works well for solar companies. We answer inbound calls, follow up with new leads fast, book appointments, and send reminders in a voice that sounds like your team. If you want, I can break down inbound, outbound, or booking for solar.";
     }
 
     const genericIndustryMatch = t.match(/\bhelp\s+([a-z][a-z\s&/-]{2,40}?)\s+(companies|businesses)\b/i);
@@ -582,8 +590,16 @@ export function createCallEngine(opts: EngineOptions): void {
 
   function buildAudioRepairAnswer(transcript: string): string | null {
     const t = transcript.toLowerCase();
-    if (!/\b(you didn'?t say anything|you were quiet|you didn'?t answer|can you hear me|are you there)\b/.test(t)) {
-      return null;
+    const heardNothing =
+      /\b(you didn'?t say anything|you were quiet|you didn'?t answer|can you hear me|are you there)\b/.test(t);
+    const listeningComplaint =
+      /\b(you'?re not listening|youre not listening|that'?s not what i asked|thats not what i asked|listen to me|not listening to me|you missed the question|tell me exactly)\b/.test(t);
+    if (!heardNothing && !listeningComplaint) return null;
+    if (listeningComplaint) {
+      if (strictFacts.industry === "solar" || /\bsolar\b/.test(industry) || /\bsolar\b/.test(t)) {
+        return "You're right. Let me answer it cleanly. For solar companies, ApexAI can answer inbound calls, follow up with leads fast, qualify homeowners, book appointments, and send text reminders without sounding robotic.";
+      }
+      return "You're right. Let me answer it cleanly and stay on your exact question.";
     }
     if (strictFacts.industry === "solar" || /\bsolar\b/.test(industry)) {
       return "I am with you now, and yes, ApexAI can help solar companies. We can handle inbound calls, outbound lead follow-up, appointment booking, and SMS reminders. Which part do you want to hear first?";
@@ -2114,7 +2130,7 @@ export function createCallEngine(opts: EngineOptions): void {
     // Loop detection — if agent is saying the same thing repeatedly
     if (isResponseLooping(cleanResponse, recentAssistantTexts)) {
       loopTurnCount++;
-      const loopBreak = getLoopBreakResponse(loopTurnCount);
+      const loopBreak = getProfessionalLoopBreakResponse(loopTurnCount);
       logVoiceControllerEvent(callId, "guardrail", { bucket: "loop_detected", count: loopTurnCount });
       // We can't cancel audio already sent, but we can fix the history
       cleanResponse = loopBreak;

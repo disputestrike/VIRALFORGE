@@ -6,6 +6,7 @@ import {
   createApexControllerState,
   splitIntoSentences,
   canEnterBooking,
+  detectChaosFragments,
   PHRASE_PRESSURE,
 } from "./apexStrictBlueprint";
 
@@ -97,6 +98,14 @@ describe("splitIntoSentences", () => {
 describe("PHRASE_PRESSURE", () => {
   it("includes so what", () => {
     expect(PHRASE_PRESSURE.some((p) => p.includes("so what"))).toBe(true);
+  });
+});
+
+describe("detectChaosFragments", () => {
+  it("does not treat short affirmations as chaos", () => {
+    expect(detectChaosFragments("yes")).toBe(false);
+    expect(detectChaosFragments("yeah")).toBe(false);
+    expect(detectChaosFragments("ok")).toBe(false);
   });
 });
 

@@ -13,7 +13,7 @@ import * as voiceSessionManager from "./services/voiceSessionManager";
 import { apiRateLimiter, aiRateLimiter, authRateLimiter, webhookRateLimiter } from "./middleware/rateLimiter";
 import * as voiceProcessingService from "./services/voiceProcessingService";
 import { startSessionPersistenceInterval } from "./services/voiceSessionManager";
-// Live calls: realtimeVoiceEngine — Deepgram STT → Groq (LLM) → Cartesia TTS.
+// Live calls: realtimeVoiceEngine — Deepgram STT → configured LLM provider → telephony TTS.
 import { createCallEngine, notifyVoiceCallTerminalFromHttp } from "../realtime/realtimeVoiceEngine";
 import {
   getPublicDemoConfig,

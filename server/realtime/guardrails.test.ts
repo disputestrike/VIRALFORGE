@@ -286,6 +286,7 @@ describe("Conversation Context Detection", () => {
       "our team can't handle the inbound volume",
       "we're losing leads because we don't answer fast enough",
       "we need to qualify more leads",
+      "tell me what you can do for solar companies",
     ];
     for (const text of businessInputs) {
       expect(detectConversationContext(text)).toBe("business_context");
@@ -359,6 +360,21 @@ describe("Full-Response Guardrails", () => {
 
     expect(result.wasModified).toBe(false);
     expect(result.violations).toHaveLength(0);
+  });
+
+  it("strips misplaced pleasantries when the caller did not ask a wellness question", () => {
+    const response = "I'm doing great, thanks for asking! ApexAI helps solar companies qualify leads fast.";
+    const result = applyFullResponseGuardrails(
+      response,
+      "tell me what you can do for solar companies",
+      [],
+      "business_context"
+    );
+
+    expect(result.wasModified).toBe(true);
+    expect(result.violations).toContain("misplaced_pleasantry");
+    expect(result.text).not.toMatch(/thanks for asking/i);
+    expect(result.text).toMatch(/solar companies/i);
   });
 
   it("uses tenant agent name in robotic-phrase fallback (full response)", () => {

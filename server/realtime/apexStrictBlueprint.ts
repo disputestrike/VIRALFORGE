@@ -239,7 +239,7 @@ export const COPY_BLOCKS = {
     "The AI isn’t replacing judgment — it’s handling the high-volume, repetitive part so nothing slips through. Your team still closes; the line just stops bleeding leads.",
   /** Controlled recovery: acknowledge → reset frame → return control to caller. */
   recovery_controlled:
-    "I hear you. Would you like me to end the call, or is there something specific I can help with?",
+    "You're right to call that out. Let me answer the exact question cleanly.",
   chaos: "Got it. Go ahead whenever you're ready.",
   /** After “why aren’t you talking” — bridge then LLM continues the real thread. */
   silence_complaint_bridge:
@@ -318,6 +318,7 @@ export function detectUserAngry(text: string): boolean {
 export function detectChaosFragments(text: string): boolean {
   const t = text.trim();
   if (t.length === 0) return false;
+  if (/^(yes|yeah|yep|yup|no|nope|correct|right|exactly|sure|okay|ok)[.!?\s]*$/i.test(t)) return false;
   if (t.length < 6) return true;
   if (/^(uh+|um+|er+|well|so|like)[,.]?\s*$/i.test(t)) return true;
   return false;
@@ -522,7 +523,7 @@ export function routeBlueprintDeterministic(
       next,
       route: {
         kind: "speak_then_llm",
-        prefix: COPY_BLOCKS.silence_complaint_bridge,
+        prefix: "I'm with you now. Let me pick that up directly.",
         markAnswered: false,
       },
     };
