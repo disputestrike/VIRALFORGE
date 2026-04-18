@@ -414,6 +414,8 @@ export function createCallEngine(opts: EngineOptions): void {
   let lastPredictiveCommittedTranscript = "";
   let lastPredictiveCommittedAt = 0;
   let lastPredictiveCommittedReason = "";
+  let lastHandledUserTranscript = "";
+  let lastHandledUserAt = 0;
   let transientBridgeActive = false;
   /** Optional μ-law jitter buffer before Deepgram (WS11). */
   let inboundJitterQueue: Buffer[] = [];
@@ -546,6 +548,48 @@ export function createCallEngine(opts: EngineOptions): void {
       .trim();
   }
 
+  function dedupeTokenSet(text: string): Set<string> {
+    const stopwords = new Set([
+      "a",
+      "an",
+      "and",
+      "are",
+      "can",
+      "do",
+      "for",
+      "help",
+      "how",
+      "i",
+      "is",
+      "me",
+      "my",
+      "please",
+      "tell",
+      "the",
+      "to",
+      "what",
+      "you",
+    ]);
+    return new Set(
+      normalizeTranscriptForDedup(text)
+        .split(" ")
+        .map((token) => token.trim())
+        .filter((token) => token.length >= 3 && !stopwords.has(token))
+    );
+  }
+
+  function hasStrongTranscriptOverlap(a: string, b: string): boolean {
+    const aTokens = dedupeTokenSet(a);
+    const bTokens = dedupeTokenSet(b);
+    if (!aTokens.size || !bTokens.size) return false;
+    let overlap = 0;
+    aTokens.forEach((token) => {
+      if (bTokens.has(token)) overlap++;
+    });
+    const minSize = Math.min(aTokens.size, bTokens.size);
+    return overlap >= minSize && overlap >= 2;
+  }
+
   function isNearDuplicateOfPredictiveFinal(text: string): boolean {
     if (!lastPredictiveCommittedTranscript || !lastPredictiveCommittedAt) return false;
     if (Date.now() - lastPredictiveCommittedAt > 1800) return false;
@@ -555,7 +599,22 @@ export function createCallEngine(opts: EngineOptions): void {
     return (
       finalNorm === predictiveNorm ||
       finalNorm.startsWith(predictiveNorm) ||
-      predictiveNorm.startsWith(finalNorm)
+      predictiveNorm.startsWith(finalNorm) ||
+      hasStrongTranscriptOverlap(finalNorm, predictiveNorm)
+    );
+  }
+
+  function isDuplicateOfRecentlyHandledTurn(text: string): boolean {
+    if (!lastHandledUserTranscript || !lastHandledUserAt) return false;
+    if (Date.now() - lastHandledUserAt > 1800) return false;
+    const currentNorm = normalizeTranscriptForDedup(text);
+    const previousNorm = normalizeTranscriptForDedup(lastHandledUserTranscript);
+    if (!currentNorm || !previousNorm) return false;
+    return (
+      currentNorm === previousNorm ||
+      currentNorm.startsWith(previousNorm) ||
+      previousNorm.startsWith(currentNorm) ||
+      hasStrongTranscriptOverlap(currentNorm, previousNorm)
     );
   }
 
@@ -1439,6 +1498,15 @@ export function createCallEngine(opts: EngineOptions): void {
       while (next) {
         const t = next;
         next = null;
+        if (isDuplicateOfRecentlyHandledTurn(t)) {
+          traceEvent(callId, "deepgram_final_deduped_after_predictive", {
+            textLen: t.length,
+            reason: "recent_handled_turn",
+          });
+          continue;
+        }
+        lastHandledUserTranscript = t;
+        lastHandledUserAt = Date.now();
         await handleUserTurnImpl(t, conf);
         if (pendingUserTranscript) {
           next = pendingUserTranscript;
