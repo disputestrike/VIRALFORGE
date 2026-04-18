@@ -109,6 +109,15 @@ import { computeInterruptAck } from "./interruptAck";
 import { logVoiceControllerEvent } from "./voiceControllerLog";
 import { extractLastQuestion } from "./repeatGuard";
 import { emptyStrictFacts, HARD_RULES, type StrictFacts } from "./strictTypes";
+import {
+  createConversationState,
+  updateConvStateAfterUserTurn,
+  updateConvStateAfterAssistantTurn,
+  type ConversationState,
+} from "./conversationState";
+import { decideStayOrPivot, canonicalizeUtterance } from "./stayPivotController";
+import { buildConversationStateBlock } from "./responseStyler";
+import { applyResetGuardrails, containsResetOpener } from "./resetGuardrails";
 import { BargeInClassifier } from "./bargeInClassifier";
 import {
   classifySmallTalk,
@@ -448,6 +457,8 @@ export function createCallEngine(opts: EngineOptions): void {
   let abResultRecorded = false;
   let activeLlmAbortController: AbortController | null = null;
   let assistantTurnSpokenText = "";
+  /** Conversation state machine — topic lock, repeat detection, frustration, hard_no_reset. */
+  let convState: ConversationState = createConversationState();
   let interruptedAtText = "";
   let interruptedAtTs = 0;
   let lastInterruptReason = "";
@@ -1943,8 +1954,25 @@ export function createCallEngine(opts: EngineOptions): void {
       mode: plan.policyForPrompt.mode,
     });
 
+    // ── CONVERSATION STATE CONTROLLER ─────────────────────────────────────
+    const spDecision = decideStayOrPivot(transcript, convState, !callerHasSpokenOnce);
+    const canonicalQ = canonicalizeUtterance(transcript, convState);
+    convState = updateConvStateAfterUserTurn(convState, transcript, spDecision, canonicalQ);
+    const convStateBlock = buildConversationStateBlock(convState, spDecision);
+    const activeStrictBlock = convStateBlock
+      ? `${convStateBlock}\n\n${plan.strictBlock}`
+      : plan.strictBlock;
+    traceEvent(callId, "conv_state", {
+      decision: spDecision,
+      repeat_count: convState.repeat_count,
+      frustration_score: convState.frustration_score,
+      active_topic: convState.active_topic ?? "(none)",
+    });
+    // ── END CONVERSATION STATE CONTROLLER ─────────────────────────────────
+
     try {
-      await respondVoiceLlm(epoch, transcript, plan.strictBlock, recoveryPrefixForLlm);
+      await respondVoiceLlm(epoch, transcript, activeStrictBlock, recoveryPrefixForLlm);
+      convState = updateConvStateAfterAssistantTurn(convState, assistantTurnSpokenText);
       clearLatencyTimer();
     } catch (e: any) {
       if (e?.name === "AbortError" || String(e?.message ?? e).toLowerCase().includes("aborted")) {
@@ -1955,7 +1983,7 @@ export function createCallEngine(opts: EngineOptions): void {
       log(`[Voice LLM] Failed: ${e?.message ?? e}`);
       try {
         await new Promise((r) => setTimeout(r, 350));
-        await respondVoiceLlm(epoch, transcript, plan.strictBlock, recoveryPrefixForLlm);
+        await respondVoiceLlm(epoch, transcript, activeStrictBlock, recoveryPrefixForLlm);
       } catch (e2: any) {
         if (e2?.name === "AbortError" || String(e2?.message ?? e2).toLowerCase().includes("aborted")) {
           clearLatencyTimer();
@@ -2258,6 +2286,14 @@ export function createCallEngine(opts: EngineOptions): void {
         .replace(/\s+/g, " ")
         .trim();
 
+      // ── GUARDRAIL: Reset opener prevention (hard_no_reset rule) ────────────
+      if (convState.hard_no_reset && containsResetOpener(cleaned)) {
+        logVoiceControllerEvent(callId, "guardrail", {
+          bucket: "reset_opener_blocked",
+          clause: cleaned.slice(0, 60),
+        });
+        return;
+      }
       // ── GUARDRAIL LAYER 2: Clause-level interception (before Cartesia) ──────────
       const clauseCheck = checkClause(
         cleaned,

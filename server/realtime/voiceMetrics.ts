@@ -108,7 +108,10 @@ export type VoiceTracePhase =
   | "quality_repetition_detected"
   | "quality_graceful_exit_triggered"
   | "quality_momentum_shift"
-  | "quality_turn_metrics";
+  | "quality_turn_metrics"
+  // ── Conversation state controller ───────────────────────────────────────
+  | "conv_state"
+  | "reset_opener_blocked";
 
 const starts = new Map<string, number>();
 
