@@ -625,6 +625,12 @@ export function createCallEngine(opts: EngineOptions): void {
     if (recentAssistantTexts.length > 5) recentAssistantTexts.shift();
   }
 
+  function formatIndustryLabel(label: string | null | undefined): string {
+    const raw = (label ?? "").trim();
+    if (!raw) return "your industry";
+    return raw.replace(/\b(companies|company|businesses|business)\b/gi, "").replace(/\s+/g, " ").trim() || raw;
+  }
+
   function buildIndustryFitAnswer(transcript: string): string | null {
     const t = transcript.toLowerCase();
     const asksForCapability =
@@ -657,7 +663,15 @@ export function createCallEngine(opts: EngineOptions): void {
 
     const genericIndustryMatch = t.match(/\bhelp\s+([a-z][a-z\s&/-]{2,40}?)\s+(companies|businesses)\b/i);
     if (genericIndustryMatch?.[1]) {
-      const sector = genericIndustryMatch[1].trim();
+      const sector = formatIndustryLabel(genericIndustryMatch[1]);
+      const repeatedGenericAnswer = recentAssistantTexts.some(
+        (recent) =>
+          new RegExp(`\\b${sector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(recent) &&
+          /\b(inbound calls|outbound follow-up|appointment setting|sms workflows|voice|business knowledge)\b/i.test(recent)
+      );
+      if (repeatedGenericAnswer) {
+        return `Yes — for ${sector}, the main value is handling inbound calls, fast follow-up, and booked next steps without sounding robotic. Which part do you want me to break down first?`;
+      }
       return `Yes. ApexAI can support ${sector} businesses with inbound calls, outbound follow-up, appointment setting, and SMS workflows. We give each company its own number, voice, and business knowledge so it sounds like that company, not like a generic bot.`;
     }
 
