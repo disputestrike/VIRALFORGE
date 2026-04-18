@@ -29,6 +29,13 @@
       "when": 1772756183221,
       "tag": "0003_tidy_firestar",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1741651594457,
+      "tag": "0004_perf_indexes",
+      "breakpoints": true
     }
   ]
 }

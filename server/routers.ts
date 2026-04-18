@@ -513,9 +513,15 @@ const messagesRouter = router({
     .mutation(async ({ input, ctx }) => {
       const contacts = await db.getCampaignContacts(input.campaignId);
       if (!contacts.length) throw new TRPCError({ code: "BAD_REQUEST", message: "No contacts assigned to this campaign" });
+
+      // Batch-fetch all leads in a single query instead of one per contact (N+1 fix)
+      const leadIds = contacts.map((c) => c.leadId);
+      const leadList = await db.getLeadsByIds(leadIds);
+      const leadsMap = new Map(leadList.map((l) => [l.id, l]));
+
       let sent = 0;
       for (const contact of contacts) {
-        const lead = await db.getLeadById(contact.leadId);
+        const lead = leadsMap.get(contact.leadId);
         if (!lead) continue;
         const lAny = lead as any;
         // Personalize body with lead data
@@ -535,7 +541,8 @@ const messagesRouter = router({
           body: personalizedBody,
           templateId: input.templateId,
           status: "queued",
-        createdBy: ctx.user.id });
+          createdBy: ctx.user.id,
+        });
 
         // Queue real delivery with explicit job ID logging for proof
         const bsLead = lead as any;
@@ -560,7 +567,9 @@ const messagesRouter = router({
         }
         sent++;
       }
-      await db.updateCampaign(input.campaignId, { sentCount: db_sql_increment("sentCount") as unknown as number });
+
+      // Update sentCount once with the actual number sent (not incrementing per message)
+      await db.updateCampaign(input.campaignId, { sentCount: sql`sentCount + ${sent}` as unknown as number });
       await db.logActivity({ userId: ctx.user.id, entityType: "campaign", entityId: input.campaignId, action: "bulk_sent", description: `Bulk sent ${input.channel} to ${sent} contacts` });
       return { success: true, sent };
     }),

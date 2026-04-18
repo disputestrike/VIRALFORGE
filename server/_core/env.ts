@@ -34,6 +34,9 @@ export const ENV = {
 
   // ── Database ──────────────────────────────────────────────
   databaseUrl: process.env.DATABASE_URL ?? "",
+  forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
+  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? process.env.REDIRECT_URI ?? `${resolvePublicUrl()}/api/auth/callback`,
 
   // ── Redis (BullMQ queue + workers) ────────────────────────
   redisUrl: process.env.REDIS_URL ?? "",

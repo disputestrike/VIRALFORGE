@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -185,7 +185,7 @@ export default function Leads() {
     if (file) handleFileUpload(file);
   };
 
-  const mappedLeads = importRows.map((row) => ({
+  const mappedLeads = useMemo(() => importRows.map((row) => ({
     firstName: String(row[columnMap.firstName ?? ""] ?? "").trim(),
     lastName: String(row[columnMap.lastName ?? ""] ?? "").trim(),
     email: String(row[columnMap.email ?? ""] ?? "").trim() || undefined,
@@ -193,7 +193,7 @@ export default function Leads() {
     company: String(row[columnMap.company ?? ""] ?? "").trim() || undefined,
     industry: String(row[columnMap.industry ?? ""] ?? "").trim() || undefined,
     title: String(row[columnMap.title ?? ""] ?? "").trim() || undefined,
-  })).filter((l) => l.firstName && l.lastName);
+  })).filter((l) => l.firstName && l.lastName), [importRows, columnMap]);
 
   const handleImport = () => importMutation.mutate(mappedLeads);
 
@@ -556,7 +556,7 @@ export default function Leads() {
                   </thead>
                   <tbody>
                     {mappedLeads.slice(0, 20).map((l, i) => (
-                      <tr key={i} className="border-t border-border/50">
+                      <tr key={`${i}-${l.firstName}-${l.lastName}-${l.email ?? ""}`} className="border-t border-border/50">
                         <td className="px-3 py-2">{l.firstName} {l.lastName}</td>
                         <td className="px-3 py-2 text-muted-foreground">{l.email ?? "—"}</td>
                         <td className="px-3 py-2 text-muted-foreground">{l.phone ?? "—"}</td>
