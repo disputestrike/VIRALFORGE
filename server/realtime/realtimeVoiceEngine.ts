@@ -413,6 +413,8 @@ export function createCallEngine(opts: EngineOptions): void {
   let pendingPredictiveTranscript = "";
   let lastPredictiveCommittedTranscript = "";
   let lastPredictiveCommittedAt = 0;
+  let lastPredictiveCommittedReason = "";
+  let transientBridgeActive = false;
   /** Optional μ-law jitter buffer before Deepgram (WS11). */
   let inboundJitterQueue: Buffer[] = [];
   /** APEX strict blueprint state (intent lock, escalation, recovery). */
@@ -605,6 +607,18 @@ export function createCallEngine(opts: EngineOptions): void {
       return "I am with you now, and yes, ApexAI can help solar companies. We can handle inbound calls, outbound lead follow-up, appointment booking, and SMS reminders. Which part do you want to hear first?";
     }
     return "I am with you now. Go ahead, and I will answer directly.";
+  }
+
+  function buildTransientBridgeText(userTranscript: string): string | null {
+    const t = userTranscript.toLowerCase().trim();
+    if (!t) return null;
+    if (/\b(hello|hi|hey|are you there|can you hear me)\b/.test(t)) return null;
+    if (/\b(real person|human|representative|agent)\b/.test(t)) return "Sure — one second.";
+    if (/\b(price|pricing|cost|plan|how much)\b/.test(t)) return "Yes —";
+    if (/\b(book|schedule|appointment|calendar|demo)\b/.test(t)) return "Absolutely —";
+    if (/\bsolar|hvac|roofing|insurance|plumbing|dental|medical|legal\b/.test(t)) return "Yes —";
+    if (/\bwhat can you do|what do you do|tell me what you can do|tell me more\b/.test(t)) return "Sure —";
+    return null;
   }
 
   function resetAssistantPlaybackClock(): void {
@@ -1094,6 +1108,7 @@ export function createCallEngine(opts: EngineOptions): void {
     clearUserSilenceReengageTimer();
     clearInterruptAckPending();
     assistantResponseInProgress = false;
+    transientBridgeActive = false;
     if (cartesiaWs && cartesiaWs.readyState === WebSocket.OPEN && cartesiaContextId) {
       cartesiaWs.send(JSON.stringify({ context_id: cartesiaContextId, cancel: true }));
     }
@@ -1214,6 +1229,7 @@ export function createCallEngine(opts: EngineOptions): void {
           const transcript: string = msg.channel?.alternatives?.[0]?.transcript || "";
           const isFinal: boolean = msg.is_final;
           const speechFinal: boolean = msg.speech_final;
+          const confidence = Number(msg.channel?.alternatives?.[0]?.confidence ?? lastFinalSttConfidence ?? 0);
 
           if (!transcript.trim()) return;
 
@@ -1260,13 +1276,21 @@ export function createCallEngine(opts: EngineOptions): void {
             !assistantResponseInProgress &&
             !userTurnBusy
           ) {
-            const predictive = predictiveTurnFromInterim(transcript);
+            const predictive = predictiveTurnFromInterim(transcript, confidence);
             if (predictive.commitEarly) {
               pendingPredictiveTranscript = transcript.trim();
               if (predictiveCommitTimer) clearTimeout(predictiveCommitTimer);
+              traceEvent(callId, "interim_predictive_armed", {
+                confidence,
+                reason: predictive.reason ?? "predictive",
+                textLen: pendingPredictiveTranscript.length,
+              });
               traceEvent(callId, "predictive_interim_armed", {
                 hints: predictive.hints,
                 textLen: pendingPredictiveTranscript.length,
+                confidence,
+                delayMs: predictive.delayMs,
+                reason: predictive.reason ?? "predictive",
               });
               predictiveCommitTimer = setTimeout(() => {
                 predictiveCommitTimer = null;
@@ -1275,14 +1299,23 @@ export function createCallEngine(opts: EngineOptions): void {
                 if (!text || isEnded || isSpeaking || assistantResponseInProgress || userTurnBusy) return;
                 lastPredictiveCommittedTranscript = text;
                 lastPredictiveCommittedAt = Date.now();
+                lastPredictiveCommittedReason = predictive.reason ?? "predictive";
                 traceEvent(callId, "predictive_interim_commit", {
                   textLen: text.length,
-                  ms: 120,
+                  ms: predictive.delayMs,
+                  confidence,
+                  reason: predictive.reason ?? "predictive",
                 });
-                void enqueueUserTurn(text, lastFinalSttConfidence).catch((e) =>
+                traceEvent(callId, "predictive_interim_commit_fast", {
+                  textLen: text.length,
+                  ms: predictive.delayMs,
+                  confidence,
+                  reason: predictive.reason ?? "predictive",
+                });
+                void enqueueUserTurn(text, Math.max(confidence || 0, lastFinalSttConfidence || 0.92)).catch((e) =>
                   log(`predictive enqueue failed: ${e instanceof Error ? e.message : String(e)}`)
                 );
-              }, 120);
+              }, predictive.delayMs);
             }
           }
 
@@ -1299,7 +1332,7 @@ export function createCallEngine(opts: EngineOptions): void {
             isFinal &&
             transcript.trim().length >= 8 &&
             !turnCtl.interruptRequested;
-          const conf = Number(msg.channel?.alternatives?.[0]?.confidence ?? 0.92);
+          const conf = confidence || 0.92;
           if (isFinal && speechFinal) lastFinalSttConfidence = conf;
 
           if (sttBackupBarge) {
@@ -1912,6 +1945,20 @@ export function createCallEngine(opts: EngineOptions): void {
     if (!clean.trim() && !full.trim()) throw new Error("Empty LLM response");
   }
 
+  function sendTransientBridge(text: string, epoch: number): void {
+    if (epoch !== generationEpoch || isEnded || !voiceStreamReady()) return;
+    const line = speakableLine(text);
+    if (!line) return;
+    transientBridgeActive = true;
+    stopSpeaking();
+    cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    cartesiaSend(line, false);
+    traceEvent(callId, "transient_bridge_sent", {
+      text: line.slice(0, 40),
+      reason: lastPredictiveCommittedReason || "latency_mask",
+    });
+  }
+
   // ── True streaming LLM → TTS pipeline — research-compliant ──────────────────
   //
   // Tokens flow from LLM in real-time. As soon as a sentence boundary is detected
@@ -1931,6 +1978,8 @@ export function createCallEngine(opts: EngineOptions): void {
     lastOutboundAudioAt = Date.now();
     assistantResponseInProgress = true;
     let clausesSent = 0;
+    const bridgeText = buildTransientBridgeText(userTranscript);
+    let transientBridgeTimer: NodeJS.Timeout | null = null;
 
     let llmAckTimer: NodeJS.Timeout | null = setTimeout(() => {
       llmAckTimer = null;
@@ -1938,6 +1987,13 @@ export function createCallEngine(opts: EngineOptions): void {
       traceEvent(callId, "llm_slow_ack_800ms");
       log("[FAILSAFE] LLM >800ms to first token — tracing only");
     }, 800);
+    if (bridgeText) {
+      transientBridgeTimer = setTimeout(() => {
+        transientBridgeTimer = null;
+        if (epoch !== generationEpoch || isEnded || clausesSent > 0 || assistantPlaybackStartAt) return;
+        sendTransientBridge(bridgeText, epoch);
+      }, 220);
+    }
     silenceWatchTimer = setInterval(() => {
       if (isEnded || epoch !== generationEpoch) {
         disarmOutboundSilenceWatch();
@@ -2017,6 +2073,13 @@ export function createCallEngine(opts: EngineOptions): void {
 
       const speakable = speakableLine(clauseCheck.text); // use guardrail-approved text
       if (!speakable) return;
+      if (transientBridgeTimer) {
+        clearTimeout(transientBridgeTimer);
+        transientBridgeTimer = null;
+      }
+      if (transientBridgeActive) {
+        stopSpeaking();
+      }
       // Each clause gets its own fresh Cartesia context to avoid "Context has closed" errors.
       cartesiaContextId = "";
       cartesiaSend(speakable, false);
@@ -2051,12 +2114,20 @@ export function createCallEngine(opts: EngineOptions): void {
     } catch (e: any) {
       disarmOutboundSilenceWatch();
       assistantResponseInProgress = false;
+      if (transientBridgeTimer) {
+        clearTimeout(transientBridgeTimer);
+        transientBridgeTimer = null;
+      }
       log(`[STREAM] Error: ${e.message}`);
       throw e;
     } finally {
       if (llmAckTimer) {
         clearTimeout(llmAckTimer);
         llmAckTimer = null;
+      }
+      if (transientBridgeTimer) {
+        clearTimeout(transientBridgeTimer);
+        transientBridgeTimer = null;
       }
     }
 

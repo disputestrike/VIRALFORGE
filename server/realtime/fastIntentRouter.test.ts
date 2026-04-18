@@ -33,23 +33,30 @@ describe("optOutFromFinal", () => {
 
 describe("predictiveTurnFromInterim", () => {
   it("commits early for clear product questions", () => {
-    const r = predictiveTurnFromInterim("what do you do for inbound and outbound calls");
+    const r = predictiveTurnFromInterim("what do you do for inbound and outbound calls", 0.97);
     expect(r.commitEarly).toBe(true);
     expect(r.hints).toContain("question_shape");
+    expect(r.delayMs).toBeLessThanOrEqual(45);
   });
 
   it("does not commit early for short filler", () => {
-    const r = predictiveTurnFromInterim("um okay");
+    const r = predictiveTurnFromInterim("um okay", 0.99);
     expect(r.commitEarly).toBe(false);
   });
 
   it("does not commit early for generic half-finished questions", () => {
-    const r = predictiveTurnFromInterim("can you help solar companies");
-    expect(r.commitEarly).toBe(false);
+    const r = predictiveTurnFromInterim("can you help solar companies", 0.98);
+    expect(r.commitEarly).toBe(true);
+    expect(r.reason).toBe("industry_fit_question");
   });
 
   it("does not commit early for dead-air checks", () => {
-    const r = predictiveTurnFromInterim("hello can you hear me");
+    const r = predictiveTurnFromInterim("hello can you hear me", 0.99);
+    expect(r.commitEarly).toBe(false);
+  });
+
+  it("does not commit early below confidence floor", () => {
+    const r = predictiveTurnFromInterim("tell me what you can do for solar", 0.84);
     expect(r.commitEarly).toBe(false);
   });
 });
