@@ -392,6 +392,8 @@ export function createCallEngine(opts: EngineOptions): void {
   let dgWs: WebSocket | null = null;
   let cartesiaWs: WebSocket | null = null;
   let cartesiaContextId = "";
+  let cartesiaContextCreatedAt = 0;
+  const CARTESIA_CONTEXT_TIMEOUT_MS = 60000; // Recycle context every 60 seconds to prevent stale context errors
   let generationEpoch = 0;
   let isSpeaking = false;
   let isEnded = false;
@@ -1240,10 +1242,20 @@ export function createCallEngine(opts: EngineOptions): void {
     const ttsSpeed = rawSpeed;
     log(`cartesiaSend: "${text.slice(0,40)}" voiceId=${voiceProfile.cartesiaId} speed=${ttsSpeed}`);
     appendAssistantPlaybackText(text);
+    
+    // ── CARTESIA CONTEXT LIFECYCLE (FIX C): Recycle every 60s to prevent stale context ──
+    const now = Date.now();
     const hadNoContext = !cartesiaContextId;
-    if (!cartesiaContextId) {
-      cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const contextAge = cartesiaContextCreatedAt > 0 ? now - cartesiaContextCreatedAt : 0;
+    if (!cartesiaContextId || contextAge > CARTESIA_CONTEXT_TIMEOUT_MS) {
+      if (cartesiaContextId && contextAge > CARTESIA_CONTEXT_TIMEOUT_MS) {
+        log(`[Cartesia] Context recycled (age ${contextAge}ms > ${CARTESIA_CONTEXT_TIMEOUT_MS}ms)`);
+      }
+      cartesiaContextId = `ctx_${now}_${Math.random().toString(36).slice(2, 9)}`;
+      cartesiaContextCreatedAt = now;
     }
+    // ── END CONTEXT LIFECYCLE ────────────────────────────────────────────────────────
+    
     // First frame of any context must use continue=false; never continue on a brand-new id.
     let continueFlag = continueCtx;
     if (hadNoContext && continueFlag) {
@@ -1971,6 +1983,43 @@ export function createCallEngine(opts: EngineOptions): void {
       active_topic: convState.active_topic ?? "(none)",
     });
     // ── END CONVERSATION STATE CONTROLLER ─────────────────────────────────
+
+    // ── TERMINATION INTENT DETECTION (CRITICAL FIX B) ─────────────────────
+    // If user explicitly asks to end call AND they've been frustrated, RESPECT IT
+    const terminationPhrases = [
+      "end the call",
+      "end call",
+      "stop the call",
+      "hang up",
+      "goodbye",
+      "end this",
+      "terminate",
+      "close the call",
+      "finish the call",
+    ];
+
+    const lowerTranscript = transcript.toLowerCase().trim();
+    const isTerminationRequest = terminationPhrases.some((phrase) => 
+      lowerTranscript.includes(phrase)
+    );
+
+    if (isTerminationRequest && convState.repeat_count >= 3) {
+      logVoiceControllerEvent(callId, "guardrail", {
+        bucket: "user_termination_request",
+        repeat_count: convState.repeat_count,
+        transcript: transcript.slice(0, 60),
+      });
+      log(`[CALL-CONTROL] User requested termination at repeat_count=${convState.repeat_count}`);
+      
+      // Say goodbye and end the call
+      await speak("Thank you for your time. Goodbye.", epoch);
+      setTimeout(() => {
+        void finalizeHard({ reason: "user_termination_request", outcome: "not_interested" });
+      }, 1000);
+      traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+      return;
+    }
+    // ── END TERMINATION INTENT DETECTION ──────────────────────────────────
 
     try {
       await respondVoiceLlm(epoch, transcript, activeStrictBlock, recoveryPrefixForLlm);
