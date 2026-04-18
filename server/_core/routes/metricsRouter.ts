@@ -167,13 +167,30 @@ export const metricsRouter = router({
   retryLeadCreatedAutomation: protectedProcedure
     .input(z.object({ leadId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
-      const { getLeadById, logActivity } = await import("../../db");
+      const { getLeadById, getActivityLogs, logActivity } = await import("../../db");
       const lead = await getLeadById(input.leadId);
       if (!lead) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
       }
       if ((lead as { createdBy?: number | null }).createdBy !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Lead does not belong to current user" });
+      }
+
+      const recent = await getActivityLogs({ userId: ctx.user.id, limit: 100 });
+      const lastRetry = recent.find(
+        (a) =>
+          a.entityType === "lead" &&
+          a.entityId === input.leadId &&
+          a.action === "automation_requeued"
+      );
+      if (lastRetry?.createdAt) {
+        const elapsedMs = Date.now() - new Date(lastRetry.createdAt).getTime();
+        if (elapsedMs < 60_000) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "A retry was already queued recently for this lead. Please wait a minute.",
+          });
+        }
       }
 
       const { addAutomationJob } = await import("../services/queue");
