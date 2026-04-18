@@ -30,6 +30,7 @@ export const ENV = {
   // ── Google OAuth ──────────────────────────────────────────
   googleClientId:     process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+  redirectUri: process.env.REDIRECT_URI ?? `${resolvePublicUrl()}/api/auth/callback`,
 
   // ── Database ──────────────────────────────────────────────
   databaseUrl: process.env.DATABASE_URL ?? "",

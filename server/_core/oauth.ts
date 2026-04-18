@@ -1,25 +1,19 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import type { Express, Request, Response } from "express";
+import { OAuth2Client } from "google-auth-library";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
 import { ENV } from "./env";
-import { OAuth2Client } from "google-auth-library";
 import { sdk } from "./sdk";
 
 let googleClient: OAuth2Client | null = null;
 
 function getGoogleClient(): OAuth2Client {
   if (!googleClient) {
-    if (!process.env.GOOGLE_CLIENT_ID) {
-      console.warn("[Google Auth] GOOGLE_CLIENT_ID not configured");
-    }
-    if (!process.env.GOOGLE_CLIENT_SECRET) {
-      console.warn("[Google Auth] GOOGLE_CLIENT_SECRET not configured");
-    }
     googleClient = new OAuth2Client(
-      process.env.GOOGLE_CLIENT_ID || "",
-      process.env.GOOGLE_CLIENT_SECRET || "",
-      `${ENV.publicUrl}/api/auth/google/callback`
+      ENV.googleClientId,
+      ENV.googleClientSecret,
+      ENV.redirectUri
     );
   }
   return googleClient;
@@ -41,8 +35,12 @@ async function handleGoogleUser(
     lastSignedIn: new Date(),
   });
 
-  // Use sdk.createSessionToken so jose signs it — compatible with sdk.authenticateRequest
-  const sessionToken = await sdk.createSessionToken({ googleId, email, name: name || "", picture: picture || undefined });
+  const sessionToken = await sdk.createSessionToken({
+    googleId,
+    email,
+    name: name || "",
+    picture: picture || undefined,
+  });
 
   const cookieOptions = getSessionCookieOptions(req);
   res.cookie(COOKIE_NAME, sessionToken, {
@@ -51,106 +49,126 @@ async function handleGoogleUser(
   });
 
   console.log(`[Google Auth] Login success | openId: ${googleId} | email: ${email}`);
-  return sessionToken;
+}
+
+async function authenticateFromAuthCode(req: Request, res: Response, code: string): Promise<void> {
+  const tokenResponse = await sdk.exchangeCodeForToken(code);
+  const userInfo = await sdk.getUserInfo(tokenResponse.access_token);
+  const openId = userInfo.id;
+
+  if (!openId || !userInfo.email) {
+    res.status(400).json({ error: "Missing required user info from Google" });
+    return;
+  }
+
+  await handleGoogleUser(
+    openId,
+    userInfo.email,
+    userInfo.name,
+    userInfo.picture,
+    req,
+    res
+  );
 }
 
 export function registerOAuthRoutes(app: Express) {
-
-  // ── Flow 1: Google redirect flow (standard OAuth2) ────────────────────────
-  // Step 1: Redirect user to Google consent screen
   app.get("/api/auth/google/login", (_req: Request, res: Response) => {
-    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-      res.status(503).json({ error: "Google OAuth not configured — add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to Railway Variables" });
+    const clientId = ENV.googleClientId || process.env.VITE_APP_ID || "";
+    const redirectUri = ENV.redirectUri;
+
+    if (!clientId) {
+      res.status(503).json({ error: "Google OAuth not configured: missing GOOGLE_CLIENT_ID" });
       return;
     }
-    const authUrl = getGoogleClient().generateAuthUrl({
-      access_type: "offline",
+    if (!redirectUri) {
+      res.status(503).json({ error: "Google OAuth not configured: missing REDIRECT_URI" });
+      return;
+    }
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: "code",
       scope: [
         "https://www.googleapis.com/auth/userinfo.email",
         "https://www.googleapis.com/auth/userinfo.profile",
-      ],
-      prompt: "select_account",
+      ].join(" "),
+      access_type: "offline",
+      prompt: "consent",
     });
-    res.redirect(authUrl);
+
+    res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
   });
 
-  // Step 2: Google redirects back here with ?code= (GET — this is what Google sends)
-  app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
-    const code = req.query.code as string;
-    const error = req.query.error as string;
+  const handleCodeCallback = async (req: Request, res: Response) => {
+    const { code, error: oauthError } = req.query as Record<string, string>;
 
-    if (error) {
-      console.error("[Google Auth] OAuth error:", error);
-      res.redirect("/?auth_error=" + encodeURIComponent(error));
+    if (oauthError) {
+      console.error("[OAuth] Google returned an error:", oauthError);
+      res.redirect(`/?auth_error=${encodeURIComponent(oauthError)}`);
       return;
     }
 
     if (!code) {
-      res.redirect("/?auth_error=missing_code");
+      res.status(400).json({ error: "Missing authorization code" });
       return;
     }
 
     try {
-      const { tokens } = await getGoogleClient().getToken(code);
-      const client = getGoogleClient();
-      client.setCredentials(tokens);
-
-      const ticket = await client.verifyIdToken({
-        idToken: tokens.id_token!,
-        audience: process.env.GOOGLE_CLIENT_ID!,
-      });
-
-      const payload = ticket.getPayload();
-      if (!payload || !payload.sub || !payload.email) {
-        res.redirect("/?auth_error=invalid_token");
-        return;
-      }
-
-      await handleGoogleUser(payload.sub, payload.email, payload.name, payload.picture, req, res);
+      await authenticateFromAuthCode(req, res, code);
       res.redirect("/");
-    } catch (err) {
-      console.error("[Google Auth] Callback GET failed:", err);
+    } catch (error) {
+      console.error("[OAuth] Callback failed:", error);
       res.redirect("/?auth_error=callback_failed");
     }
-  });
+  };
 
-  // ── Flow 2: Google Identity Services (one-tap / credential POST) ──────────
-  // Used by the frontend Google button that posts a credential token directly
+  // Canonical callback path used by newer OAuth config.
+  app.get("/api/auth/callback", handleCodeCallback);
+  // Backward-compatible callback path used by older OAuth config.
+  app.get("/api/auth/google/callback", handleCodeCallback);
+
+  // Legacy one-tap credential POST and code-based POST callback support.
   app.post("/api/auth/google/callback", async (req: Request, res: Response) => {
-    const { credential } = req.body;
-
-    if (!credential) {
-      res.status(400).json({ error: "credential is required" });
-      return;
-    }
+    const body = req.body as { credential?: string; code?: string };
 
     try {
-      if (!process.env.GOOGLE_CLIENT_ID) {
-        res.status(500).json({ error: "Google authentication not configured" });
+      if (body.credential) {
+        if (!ENV.googleClientId) {
+          res.status(500).json({ error: "Google authentication not configured" });
+          return;
+        }
+
+        const ticket = await getGoogleClient().verifyIdToken({
+          idToken: body.credential,
+          audience: ENV.googleClientId,
+        });
+
+        const payload = ticket.getPayload();
+        if (!payload || !payload.sub || !payload.email) {
+          res.status(400).json({ error: "Invalid token payload" });
+          return;
+        }
+
+        await handleGoogleUser(payload.sub, payload.email, payload.name, payload.picture, req, res);
+        res.json({ success: true });
         return;
       }
 
-      const ticket = await getGoogleClient().verifyIdToken({
-        idToken: credential,
-        audience: process.env.GOOGLE_CLIENT_ID,
-      });
-
-      const payload = ticket.getPayload();
-      if (!payload || !payload.sub || !payload.email) {
-        res.status(400).json({ error: "Invalid token payload" });
+      if (body.code) {
+        await authenticateFromAuthCode(req, res, body.code);
+        res.json({ success: true });
         return;
       }
 
-      await handleGoogleUser(payload.sub, payload.email, payload.name, payload.picture, req, res);
-      res.json({ success: true });
+      res.status(400).json({ error: "credential or code is required" });
     } catch (error) {
-      console.error("[Google Auth] Callback POST failed:", error);
-      res.status(401).json({ error: "Google authentication failed" });
+      console.error("[OAuth] POST callback failed:", error);
+      res.status(500).json({ error: "Authentication failed" });
     }
   });
 
-  // ── Logout ────────────────────────────────────────────────────────────────
-  app.post("/api/auth/logout", (req: Request, res: Response) => {
+  app.post("/api/auth/logout", (_req: Request, res: Response) => {
     res.clearCookie(COOKIE_NAME);
     res.json({ success: true });
   });
