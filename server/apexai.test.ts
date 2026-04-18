@@ -343,4 +343,19 @@ describe("admin", () => {
     const logs = await caller.admin.activityLogs({ limit: 10 });
     expect(Array.isArray(logs)).toBe(true);
   });
+
+  it("prevents admin self-demotion", async () => {
+    const ctx = makeAdminCtx();
+    const caller = appRouter.createCaller(ctx);
+    await expect(caller.admin.updateUserRole({ userId: 99, role: "user" })).rejects.toThrow(/cannot remove your own admin access/i);
+  });
+
+  it("admin can promote a user", async () => {
+    const ctx = makeAdminCtx();
+    const caller = appRouter.createCaller(ctx);
+    await expect(caller.admin.updateUserRole({ userId: 1, role: "admin" })).resolves.toEqual({ success: true });
+    const users = await caller.admin.users();
+    const promoted = users.find((u) => u.id === 1);
+    expect(promoted?.role).toBe("admin");
+  });
 });

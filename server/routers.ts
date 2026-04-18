@@ -1228,6 +1228,31 @@ const adminRouter = router({
   updateUserRole: adminProcedure
     .input(z.object({ userId: z.number(), role: z.enum(["user", "admin"]) }))
     .mutation(async ({ input, ctx }) => {
+      const targetUser = await db.getUserById(input.userId);
+      if (!targetUser) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+      }
+
+      if (input.role === "user" && input.userId === ctx.user.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot remove your own admin access" });
+      }
+
+      if (input.role === "user" && targetUser.openId === ENV.ownerOpenId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "The owner account must retain admin access" });
+      }
+
+      if (input.role === "user" && targetUser.role === "admin") {
+        const allUsers = await db.getAllUsers();
+        const adminCount = allUsers.filter((u) => u.role === "admin").length;
+        if (adminCount <= 1) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "At least one admin is required" });
+        }
+      }
+
+      if (targetUser.role === input.role) {
+        return { success: true };
+      }
+
       await db.updateUserRole(input.userId, input.role);
       await db.logActivity({ userId: ctx.user.id, entityType: "user", entityId: input.userId, action: "role_updated", description: `Role changed to ${input.role}` });
       return { success: true };

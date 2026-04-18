@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -45,27 +45,29 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export default function Admin() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth({ redirectOnUnauthenticated: true });
   const [, navigate] = useLocation();
   const [tab, setTab] = useState("users");
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const isAdmin = user?.role === "admin";
 
   const utils = trpc.useUtils();
 
-  // Redirect non-admins
-  if (user && user.role !== "admin") {
+  useEffect(() => {
+    if (loading) return;
+    if (!user) return;
+    if (user.role === "admin") return;
     navigate("/dashboard");
-    return null;
-  }
+  }, [loading, navigate, user]);
 
-  const { data: users } = trpc.admin.users.useQuery();
-  const { data: stats } = trpc.admin.systemStats.useQuery();
-  const { data: logs } = trpc.admin.activityLogs.useQuery({ limit: 100 });
-  const { data: campaigns } = trpc.campaigns.list.useQuery({});
-  const { data: savedConfig } = trpc.admin.getConfig.useQuery();
-  const { data: voiceMetrics } = trpc.admin.voiceMetricEvents.useQuery({ limit: 200 });
-  const { data: voiceLatency } = trpc.admin.voiceMetricLatencySummary.useQuery({ sampleLimit: 500 });
+  const { data: users } = trpc.admin.users.useQuery(undefined, { enabled: isAdmin });
+  const { data: stats } = trpc.admin.systemStats.useQuery(undefined, { enabled: isAdmin });
+  const { data: logs } = trpc.admin.activityLogs.useQuery({ limit: 100 }, { enabled: isAdmin });
+  const { data: campaigns } = trpc.campaigns.list.useQuery({}, { enabled: isAdmin });
+  const { data: savedConfig } = trpc.admin.getConfig.useQuery(undefined, { enabled: isAdmin });
+  const { data: voiceMetrics } = trpc.admin.voiceMetricEvents.useQuery({ limit: 200 }, { enabled: isAdmin });
+  const { data: voiceLatency } = trpc.admin.voiceMetricLatencySummary.useQuery({ sampleLimit: 500 }, { enabled: isAdmin });
   const { data: demoConfig } = trpc.demoCall.config.useQuery();
 
   const promoteUserMutation = trpc.admin.updateUserRole.useMutation({
@@ -97,6 +99,36 @@ export default function Admin() {
     if (v === "not_configured" || v === "disabled") return "text-red-400";
     return "";
   };
+
+  if (loading || !user) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto">
+        <Card className="bg-card border-border">
+          <CardContent className="p-6 text-sm text-muted-foreground">Loading admin access…</CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto">
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Shield className="w-4 h-4 text-red-400" /> Admin access required
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <p>Your account is authenticated but does not have admin permissions for this workspace.</p>
+            <div>
+              <Button variant="outline" onClick={() => navigate("/dashboard")}>Back to dashboard</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-5 max-w-7xl mx-auto">
