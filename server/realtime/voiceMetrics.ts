@@ -101,7 +101,14 @@ export type VoiceTracePhase =
   | "tts_clause"
   | "latency_budget_exceeded"
   | "ab_variant"
-  | "voice_stack_unready";
+  | "voice_stack_unready"
+  // ── Conversation quality metrics ────────────────────────────────────────
+  | "quality_frustration_detected"
+  | "quality_disengagement_detected"
+  | "quality_repetition_detected"
+  | "quality_graceful_exit_triggered"
+  | "quality_momentum_shift"
+  | "quality_turn_metrics";
 
 const starts = new Map<string, number>();
 

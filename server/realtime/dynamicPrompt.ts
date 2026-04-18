@@ -203,12 +203,114 @@ These rules are enforced by the system. You must also follow them in generation:
 7. Never say "what do you want", "let's keep things professional", or anything that sounds like you are correcting the caller. Redirect by being useful.
 `;
 
+// ── Conversation quality tracking (from quality engine) ───────────────────────
+
+const FRUSTRATION_PATTERNS = [
+  /\bgo away\b/i,
+  /\bstop (calling|talking|it|this)\b/i,
+  /\bleave me alone\b/i,
+  /\bdon'?t (want|call|contact)\b/i,
+  /\bnot interested\b/i,
+  /\bno{2,}\b/i,
+  /\bget off\b/i,
+  /\bhang up\b/i,
+  /\bquit it\b/i,
+  /\bi said no\b/i,
+  /\bplease stop\b/i,
+  /\bleave me\b/i,
+];
+
+const DISENGAGEMENT_PATTERNS = [
+  /\bnot right now\b/i,
+  /\bmaybe later\b/i,
+  /\bi'?m busy\b/i,
+  /\bcall me back\b/i,
+  /\bnot a good time\b/i,
+  /\bi'?ll think about it\b/i,
+  /\bjust browsing\b/i,
+  /\bnot today\b/i,
+];
+
+export type ConversationMomentum = "engaged" | "neutral" | "disengaging" | "frustrated" | "confused";
+
+export interface ConversationQualityState {
+  momentum: ConversationMomentum;
+  frustrationCount: number;
+  disengagementCount: number;
+  engagementScore: number;
+  recentPhrases: string[];
+}
+
+export function createConversationQualityState(): ConversationQualityState {
+  return { momentum: "neutral", frustrationCount: 0, disengagementCount: 0, engagementScore: 50, recentPhrases: [] };
+}
+
+export function detectCustomerMomentum(
+  transcript: string,
+  state: ConversationQualityState
+): ConversationQualityState {
+  const t = transcript.toLowerCase();
+  const isFrustrated = FRUSTRATION_PATTERNS.some((p) => p.test(t));
+  const isDisengaging = DISENGAGEMENT_PATTERNS.some((p) => p.test(t));
+  if (isFrustrated) {
+    return {
+      ...state,
+      momentum: "frustrated",
+      frustrationCount: state.frustrationCount + 1,
+      engagementScore: Math.max(0, state.engagementScore - 25),
+    };
+  }
+  if (isDisengaging) {
+    return {
+      ...state,
+      momentum: "disengaging",
+      disengagementCount: state.disengagementCount + 1,
+      engagementScore: Math.max(0, state.engagementScore - 10),
+    };
+  }
+  // Positive signals
+  if (/yes|sure|sounds good|okay|great|interested|tell me more/i.test(t)) {
+    return {
+      ...state,
+      momentum: "engaged",
+      engagementScore: Math.min(100, state.engagementScore + 10),
+    };
+  }
+  return state;
+}
+
+export function detectFrustrationEscalation(transcript: string): boolean {
+  return FRUSTRATION_PATTERNS.some((p) => p.test(transcript.toLowerCase()));
+}
+
+export function trackAssistantPhrase(
+  state: ConversationQualityState,
+  phrase: string
+): ConversationQualityState {
+  const recent = [...state.recentPhrases, phrase].slice(-5);
+  return { ...state, recentPhrases: recent };
+}
+
+export function buildMomentumBlock(momentum: ConversationMomentum): string {
+  if (momentum === "frustrated") {
+    return "\n\nCALLER MOMENTUM: FRUSTRATED — Do NOT keep pitching. Acknowledge briefly, then offer to end the call gracefully: \"Totally get it — I'll let you go. Have a great day.\"";
+  }
+  if (momentum === "disengaging") {
+    return "\n\nCALLER MOMENTUM: DISENGAGING — Respect their pace. Offer a callback or a simpler next step. Don't push.";
+  }
+  return "";
+}
+
 export function buildVoiceSystemPrompt(
   state: ConversationPolicyState,
   businessName: string,
   industry: string,
   client: ClientConfig,
-  domainPackBlock?: string
+  domainPackBlock?: string,
+  opts?: {
+    momentum?: ConversationMomentum;
+    recentAssistantPhrases?: string[];
+  }
 ): string {
   const apexProductLine = isApexPlatformDemoLine(businessName);
   const runtimeProfile = client.voiceRuntimeProfile ?? DEFAULT_TENANT_VOICE_RUNTIME;
@@ -220,6 +322,16 @@ export function buildVoiceSystemPrompt(
   const bookingRule = bookingLocked
     ? "DO NOT offer appointment times or calendar slots. Answer first; one non-booking next step only."
     : "You may offer specific times only if the caller is ready to book.";
+
+  const momentumBlock = opts?.momentum ? buildMomentumBlock(opts.momentum) : "";
+  let phraseBanBlock = "";
+  if (opts?.recentAssistantPhrases && opts.recentAssistantPhrases.length > 0) {
+    const banned = opts.recentAssistantPhrases
+      .slice(-3)
+      .map((p) => `  - "${p}"`)
+      .join("\n");
+    phraseBanBlock = `\n\nPHRASE VARIATION (critical):\nYou recently said these — do NOT repeat or closely paraphrase them this turn:\n${banned}\nUse completely different wording to express the same idea.`;
+  }
 
   const domainSection = domainPackBlock?.trim()
     ? `\n\n${domainPackBlock.trim()}\n\nINDUSTRY_LABEL FOR ADAPTATION: Use the VERTICAL LABEL above; stay within CONFIG FACTS and DOMAIN GUIDANCE.`
@@ -250,7 +362,7 @@ CURRENT MODE: ${state.mode.toUpperCase()}
 MODE BEHAVIOR: ${MODE_HINTS[state.mode]}
 ACTIVE QUESTION (unanswered - address before anything else): ${state.activeQuestion ?? "none"}
 ACTIVE QUESTION RESOLVED: ${state.questionAnswered ? "yes" : "no"}
-BOOKING POLICY: ${bookingRule}
+BOOKING POLICY: ${bookingRule}${momentumBlock}${phraseBanBlock}
 
 CONTEXT AWARENESS:
 * Stay on the current topic (${industry}) until the caller changes it.

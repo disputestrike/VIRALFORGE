@@ -23,7 +23,12 @@ export type VoiceControllerFailureBucket =
   | "full_response_guardrail"
   | "loop_detected"
   | "quality_pass"
-  | "quality_issues";
+  | "quality_issues"
+  // ── Conversation quality buckets ────────────────────────────────────────
+  | "frustration_not_handled"
+  | "response_too_repetitive"
+  | "momentum_ignored"
+  | "graceful_exit_delayed";
 
 export function logVoiceControllerEvent(
   callId: string,

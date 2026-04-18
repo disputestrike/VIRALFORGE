@@ -94,7 +94,39 @@ export function detectEndCallIntent(transcript: string): boolean {
     "that's all", "stop calling", "remove me", "don't call",
     "goodbye", "bye", "i have to go", "i'm busy",
   ];
-  return endPhrases.some(p => t === p || t.startsWith(p) || t.endsWith(p));
+  if (endPhrases.some(p => t === p || t.startsWith(p) || t.endsWith(p))) return true;
+  // Frustration escalation — repeated "go away" / "stop" / "no" signals should end the call
+  if (detectFrustrationEscalation(transcript)) return true;
+  return false;
+}
+
+/**
+ * Detect high-frustration signals that warrant an immediate graceful exit.
+ * These are stronger than a simple objection — the caller is actively pushing back.
+ */
+export function detectFrustrationEscalation(transcript: string): boolean {
+  const t = transcript.toLowerCase().trim();
+  const frustrationPhrases = [
+    "go away",
+    "leave me alone",
+    "stop it",
+    "i said no",
+    "please stop",
+    "quit it",
+    "get off",
+    "hang up",
+    "stop calling me",
+    "don't call me",
+    "don't want",
+    "i don't want this",
+    "i don't want to",
+  ];
+  if (frustrationPhrases.some((p) => t.includes(p))) return true;
+  // Repeated "no" (e.g. "no no no", "no no") — strong rejection signal
+  if (/\bno\b.*\bno\b/i.test(t)) return true;
+  // "go away" repeated or emphatic
+  if (/go away/i.test(t)) return true;
+  return false;
 }
 
 export function isObjection(transcript: string): boolean {
