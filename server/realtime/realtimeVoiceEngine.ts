@@ -1104,6 +1104,7 @@ export function createCallEngine(opts: EngineOptions): void {
   }
 
   function stopSpeaking() {
+    const hadActiveSpeech = isSpeaking || Boolean(cartesiaContextId);
     resetAssistantPlaybackClock();
     clearUserSilenceReengageTimer();
     clearInterruptAckPending();
@@ -1116,7 +1117,7 @@ export function createCallEngine(opts: EngineOptions): void {
     // Empty = reject stray chunks until a new utterance sets a fresh context_id
     cartesiaContextId = "";
     // Clear SignalWire audio buffer
-    if (streamSid && sigWs.readyState === WebSocket.OPEN) {
+    if (hadActiveSpeech && streamSid && sigWs.readyState === WebSocket.OPEN) {
       sigWs.send(JSON.stringify({ event: "clear", streamSid }));
     }
   }
@@ -1949,8 +1950,8 @@ export function createCallEngine(opts: EngineOptions): void {
     if (epoch !== generationEpoch || isEnded || !voiceStreamReady()) return;
     const line = speakableLine(text);
     if (!line) return;
-    transientBridgeActive = true;
     stopSpeaking();
+    transientBridgeActive = true;
     cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     cartesiaSend(line, false);
     traceEvent(callId, "transient_bridge_sent", {
@@ -2079,6 +2080,7 @@ export function createCallEngine(opts: EngineOptions): void {
       }
       if (transientBridgeActive) {
         stopSpeaking();
+        transientBridgeActive = false;
       }
       // Each clause gets its own fresh Cartesia context to avoid "Context has closed" errors.
       cartesiaContextId = "";
