@@ -120,12 +120,12 @@ export const metricsRouter = router({
     .query(async ({ ctx, input }) => {
       const { fromDate } = parseDateRange(input?.timeRange ?? "24h");
       const { getActivityLogs } = await import("../../db");
-      const logs = await getActivityLogs({ userId: ctx.user.id, limit: 500 });
-
-      const automationEvents = logs.filter((l) => {
-        if (!l?.createdAt || l.createdAt < fromDate) return false;
-        if (l.entityType !== "lead") return false;
-        return l.action === "automation_failed" || l.action === "automation_completed";
+      const automationEvents = await getActivityLogs({
+        userId: ctx.user.id,
+        limit: 500,
+        entityType: "lead",
+        actions: ["automation_failed", "automation_completed"],
+        fromDate,
       });
 
       const failed = automationEvents.filter((l) => l.action === "automation_failed");
@@ -176,13 +176,13 @@ export const metricsRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Lead does not belong to current user" });
       }
 
-      const recent = await getActivityLogs({ userId: ctx.user.id, limit: 100 });
-      const lastRetry = recent.find(
-        (a) =>
-          a.entityType === "lead" &&
-          a.entityId === input.leadId &&
-          a.action === "automation_requeued"
-      );
+      const [lastRetry] = await getActivityLogs({
+        userId: ctx.user.id,
+        entityType: "lead",
+        entityId: input.leadId,
+        actions: ["automation_requeued"],
+        limit: 1,
+      });
       if (lastRetry?.createdAt) {
         const elapsedMs = Date.now() - new Date(lastRetry.createdAt).getTime();
         if (elapsedMs < 60_000) {

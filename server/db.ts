@@ -587,12 +587,23 @@ export async function logActivity(data: { userId?: number; entityType: string; e
   }
 }
 
-export async function getActivityLogs(opts?: { limit?: number; userId?: number }) {
+export async function getActivityLogs(opts?: {
+  limit?: number;
+  userId?: number;
+  entityType?: string;
+  entityId?: number;
+  actions?: string[];
+  fromDate?: Date;
+}) {
   const db = await getDb();
   if (!db) return [];
   const limit = opts?.limit ?? 50;
-  const conditions = [];
+  const conditions: any[] = [];
   if (opts?.userId != null) conditions.push(eq(activityLogs.userId, opts.userId));
+  if (opts?.entityType) conditions.push(eq(activityLogs.entityType, opts.entityType));
+  if (opts?.entityId != null) conditions.push(eq(activityLogs.entityId, opts.entityId));
+  if (opts?.actions?.length) conditions.push(inArray(activityLogs.action, opts.actions));
+  if (opts?.fromDate) conditions.push(gte(activityLogs.createdAt, opts.fromDate));
   const where = conditions.length ? and(...conditions) : undefined;
   return db.select().from(activityLogs).where(where).orderBy(desc(activityLogs.createdAt)).limit(limit);
 }
