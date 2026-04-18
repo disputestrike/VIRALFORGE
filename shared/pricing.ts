@@ -9,8 +9,10 @@ export type SelfServePlan = {
   minutes: number;
   numbers: number;
   industriesIncluded: string;
+  conversationEstimate: string;
   summary: string;
   bestFor: string;
+  whatItHandles: readonly string[];
   popular?: boolean;
   accentColor: string;
 };
@@ -22,8 +24,10 @@ export type EnterprisePlan = {
   minutes: string;
   numbers: string;
   industriesIncluded: string;
+  conversationEstimate: string;
   summary: string;
   bestFor: string;
+  whatItHandles: readonly string[];
   accentColor: string;
 };
 
@@ -36,8 +40,14 @@ export const SELF_SERVE_PLANS: SelfServePlan[] = [
     minutes: 500,
     numbers: 1,
     industriesIncluded: "1 included",
-    summary: "Turn missed calls into booked revenue without adding headcount.",
+    conversationEstimate: "~50-150 conversations",
+    summary: "Capture missed inbound demand and book more opportunities without adding headcount.",
     bestFor: "Owner-led teams that need a real front desk on the phone.",
+    whatItHandles: [
+      "After-hours and overflow call coverage",
+      "Lead capture, qualification, and appointment booking",
+      "SMS follow-up for missed callers and no-answer moments",
+    ],
     accentColor: "#60a5fa",
   },
   {
@@ -48,8 +58,14 @@ export const SELF_SERVE_PLANS: SelfServePlan[] = [
     minutes: 1500,
     numbers: 1,
     industriesIncluded: "1 included",
-    summary: "The core ApexAI plan for active SMB teams that live on the phone.",
+    conversationEstimate: "~150-400 conversations",
+    summary: "Capture and convert inbound demand with full coverage plus automated follow-up.",
     bestFor: "Growing teams that need inbound coverage plus outbound follow-up.",
+    whatItHandles: [
+      "Consistent inbound coverage during busy hours",
+      "Fast missed-call recovery before leads go cold",
+      "Follow-up workflows for active prospects and booked next steps",
+    ],
     popular: true,
     accentColor: "#22c55e",
   },
@@ -61,8 +77,14 @@ export const SELF_SERVE_PLANS: SelfServePlan[] = [
     minutes: 4000,
     numbers: 3,
     industriesIncluded: "All packs",
-    summary: "More capacity, more numbers, and broader deployment without complexity.",
+    conversationEstimate: "~400-1,200 conversations",
+    summary: "Run higher-volume demand capture across more lines, locations, and campaigns.",
     bestFor: "Mid-market operators running multiple lines, campaigns, or locations.",
+    whatItHandles: [
+      "Multiple phone numbers, locations, or campaign entry points",
+      "Broader routing, escalation, and human handoff coverage",
+      "Higher follow-up and outbound volume without operational sprawl",
+    ],
     accentColor: "#f59e0b",
   },
 ];
@@ -74,8 +96,14 @@ export const ENTERPRISE_PLAN: EnterprisePlan = {
   minutes: "Custom",
   numbers: "Custom",
   industriesIncluded: "Custom",
-  summary: "Dedicated rollout, custom integrations, compliance needs, and higher-volume deployment.",
+  conversationEstimate: "High-volume or complex deployment",
+  summary: "Custom deployment for regulated teams, multi-location operations, and integration-heavy rollouts.",
   bestFor: "Teams with multi-location, regulated, or high-volume voice operations.",
+  whatItHandles: [
+    "Complex routing, compliance, and escalation requirements",
+    "CRM, calendar, and workflow integration support",
+    "Deployment planning for higher-volume or multi-team operations",
+  ],
   accentColor: "#c084fc",
 };
 
@@ -103,13 +131,25 @@ export const PLATFORM_ADD_ONS = [
   { name: "Additional industry pack", priceLabel: "$49/mo", description: "Train one workspace for another vertical without opening a second account." },
   { name: "Extra phone numbers", priceLabel: "Custom", description: "Add more coverage lines as your locations, campaigns, or teams expand." },
   { name: "Outbound campaign volume", priceLabel: "Custom", description: "Scale AI outbound calling and follow-up beyond the default Growth/Scale usage." },
-  { name: "Enterprise onboarding", priceLabel: "Custom", description: "White-glove rollout, custom integrations, and higher-compliance requirements." },
+  { name: "Advanced setup and deployment", priceLabel: "Custom", description: "Optional rollout support for custom routing, integrations, compliance, or multi-location teams." },
 ] as const;
 
 export const DEFAULT_ROI_PLAN_TIER: CheckoutTier = "growth";
 
 export function getSelfServePlanByCheckoutTier(tier: CheckoutTier): SelfServePlan {
   return SELF_SERVE_PLANS.find((plan) => plan.checkoutTier === tier) ?? SELF_SERVE_PLANS[1]!;
+}
+
+export function getPublicPlanById(id: PublicPlanId): SelfServePlan | EnterprisePlan {
+  if (id === "enterprise") return ENTERPRISE_PLAN;
+  return SELF_SERVE_PLANS.find((plan) => plan.id === id) ?? SELF_SERVE_PLANS[1]!;
+}
+
+export function recommendPlanForMonthlyConversations(monthlyConversations: number): PublicPlanId {
+  if (monthlyConversations <= 150) return "starter";
+  if (monthlyConversations <= 450) return "growth";
+  if (monthlyConversations <= 1200) return "scale";
+  return "enterprise";
 }
 
 export function formatPlanLabel(plan: string | null | undefined): string {

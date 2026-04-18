@@ -2,7 +2,12 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, TrendingUp } from "lucide-react";
 import { Link } from "wouter";
-import { DEFAULT_ROI_PLAN_TIER, getSelfServePlanByCheckoutTier } from "@/lib/pricing";
+import {
+  DEFAULT_ROI_PLAN_TIER,
+  getPublicPlanById,
+  getSelfServePlanByCheckoutTier,
+  recommendPlanForMonthlyConversations,
+} from "@/lib/pricing";
 
 const D3 = "#000000";
 const BLUE = "#1d6ff4";
@@ -35,6 +40,8 @@ export default function ROICalculator() {
   const dailyGap = aiDailyRevenue - currentDailyRevenue;
   const monthlyGap = dailyGap * 30;
   const annualGap = dailyGap * 365;
+  const monthlyConversations = Math.round(aiContacts * 30);
+  const recommendedPlan = getPublicPlanById(recommendPlanForMonthlyConversations(monthlyConversations));
 
   const apexCost = getSelfServePlanByCheckoutTier(DEFAULT_ROI_PLAN_TIER).price;
   const annualCost = apexCost * 12;
@@ -157,12 +164,36 @@ export default function ROICalculator() {
             </p>
           </div>
 
-          <Link href="/dashboard" className="w-full min-w-0 block box-border">
-            <Button className="w-full min-w-0 min-h-[52px] text-base font-bold rounded-xl box-border" style={{ backgroundColor: BLUE }}>
-              Start free — see your dashboard
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-          </Link>
+          <div className="p-7 sm:p-8 rounded-2xl w-full min-w-0 box-border" style={{ backgroundColor: "rgba(29,111,244,0.08)", border: `1px solid ${BLUE}35` }}>
+            <p className="text-xs mb-2 font-semibold uppercase tracking-wider" style={{ color: `${BLUE}dd` }}>
+              Suggested starting plan
+            </p>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-2xl sm:text-3xl font-black text-white">{recommendedPlan.name}</p>
+                <p className="mt-2 text-sm leading-relaxed" style={{ color: DIM2 }}>
+                  Based on roughly {fmt(monthlyConversations)} conversations per month, most teams like yours start here.
+                </p>
+              </div>
+              <p className="text-sm font-semibold" style={{ color: BLUE }}>
+                {recommendedPlan.conversationEstimate}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <a href="/pricing" className="w-full min-w-0 block box-border">
+              <Button variant="outline" className="w-full min-w-0 min-h-[52px] text-base font-semibold rounded-xl box-border border-white/20 bg-transparent text-white hover:bg-white/10">
+                Review pricing guidance
+              </Button>
+            </a>
+            <Link href="/dashboard" className="w-full min-w-0 block box-border">
+              <Button className="w-full min-w-0 min-h-[52px] text-base font-bold rounded-xl box-border" style={{ backgroundColor: BLUE }}>
+                Start free — see your dashboard
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 
