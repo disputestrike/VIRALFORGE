@@ -618,6 +618,13 @@ export function createCallEngine(opts: EngineOptions): void {
     );
   }
 
+  function rememberAssistantResponse(text: string): void {
+    const normalized = text.trim();
+    if (!normalized) return;
+    recentAssistantTexts.push(normalized);
+    if (recentAssistantTexts.length > 5) recentAssistantTexts.shift();
+  }
+
   function buildIndustryFitAnswer(transcript: string): string | null {
     const t = transcript.toLowerCase();
     const asksForCapability =
@@ -634,6 +641,14 @@ export function createCallEngine(opts: EngineOptions): void {
       /\bsolar\b/.test(industry);
 
     if (solarFit) {
+      const repeatedSolarAnswer = recentAssistantTexts.some(
+        (recent) =>
+          /\bsolar companies\b/i.test(recent) &&
+          /\b(inbound calls|follow up with new leads|book appointments|send reminders)\b/i.test(recent)
+      );
+      if (repeatedSolarAnswer) {
+        return "Yes — for solar, the core wins are inbound lead capture, fast outbound follow-up, and booked appointments on the calendar. Which one do you want me to break down first?";
+      }
       if (/\bexact|exactly|tell me more|what you can do|what do you do\b/.test(t)) {
         return "For solar companies, ApexAI answers inbound calls, follows up with new leads in seconds, qualifies homeowners, books appointments on the calendar, and sends text confirmations and reminders. We can also answer common solar questions, reactivate old leads, and route hot prospects to your team right away.";
       }
@@ -2279,8 +2294,7 @@ export function createCallEngine(opts: EngineOptions): void {
       loopTurnCount = 0;
     }
     // Track recent responses for loop detection
-    recentAssistantTexts.push(cleanResponse);
-    if (recentAssistantTexts.length > 5) recentAssistantTexts.shift();
+    rememberAssistantResponse(cleanResponse);
     // ── END GUARDRAIL LAYER 3 ─────────────────────────────────────────────
 
     // Note: we do NOT re-send clauses here — they were already sent during streaming above.
@@ -2321,6 +2335,7 @@ export function createCallEngine(opts: EngineOptions): void {
     const line = speakableLine(text);
     cartesiaSend(line, false);
     appendHistory("assistant", line);
+    rememberAssistantResponse(line);
   }
 
   // ── Tool execution ────────────────────────────────────────────────────────
