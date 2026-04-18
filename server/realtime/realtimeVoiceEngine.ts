@@ -427,6 +427,7 @@ export function createCallEngine(opts: EngineOptions): void {
   let lastHandledUserTranscript = "";
   let lastHandledUserAt = 0;
   let transientBridgeActive = false;
+  let awaitingFirstAudioForTurn = false;
   /** Optional μ-law jitter buffer before Deepgram (WS11). */
   let inboundJitterQueue: Buffer[] = [];
   /** APEX strict blueprint state (intent lock, escalation, recovery). */
@@ -1150,11 +1151,14 @@ export function createCallEngine(opts: EngineOptions): void {
           if (streamSid && sigWs.readyState === WebSocket.OPEN) {
             if (greetingDone) {
               logSttFinalToTtsLatencyIfPending(callId);
-              // Record tts_first_audio on the very first chunk after user speech
-              recordLatencyEvent(activeSessionId ?? callId, "tts_first_audio", {
-                callId,
-                bytes: Buffer.from(msg.data, "base64").length,
-              });
+              // Record first-audio exactly once per assistant turn.
+              if (awaitingFirstAudioForTurn) {
+                awaitingFirstAudioForTurn = false;
+                recordLatencyEvent(activeSessionId ?? callId, "tts_first_audio", {
+                  callId,
+                  bytes: Buffer.from(msg.data, "base64").length,
+                });
+              }
             }
             sigWs.send(JSON.stringify({
               event: "media",
@@ -1286,6 +1290,7 @@ export function createCallEngine(opts: EngineOptions): void {
     resetAssistantPlaybackClock();
     clearUserSilenceReengageTimer();
     clearInterruptAckPending();
+    awaitingFirstAudioForTurn = false;
     assistantResponseInProgress = false;
     transientBridgeActive = false;
     if (cartesiaWs && cartesiaWs.readyState === WebSocket.OPEN && cartesiaContextId) {
@@ -2271,6 +2276,11 @@ export function createCallEngine(opts: EngineOptions): void {
         if (clausesSent === 0) {
           const safeSpeak = speakableLine(clauseCheck.text);
           if (safeSpeak) {
+            recordLatencyEvent(activeSessionId ?? callId, "tts_start", {
+              clauseCount: 1,
+              callId,
+            });
+            awaitingFirstAudioForTurn = true;
             cartesiaContextId = "";
             cartesiaSend(safeSpeak, false);
             clausesSent++;
@@ -2291,9 +2301,20 @@ export function createCallEngine(opts: EngineOptions): void {
         stopSpeaking();
         transientBridgeActive = false;
       }
-      // Each clause gets its own fresh Cartesia context to avoid "Context has closed" errors.
-      cartesiaContextId = "";
-      cartesiaSend(speakable, false);
+      // Keep a single Cartesia context for the whole streamed response turn.
+      // Creating a new context per clause causes late-arriving chunks from prior clauses
+      // to be treated as stale and dropped by context filtering, which sounds like silence.
+      if (clausesSent === 0) {
+        recordLatencyEvent(activeSessionId ?? callId, "tts_start", {
+          clauseCount: 0,
+          callId,
+        });
+        awaitingFirstAudioForTurn = true;
+        cartesiaContextId = "";
+        cartesiaSend(speakable, false);
+      } else {
+        cartesiaSend(speakable, true);
+      }
       clausesSent++;
       traceEvent(callId, clausesSent === 1 ? "tts_first_clause_streaming" : "tts_clause", {
         clause: speakable.slice(0, 60),
@@ -2420,14 +2441,7 @@ export function createCallEngine(opts: EngineOptions): void {
       // We log it here for post-call QA. In future: pre-stream the full text before TTS.
     }
 
-    // Record TTS start before first clause dispatch
     const toSpeak = parts.length > 0 ? parts : [cleanResponse];
-    if (toSpeak.some((s) => s.trim())) {
-      recordLatencyEvent(activeSessionId ?? callId, "tts_start", {
-        clauseCount: toSpeak.length,
-        callId,
-      });
-    }
 
     // Loop detection — if agent is saying the same thing repeatedly
     if (isResponseLooping(cleanResponse, recentAssistantTexts)) {
@@ -2477,6 +2491,13 @@ export function createCallEngine(opts: EngineOptions): void {
     // Always start a new Cartesia context — reusing ctx after greeting without a timely
     // `done` causes 400 "unable to infer voice mode" and loops the sorry line.
     cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    if (greetingDone) {
+      recordLatencyEvent(activeSessionId ?? callId, "tts_start", {
+        clauseCount: 1,
+        callId,
+      });
+      awaitingFirstAudioForTurn = true;
+    }
     // Single utterance with continue:false completes and closes the Cartesia context — do NOT flush.
     // Flushing immediately hits "Context has closed" and can prevent any audio from playing.
     const line = speakableLine(text);
