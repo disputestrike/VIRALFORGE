@@ -130,25 +130,21 @@ export function registerWebchatPublicRoutes(app: Express) {
         description: `Webchat lead from widget "${widget.name}"`,
       });
 
-      const { emitZapierEvent } = await import("./services/zapierEmit");
-      void emitZapierEvent(widget.userId, "lead.created", {
-        leadId,
-        score,
-        segment,
-        firstName,
-        lastName,
-        source: "webchat",
+      const { addAutomationJob } = await import("./services/queue");
+      await addAutomationJob({
+        action: "lead.created",
+        userId: widget.userId,
+        payload: {
+          leadId,
+          score,
+          segment,
+          firstName,
+          lastName,
+          source: "webchat",
+          email: email ?? undefined,
+          phone: phone ?? undefined,
+        },
       });
-
-      const { runEmailSequencesForLeadCreated } = await import("./services/emailSequenceTrigger");
-      void runEmailSequencesForLeadCreated(widget.userId, {
-        id: leadId,
-        firstName,
-        lastName,
-        email: email ?? null,
-        phone: phone ?? null,
-        company: null,
-      }).catch((e) => console.warn("[EmailSequence] webchat:", e));
 
       res.status(201).json({ ok: true, leadId });
     } catch (e) {

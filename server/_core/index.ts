@@ -869,16 +869,21 @@ async function startServer() {
             segment: "warm",
             createdBy: ownerId ?? null,
           });
-          const { runEmailSequencesForLeadCreated } = await import("./services/emailSequenceTrigger");
           if (ownerId) {
-            void runEmailSequencesForLeadCreated(ownerId, {
-              id: insertId,
-              firstName: "Inbound",
-              lastName: From.slice(-4),
-              phone: From,
-              email: null,
-              company: null,
-            }).catch((e) => console.warn("[EmailSequence] voice/inbound:", e));
+            const { addAutomationJob } = await import("./services/queue");
+            await addAutomationJob({
+              action: "lead.created",
+              userId: ownerId,
+              payload: {
+                leadId: insertId,
+                score: 60,
+                segment: "warm",
+                firstName: "Inbound",
+                lastName: From.slice(-4),
+                phone: From,
+                source: "inbound_call",
+              },
+            });
           }
           lead = await db.getLeadById(insertId);
         }
@@ -1102,15 +1107,20 @@ ${ringXml}  <Connect action="${statusCallback}" method="POST">
           phone: From, source: "inbound_call",
           status: "new", score: 60, segment: "warm", createdBy: ownerId,
         });
-        const { runEmailSequencesForLeadCreated } = await import("./services/emailSequenceTrigger");
-        void runEmailSequencesForLeadCreated(ownerId, {
-          id: insertId,
-          firstName: "Inbound",
-          lastName: String(From).slice(-4),
-          phone: From,
-          email: null,
-          company: null,
-        }).catch((e) => console.warn("[EmailSequence] voice/stream:", e));
+        const { addAutomationJob } = await import("./services/queue");
+        await addAutomationJob({
+          action: "lead.created",
+          userId: ownerId,
+          payload: {
+            leadId: insertId,
+            score: 60,
+            segment: "warm",
+            firstName: "Inbound",
+            lastName: String(From).slice(-4),
+            phone: From,
+            source: "inbound_call",
+          },
+        });
         lead = await dbMod.getLeadById(insertId);
       } else {
         ownerId = (lead as { createdBy?: number })?.createdBy ?? ownerId;

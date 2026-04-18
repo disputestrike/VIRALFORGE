@@ -35,6 +35,17 @@ export async function assertLeadCreateAllowed(userId: number): Promise<void> {
   }
 }
 
+export async function assertLeadBulkCreateAllowed(userId: number, additionalLeads: number): Promise<void> {
+  const { plan, usage } = await getPlanAndUsage(userId);
+  const cap = PLAN_POLICIES[plan].monthlyLeads;
+  if (cap == null) return;
+  if (usage.leadsThisMonth + Math.max(0, additionalLeads) > cap) {
+    throw new Error(
+      `PLAN_LIMIT_LEADS:${plan}:${usage.leadsThisMonth + Math.max(0, additionalLeads)}/${cap}`
+    );
+  }
+}
+
 export async function assertQueuedCallAllowance(userId: number, additionalCalls: number): Promise<void> {
   const { plan, usage } = await getPlanAndUsage(userId);
   const cap = PLAN_POLICIES[plan].monthlyCalls;

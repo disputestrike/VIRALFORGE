@@ -51,15 +51,22 @@ export const webhooksRouter = router({
         });
 
         const insertId = result.insertId;
-        const { runEmailSequencesForLeadCreated } = await import('../_core/services/emailSequenceTrigger');
-        void runEmailSequencesForLeadCreated(1, {
-          id: insertId,
-          firstName: input.firstName,
-          lastName: input.lastName,
-          email: input.email,
-          phone: input.phone,
-          company: input.company,
-        }).catch((e) => console.warn('[EmailSequence] omni:', e));
+        const { addAutomationJob } = await import('../_core/services/queue');
+        await addAutomationJob({
+          action: 'lead.created',
+          userId: 1,
+          payload: {
+            leadId: insertId,
+            score: 75,
+            segment: 'hot',
+            firstName: input.firstName,
+            lastName: input.lastName,
+            email: input.email,
+            phone: input.phone,
+            company: input.company,
+            source: 'omni_ai',
+          },
+        });
         console.log(`[Webhooks] Lead ingested → insertId: ${insertId} | source: omniAiLead`);
         return { success: true, leadId: insertId };
       } catch (error) {

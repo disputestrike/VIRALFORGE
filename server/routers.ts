@@ -33,7 +33,7 @@ import { metricsRouter } from "./_core/routes/metricsRouter";
 import { ENV } from "./_core/env";
 import { normalizeToE164US } from "./_core/phoneE164";
 import { scoreFromRules, type RuleEntry } from "./_core/services/leadScoringApply";
-import { assertLeadCreateAllowed, assertQueuedCallAllowance } from "./_core/services/billingPolicy";
+import { assertLeadBulkCreateAllowed, assertLeadCreateAllowed, assertQueuedCallAllowance } from "./_core/services/billingPolicy";
 import { assertOutboundDialAllowed } from "./realtime/outboundCompliance";
 import {
   getPublicDemoConfig,
@@ -283,19 +283,25 @@ const leadsRouter = router({
     .input(z.array(z.object({ firstName: z.string(), lastName: z.string(), email: z.string().optional(), phone: z.string().optional(), company: z.string().optional(), industry: z.string().optional(), title: z.string().optional() })))
     .mutation(async ({ input, ctx }) => {
       let created = 0;
-      const { runEmailSequencesForLeadCreated } = await import("./_core/services/emailSequenceTrigger");
+      await assertLeadBulkCreateAllowed(ctx.user.id, input.length);
       for (const lead of input) {
         const score = calculateLeadScore(lead);
         const segment = score >= 70 ? "hot" : score >= 40 ? "warm" : "cold";
         const { insertId } = await db.createLead({ ...lead, score, segment, createdBy: ctx.user.id });
-        void runEmailSequencesForLeadCreated(ctx.user.id, {
-          id: insertId,
-          firstName: lead.firstName,
-          lastName: lead.lastName,
-          email: lead.email,
-          company: lead.company,
-          phone: lead.phone,
-        }).catch((e) => console.warn("[EmailSequence] bulk:", e));
+        await queueService.addAutomationJob({
+          action: "lead.created",
+          userId: ctx.user.id,
+          payload: {
+            leadId: insertId,
+            score,
+            segment,
+            firstName: lead.firstName,
+            lastName: lead.lastName,
+            email: lead.email,
+            company: lead.company,
+            phone: lead.phone,
+          },
+        });
         created++;
       }
       await db.logActivity({ userId: ctx.user.id, entityType: "lead", action: "bulk_import", description: `Imported ${created} leads` });
@@ -679,10 +685,12 @@ const voiceAIRouter = router({
         }
 
         // INTEGRATION: Queue the call job (asynchronous)
+        await assertQueuedCallAllowance(ctx.user.id, 1);
         const callJob = await queueService.addCallJob({
           leadId: input.leadId,
           campaignId: input.campaignId,
           script: input.script,
+          userId: ctx.user.id,
         });
 
         const jobId = (callJob as any)?.jobId || `job_${Date.now()}`;
@@ -1958,15 +1966,22 @@ const demoCallRouter = router({
           industry: input.industry,
           createdBy: demoOwnerId,
         });
-        const { runEmailSequencesForLeadCreated } = await import("./_core/services/emailSequenceTrigger");
-        void runEmailSequencesForLeadCreated(demoOwnerId, {
-          id: leadResult.insertId,
-          firstName: input.firstName,
-          lastName: "Demo",
-          email: input.email,
-          phone: input.phone,
-          company: null,
-        }).catch((e) => console.warn("[EmailSequence] demo:", e));
+        await assertQueuedCallAllowance(demoOwnerId, 1);
+        await queueService.addAutomationJob({
+          action: "lead.created",
+          userId: demoOwnerId,
+          payload: {
+            leadId: leadResult.insertId,
+            score: 70,
+            segment: "hot",
+            firstName: input.firstName,
+            lastName: "Demo",
+            email: input.email,
+            phone: input.phone,
+            company: undefined,
+            source: "demo_call",
+          },
+        });
 
         const messageRow = await db.createMessage({
           leadId: leadResult.insertId,
@@ -2041,6 +2056,7 @@ const ghlRouter = router({
       }
 
       try {
+        await assertQueuedCallAllowance(1, 1);
         // Upsert lead
         let lead = await db.getLeadByPhone(input.phone);
         if (!lead) {
@@ -2057,15 +2073,21 @@ const ghlRouter = router({
             createdBy: 1,
           });
           lead = { id: result.insertId } as any;
-          const { runEmailSequencesForLeadCreated } = await import("./_core/services/emailSequenceTrigger");
-          void runEmailSequencesForLeadCreated(1, {
-            id: result.insertId,
-            firstName: input.firstName || "GHL",
-            lastName: input.lastName || "Lead",
-            email: input.email,
-            phone: input.phone,
-            company: null,
-          }).catch((e) => console.warn("[EmailSequence] ghl:", e));
+          await queueService.addAutomationJob({
+            action: "lead.created",
+            userId: 1,
+            payload: {
+              leadId: result.insertId,
+              score: 65,
+              segment: "warm",
+              firstName: input.firstName || "GHL",
+              lastName: input.lastName || "Lead",
+              email: input.email,
+              phone: input.phone,
+              company: undefined,
+              source: "gohighlevel",
+            },
+          });
         }
 
         // Queue outbound call
