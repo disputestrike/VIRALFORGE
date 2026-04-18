@@ -318,6 +318,34 @@ function buildMock() {
       else _systemConfig.push({ id: nextId("systemConfig"), key, value, category, updatedAt: new Date() });
     }),
 
+    getDisabledUserIds: vi.fn().mockImplementation(async () => {
+      const row = _systemConfig.find((c) => c.key === "disabled_user_ids");
+      if (!row || !row.value) return [];
+      return String(row.value)
+        .split(",")
+        .map((part) => Number.parseInt(part.trim(), 10))
+        .filter((id) => Number.isInteger(id) && id > 0);
+    }),
+
+    setDisabledUserIds: vi.fn().mockImplementation(async (userIds: number[]) => {
+      const normalized = Array.from(new Set(userIds.filter((id) => Number.isInteger(id) && id > 0))).sort((a, b) => a - b);
+      const value = normalized.join(",");
+      const idx = _systemConfig.findIndex((c) => c.key === "disabled_user_ids");
+      if (idx !== -1) _systemConfig[idx] = { ..._systemConfig[idx], value, category: "security", updatedAt: new Date() };
+      else _systemConfig.push({ id: nextId("systemConfig"), key: "disabled_user_ids", value, category: "security", updatedAt: new Date() });
+      return normalized;
+    }),
+
+    isUserDisabled: vi.fn().mockImplementation(async (userId: number) => {
+      const row = _systemConfig.find((c) => c.key === "disabled_user_ids");
+      if (!row || !row.value) return false;
+      const ids = String(row.value)
+        .split(",")
+        .map((part) => Number.parseInt(part.trim(), 10))
+        .filter((id) => Number.isInteger(id) && id > 0);
+      return ids.includes(userId);
+    }),
+
     // ─── Integrations (Zapier / lead scoring) ─────────────────────────────────
     getDefaultLeadScoringRule: vi.fn().mockResolvedValue(null),
     getZapierWebhook: vi.fn().mockResolvedValue(null),

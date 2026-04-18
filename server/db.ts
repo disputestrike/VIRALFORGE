@@ -799,6 +799,38 @@ export async function setSystemConfig(key: string, value: string, category = "ge
     .onDuplicateKeyUpdate({ set: { value, category } });
 }
 
+const DISABLED_USER_IDS_CONFIG_KEY = "disabled_user_ids";
+
+function parseDisabledUserIdsValue(value: string | null | undefined): number[] {
+  if (!value) return [];
+  return Array.from(
+    new Set(
+      value
+        .split(",")
+        .map((part) => Number.parseInt(part.trim(), 10))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )
+  ).sort((a, b) => a - b);
+}
+
+export async function getDisabledUserIds(): Promise<number[]> {
+  const configRows = await getSystemConfig();
+  const disabled = configRows.find((row) => row.key === DISABLED_USER_IDS_CONFIG_KEY)?.value;
+  return parseDisabledUserIdsValue(disabled);
+}
+
+export async function setDisabledUserIds(userIds: number[]): Promise<number[]> {
+  const normalized = Array.from(new Set(userIds.filter((id) => Number.isInteger(id) && id > 0))).sort((a, b) => a - b);
+  await setSystemConfig(DISABLED_USER_IDS_CONFIG_KEY, normalized.join(","), "security");
+  return normalized;
+}
+
+export async function isUserDisabled(userId: number): Promise<boolean> {
+  if (!Number.isInteger(userId) || userId <= 0) return false;
+  const disabledUserIds = await getDisabledUserIds();
+  return disabledUserIds.includes(userId);
+}
+
 export async function listKnowledgeBases(userId: number) {
   const db = await getDb();
   if (!db) return [];

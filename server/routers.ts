@@ -1225,6 +1225,8 @@ const onboardingRouter = router({
 const adminRouter = router({
   users: adminProcedure.query(async () => db.getAllUsers()),
 
+  disabledUserIds: adminProcedure.query(async () => db.getDisabledUserIds()),
+
   updateUserRole: adminProcedure
     .input(z.object({ userId: z.number(), role: z.enum(["user", "admin"]) }))
     .mutation(async ({ input, ctx }) => {
@@ -1256,6 +1258,52 @@ const adminRouter = router({
       await db.updateUserRole(input.userId, input.role);
       await db.logActivity({ userId: ctx.user.id, entityType: "user", entityId: input.userId, action: "role_updated", description: `Role changed to ${input.role}` });
       return { success: true };
+    }),
+
+  setUserDisabled: adminProcedure
+    .input(z.object({ userId: z.number(), disabled: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      const targetUser = await db.getUserById(input.userId);
+      if (!targetUser) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+      }
+
+      if (input.disabled && input.userId === ctx.user.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot disable your own account" });
+      }
+
+      if (input.disabled && targetUser.openId === ENV.ownerOpenId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "The owner account cannot be disabled" });
+      }
+
+      const disabledUserIds = await db.getDisabledUserIds();
+      const nextDisabledUserIds = new Set(disabledUserIds);
+
+      if (input.disabled) {
+        nextDisabledUserIds.add(input.userId);
+      } else {
+        nextDisabledUserIds.delete(input.userId);
+      }
+
+      if (input.disabled && targetUser.role === "admin") {
+        const users = await db.getAllUsers();
+        const activeAdmins = users.filter((u) => u.role === "admin" && !nextDisabledUserIds.has(u.id));
+        if (activeAdmins.length < 1) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "At least one active admin is required" });
+        }
+      }
+
+      const normalized = await db.setDisabledUserIds(Array.from(nextDisabledUserIds));
+      await db.logActivity({
+        userId: ctx.user.id,
+        entityType: "user",
+        entityId: input.userId,
+        action: input.disabled ? "user_disabled" : "user_reactivated",
+        description: input.disabled
+          ? `Disabled user ${targetUser.email ?? targetUser.openId}`
+          : `Reactivated user ${targetUser.email ?? targetUser.openId}`,
+      });
+      return { success: true, disabledUserIds: normalized };
     }),
 
   activityLogs: adminProcedure.input(z.object({ limit: z.number().optional() }).optional()).query(async ({ input }) => db.getActivityLogs({ limit: input?.limit ?? 50 })),
@@ -1293,6 +1341,241 @@ const adminRouter = router({
   voiceMetricLatencySummary: adminProcedure
     .input(z.object({ sampleLimit: z.number().min(10).max(2000).optional() }).optional())
     .query(async ({ input }) => db.getVoiceMetricLatencyStats(input?.sampleLimit ?? 500)),
+
+  exportAudit: adminProcedure
+    .input(
+      z
+        .object({
+          days: z.number().int().min(1).max(365).optional(),
+          format: z.enum(["csv", "json"]).optional(),
+        })
+        .optional()
+    )
+    .mutation(async ({ input }) => {
+      const days = input?.days ?? 7;
+      const format = input?.format ?? "csv";
+      const fromDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+      const [logs, configRows, users] = await Promise.all([
+        db.getActivityLogs({ limit: 5000, fromDate }),
+        db.getSystemConfig(),
+        db.getAllUsers(),
+      ]);
+
+      if (format === "json") {
+        const payload = {
+          exportedAt: new Date().toISOString(),
+          lookbackDays: days,
+          activityCount: logs.length,
+          configCount: configRows.length,
+          userCount: users.length,
+          activityLogs: logs,
+          systemConfig: configRows,
+          users: users.map((u) => ({
+            id: u.id,
+            openId: u.openId,
+            email: u.email,
+            role: u.role,
+            createdAt: u.createdAt,
+            lastSignedIn: u.lastSignedIn,
+          })),
+        };
+        return {
+          fileName: `apexai-audit-${days}d-${Date.now()}.json`,
+          mimeType: "application/json",
+          content: JSON.stringify(payload, null, 2),
+          rowCount: logs.length,
+        };
+      }
+
+      const csvEscape = (value: unknown) => {
+        if (value == null) return "";
+        const text = String(value);
+        if (text.includes(",") || text.includes("\n") || text.includes('"')) {
+          return `"${text.replace(/"/g, '""')}"`;
+        }
+        return text;
+      };
+
+      const rows: string[] = ["section,id,createdAt,userId,entityType,entityId,action,description,metadata,key,value,category,email,role,lastSignedIn"];
+
+      for (const log of logs) {
+        rows.push(
+          [
+            "activity",
+            log.id,
+            log.createdAt ? new Date(log.createdAt as unknown as string).toISOString() : "",
+            log.userId,
+            log.entityType,
+            log.entityId,
+            log.action,
+            log.description,
+            log.metadata ? JSON.stringify(log.metadata) : "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+          ]
+            .map(csvEscape)
+            .join(",")
+        );
+      }
+
+      for (const row of configRows) {
+        rows.push(
+          [
+            "config",
+            row.id,
+            row.updatedAt ? new Date(row.updatedAt as unknown as string).toISOString() : "",
+            "",
+            "config",
+            "",
+            "config_snapshot",
+            "",
+            "",
+            row.key,
+            row.value,
+            row.category,
+            "",
+            "",
+            "",
+          ]
+            .map(csvEscape)
+            .join(",")
+        );
+      }
+
+      for (const u of users) {
+        rows.push(
+          [
+            "user",
+            u.id,
+            u.createdAt ? new Date(u.createdAt as unknown as string).toISOString() : "",
+            u.id,
+            "user",
+            u.id,
+            "user_snapshot",
+            u.name ?? "",
+            "",
+            "",
+            "",
+            "",
+            u.email ?? "",
+            u.role,
+            u.lastSignedIn ? new Date(u.lastSignedIn as unknown as string).toISOString() : "",
+          ]
+            .map(csvEscape)
+            .join(",")
+        );
+      }
+
+      return {
+        fileName: `apexai-audit-${days}d-${Date.now()}.csv`,
+        mimeType: "text/csv;charset=utf-8",
+        content: rows.join("\n"),
+        rowCount: logs.length,
+      };
+    }),
+
+  integrationReadiness: adminProcedure.query(async () => {
+    const dbInst = await db.getDb();
+    const checklist = [
+      {
+        key: "database",
+        label: "Database",
+        ready: !!dbInst,
+        detail: dbInst ? "Connected" : "DATABASE_URL missing or unreachable",
+      },
+      {
+        key: "redis",
+        label: "Redis Queue",
+        ready: ENV.queueEnabled,
+        detail: ENV.queueEnabled ? "REDIS_URL configured" : "REDIS_URL missing",
+      },
+      {
+        key: "signalwire",
+        label: "SignalWire Voice/SMS",
+        ready:
+          ENV.signalwireProjectId !== "" &&
+          ENV.signalwireToken !== "" &&
+          ENV.signalwireSpaceUrl !== "" &&
+          ENV.signalwirePhoneNumber !== "",
+        detail:
+          ENV.signalwireProjectId !== "" &&
+          ENV.signalwireToken !== "" &&
+          ENV.signalwireSpaceUrl !== "" &&
+          ENV.signalwirePhoneNumber !== ""
+            ? `Configured (${ENV.signalwirePhoneNumber})`
+            : "Missing SIGNALWIRE_* values",
+      },
+      {
+        key: "stt",
+        label: "Deepgram STT",
+        ready: ENV.deepgramApiKey !== "",
+        detail: ENV.deepgramApiKey !== "" ? "Configured" : "DEEPGRAM_API_KEY missing",
+      },
+      {
+        key: "llm",
+        label: "Cerebras LLM",
+        ready: ENV.voiceLlmConfigured,
+        detail: ENV.voiceLlmConfigured ? `${ENV.cerebrasApiKeys.length} API key(s)` : "CEREBRAS_API_KEY missing",
+      },
+      {
+        key: "tts",
+        label: "TTS Provider",
+        ready: ENV.cartesiaApiKey !== "" || ENV.elevenLabsApiKey !== "",
+        detail:
+          ENV.cartesiaApiKey !== ""
+            ? "Cartesia configured"
+            : ENV.elevenLabsApiKey !== ""
+              ? "ElevenLabs configured"
+              : "CARTESIA_API_KEY / ELEVENLABS_API_KEY missing",
+      },
+      {
+        key: "email",
+        label: "Resend Email",
+        ready: ENV.emailEnabled,
+        detail: ENV.emailEnabled ? `From ${ENV.resendFromHeader}` : "RESEND_API_KEY missing",
+      },
+      {
+        key: "billing",
+        label: "Stripe Billing",
+        ready: ENV.stripeEnabled,
+        detail: ENV.stripeEnabled ? "Configured" : "STRIPE_SECRET_KEY missing",
+      },
+      {
+        key: "voice_runtime",
+        label: "Realtime Voice Runtime",
+        ready: ENV.voiceRealtimeReady,
+        detail: ENV.voiceRealtimeReady ? "STT + LLM + TTS ready" : "Missing one or more realtime voice dependencies",
+      },
+      {
+        key: "crm_oauth",
+        label: "CRM OAuth",
+        ready:
+          (ENV.hubspotClientId !== "" && ENV.hubspotClientSecret !== "") ||
+          (ENV.salesforceClientId !== "" && ENV.salesforceClientSecret !== "") ||
+          (ENV.pipedriveClientId !== "" && ENV.pipedriveClientSecret !== ""),
+        detail:
+          (ENV.hubspotClientId !== "" && ENV.hubspotClientSecret !== "") ||
+          (ENV.salesforceClientId !== "" && ENV.salesforceClientSecret !== "") ||
+          (ENV.pipedriveClientId !== "" && ENV.pipedriveClientSecret !== "")
+            ? "At least one CRM integration configured"
+            : "HubSpot/Salesforce/Pipedrive OAuth keys missing",
+      },
+    ] as const;
+
+    const readyCount = checklist.filter((item) => item.ready).length;
+    return {
+      generatedAt: new Date().toISOString(),
+      readyCount,
+      totalCount: checklist.length,
+      readinessScore: Math.round((readyCount / checklist.length) * 100),
+      blockers: checklist.filter((item) => !item.ready).map((item) => item.label),
+      checks: checklist,
+    };
+  }),
 });
 
 // INTEGRATION: Import webhooks router

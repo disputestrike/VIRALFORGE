@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Activity, AlertTriangle, BarChart3, CheckCircle, Database, Mic, Pencil, Phone, Save, Settings, Shield, Users, X } from "lucide-react";
+import { Activity, AlertTriangle, BarChart3, CheckCircle, Database, Download, Mic, Pencil, Phone, RefreshCw, Save, Settings, Shield, Users, X } from "lucide-react";
 import { useLocation } from "wouter";
 
 const DEFAULT_CONFIG = [
@@ -21,7 +21,7 @@ const DEFAULT_CONFIG = [
   { key: "daily_email_limit", value: "1000", category: "limits", label: "Daily Email Limit (per user)" },
   { key: "daily_call_limit", value: "200", category: "limits", label: "Daily Call Limit (per user)" },
   { key: "rate_limiting", value: "active", category: "limits", label: "Rate Limiting" },
-  { key: "twilio_status", value: "connected", category: "integrations", label: "Twilio (Voice/SMS)" },
+  { key: "signalwire_status", value: "connected", category: "integrations", label: "SignalWire (Voice/SMS)" },
   { key: "sendgrid_status", value: "connected", category: "integrations", label: "SendGrid (Email)" },
   { key: "linkedin_api_status", value: "pending", category: "integrations", label: "LinkedIn API" },
   { key: "crm_webhook", value: "not_configured", category: "integrations", label: "CRM Webhook URL" },
@@ -62,8 +62,10 @@ export default function Admin() {
   }, [loading, navigate, user]);
 
   const { data: users } = trpc.admin.users.useQuery(undefined, { enabled: isAdmin });
+  const { data: disabledUserIds } = trpc.admin.disabledUserIds.useQuery(undefined, { enabled: isAdmin });
   const { data: stats } = trpc.admin.systemStats.useQuery(undefined, { enabled: isAdmin });
   const { data: logs } = trpc.admin.activityLogs.useQuery({ limit: 100 }, { enabled: isAdmin });
+  const { data: integrationReadiness, refetch: refetchReadiness, isFetching: readinessRefreshing } = trpc.admin.integrationReadiness.useQuery(undefined, { enabled: isAdmin });
   const { data: campaigns } = trpc.campaigns.list.useQuery({}, { enabled: isAdmin });
   const { data: savedConfig } = trpc.admin.getConfig.useQuery(undefined, { enabled: isAdmin });
   const { data: voiceMetrics } = trpc.admin.voiceMetricEvents.useQuery({ limit: 200 }, { enabled: isAdmin });
@@ -77,6 +79,31 @@ export default function Admin() {
 
   const setConfigMutation = trpc.admin.setConfig.useMutation({
     onSuccess: () => { utils.admin.getConfig.invalidate(); setEditingKey(null); toast.success("Configuration saved"); },
+    onError: (e: { message: string }) => toast.error(e.message),
+  });
+
+  const setUserDisabledMutation = trpc.admin.setUserDisabled.useMutation({
+    onSuccess: (_, variables) => {
+      utils.admin.disabledUserIds.invalidate();
+      utils.admin.activityLogs.invalidate();
+      toast.success(variables.disabled ? "User disabled" : "User reactivated");
+    },
+    onError: (e: { message: string }) => toast.error(e.message),
+  });
+
+  const exportAuditMutation = trpc.admin.exportAudit.useMutation({
+    onSuccess: (payload) => {
+      const blob = new Blob([payload.content], { type: payload.mimeType });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = payload.fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+      toast.success(`Audit export downloaded (${payload.rowCount} activity rows)`);
+    },
     onError: (e: { message: string }) => toast.error(e.message),
   });
 
@@ -167,6 +194,7 @@ export default function Admin() {
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="campaigns">Campaigns</TabsTrigger>
           <TabsTrigger value="logs">Activity Logs</TabsTrigger>
+          <TabsTrigger value="integrations">Readiness</TabsTrigger>
           <TabsTrigger value="voice-metrics">Voice traces</TabsTrigger>
           <TabsTrigger value="config">System Config</TabsTrigger>
         </TabsList>
@@ -184,13 +212,16 @@ export default function Admin() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border">
-                      {["User", "Email", "Login Method", "Role", "Joined", "Last Sign In", "Actions"].map((h) => (
+                      {["User", "Email", "Login Method", "Role", "Account", "Joined", "Last Sign In", "Actions"].map((h) => (
                         <th key={h} className="text-left px-3 py-2 text-xs text-muted-foreground font-medium">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {(users ?? []).map((u) => (
+                      (() => {
+                        const isDisabled = (disabledUserIds ?? []).includes(u.id);
+                        return (
                       <tr key={u.id} className="border-b border-border/50 hover:bg-secondary/30">
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
@@ -207,28 +238,45 @@ export default function Admin() {
                             {u.role}
                           </Badge>
                         </td>
+                        <td className="px-3 py-2">
+                          <Badge variant="outline" className={`text-xs ${isDisabled ? "text-orange-300 border-orange-500/40 bg-orange-500/10" : "text-green-300 border-green-500/40 bg-green-500/10"}`}>
+                            {isDisabled ? "Disabled" : "Active"}
+                          </Badge>
+                        </td>
                         <td className="px-3 py-2 text-muted-foreground text-xs">{new Date(u.createdAt).toLocaleDateString()}</td>
                         <td className="px-3 py-2 text-muted-foreground text-xs">{new Date(u.lastSignedIn).toLocaleDateString()}</td>
                         <td className="px-3 py-2">
-                          {u.id !== user?.id && (
-                            <Select
-                              value={u.role}
-                              onValueChange={(role) => promoteUserMutation.mutate({ userId: u.id, role: role as "admin" | "user" })}
-                            >
-                              <SelectTrigger className="h-7 w-24 bg-secondary border-border text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="user">User</SelectItem>
-                                <SelectItem value="admin">Admin</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          )}
-                          {u.id === user?.id && (
+                          {u.id !== user?.id ? (
+                            <div className="flex items-center gap-2">
+                              <Select
+                                value={u.role}
+                                onValueChange={(role) => promoteUserMutation.mutate({ userId: u.id, role: role as "admin" | "user" })}
+                              >
+                                <SelectTrigger className="h-7 w-24 bg-secondary border-border text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="user">User</SelectItem>
+                                  <SelectItem value="admin">Admin</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                size="sm"
+                                variant={isDisabled ? "outline" : "secondary"}
+                                className="h-7 text-[11px]"
+                                onClick={() => setUserDisabledMutation.mutate({ userId: u.id, disabled: !isDisabled })}
+                                disabled={setUserDisabledMutation.isPending}
+                              >
+                                {isDisabled ? "Reactivate" : "Disable"}
+                              </Button>
+                            </div>
+                          ) : (
                             <span className="text-xs text-muted-foreground italic">You</span>
                           )}
                         </td>
                       </tr>
+                        );
+                      })()
                     ))}
                   </tbody>
                 </table>
@@ -236,6 +284,9 @@ export default function Admin() {
                   <div className="text-center py-8 text-muted-foreground text-sm">No users found</div>
                 )}
               </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Disabled users are blocked from new authenticated sessions until reactivated by an admin.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -310,6 +361,26 @@ export default function Admin() {
                 <Activity className="w-4 h-4 text-primary" /> Activity Logs
                 <span className="ml-auto text-xs text-muted-foreground font-normal">{logs?.length ?? 0} entries</span>
               </CardTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  onClick={() => exportAuditMutation.mutate({ days: 7, format: "csv" })}
+                  disabled={exportAuditMutation.isPending}
+                >
+                  <Download className="w-3.5 h-3.5 mr-1" /> Export 7d CSV
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  onClick={() => exportAuditMutation.mutate({ days: 30, format: "json" })}
+                  disabled={exportAuditMutation.isPending}
+                >
+                  <Download className="w-3.5 h-3.5 mr-1" /> Export 30d JSON
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-1 max-h-[500px] overflow-y-auto">
@@ -344,6 +415,70 @@ export default function Admin() {
                 {!logs?.length && (
                   <div className="text-center py-8 text-muted-foreground text-sm">No activity logs yet</div>
                 )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="integrations" className="mt-4">
+          <Card className="bg-card border-border">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Database className="w-4 h-4 text-primary" /> Integration readiness
+                <span className="ml-auto text-xs text-muted-foreground font-normal">
+                  {integrationReadiness?.readyCount ?? 0}/{integrationReadiness?.totalCount ?? 0} ready
+                </span>
+              </CardTitle>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  Live env readiness based on configured providers and runtime dependencies.
+                </p>
+                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => refetchReadiness()} disabled={readinessRefreshing}>
+                  <RefreshCw className={`w-3.5 h-3.5 mr-1 ${readinessRefreshing ? "animate-spin" : ""}`} /> Refresh
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="rounded-lg border border-border bg-secondary/20 px-3 py-2">
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Readiness score</div>
+                  <div className="text-lg font-semibold">{integrationReadiness?.readinessScore ?? 0}%</div>
+                </div>
+                <div className="rounded-lg border border-border bg-secondary/20 px-3 py-2 md:col-span-2">
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Blockers</div>
+                  <div className="text-xs mt-1 text-muted-foreground">
+                    {integrationReadiness?.blockers?.length ? integrationReadiness.blockers.join(" • ") : "No blockers detected"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      {[
+                        "Check",
+                        "Status",
+                        "Details",
+                      ].map((h) => (
+                        <th key={h} className="text-left px-3 py-2 text-xs text-muted-foreground font-medium">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(integrationReadiness?.checks ?? []).map((check) => (
+                      <tr key={check.key} className="border-b border-border/50 hover:bg-secondary/30">
+                        <td className="px-3 py-2 text-sm font-medium">{check.label}</td>
+                        <td className="px-3 py-2">
+                          <Badge variant="outline" className={`text-xs ${check.ready ? "text-green-300 border-green-500/40 bg-green-500/10" : "text-red-300 border-red-500/40 bg-red-500/10"}`}>
+                            {check.ready ? "Ready" : "Missing"}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground">{check.detail}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </CardContent>
           </Card>

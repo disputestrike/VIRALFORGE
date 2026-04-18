@@ -358,4 +358,32 @@ describe("admin", () => {
     const promoted = users.find((u) => u.id === 1);
     expect(promoted?.role).toBe("admin");
   });
+
+  it("prevents disabling the active admin's own account", async () => {
+    const ctx = makeAdminCtx();
+    const caller = appRouter.createCaller(ctx);
+    await expect(caller.admin.setUserDisabled({ userId: 99, disabled: true })).rejects.toThrow(/cannot disable your own account/i);
+  });
+
+  it("admin can disable and reactivate a user", async () => {
+    const ctx = makeAdminCtx();
+    const caller = appRouter.createCaller(ctx);
+
+    await expect(caller.admin.setUserDisabled({ userId: 1, disabled: true })).resolves.toMatchObject({ success: true });
+    const disabledAfter = await caller.admin.disabledUserIds();
+    expect(disabledAfter).toContain(1);
+
+    await expect(caller.admin.setUserDisabled({ userId: 1, disabled: false })).resolves.toMatchObject({ success: true });
+    const disabledAfterReactivate = await caller.admin.disabledUserIds();
+    expect(disabledAfterReactivate).not.toContain(1);
+  });
+
+  it("admin can fetch integration readiness", async () => {
+    const ctx = makeAdminCtx();
+    const caller = appRouter.createCaller(ctx);
+    const readiness = await caller.admin.integrationReadiness();
+    expect(readiness).toHaveProperty("checks");
+    expect(Array.isArray(readiness.checks)).toBe(true);
+    expect(readiness).toHaveProperty("readinessScore");
+  });
 });

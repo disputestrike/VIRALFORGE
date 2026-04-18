@@ -121,24 +121,31 @@ class SDK {
       throw new ForbiddenError("Missing session token");
     }
 
+    let payload: SessionPayload;
     try {
       const secret = new TextEncoder().encode(ENV.cookieSecret);
-      const { payload } = await jwtVerify<SessionPayload>(sessionToken, secret);
-
-      if (!payload.googleId || !payload.email) {
-        throw new ForbiddenError("Invalid token payload");
-      }
-
-      const user = await db.getUserByOpenId(payload.googleId);
-      if (!user) {
-        throw new ForbiddenError("User not found");
-      }
-
-      return user;
+      const verified = await jwtVerify<SessionPayload>(sessionToken, secret);
+      payload = verified.payload;
     } catch (error) {
       console.error("[Auth] JWT verification failed:", error);
       throw new ForbiddenError("Invalid session token");
     }
+
+    if (!payload.googleId || !payload.email) {
+      throw new ForbiddenError("Invalid token payload");
+    }
+
+    const user = await db.getUserByOpenId(payload.googleId);
+    if (!user) {
+      throw new ForbiddenError("User not found");
+    }
+
+    const disabled = await db.isUserDisabled(user.id);
+    if (disabled) {
+      throw new ForbiddenError("Account disabled by admin");
+    }
+
+    return user;
   }
 
   /**
