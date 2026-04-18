@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { assertOutboundDialAllowed, isHourInAllowWindow, parseAllowHoursWindow } from "./outboundCompliance";
+import {
+  assertOutboundDialAllowed,
+  getOutboundComplianceDelayMs,
+  isHourInAllowWindow,
+  parseAllowHoursWindow,
+} from "./outboundCompliance";
 
 describe("parseAllowHoursWindow", () => {
   it("parses same-day window", () => {
@@ -28,5 +33,22 @@ describe("isHourInAllowWindow", () => {
 describe("assertOutboundDialAllowed", () => {
   it("no env does not throw", () => {
     expect(() => assertOutboundDialAllowed(undefined)).not.toThrow();
+  });
+});
+
+describe("getOutboundComplianceDelayMs", () => {
+  it("returns 0 when currently allowed", () => {
+    const now = new Date("2026-04-18T10:15:00");
+    expect(getOutboundComplianceDelayMs(now, "8-21")).toBe(0);
+  });
+
+  it("returns delay until next same-day window start", () => {
+    const now = new Date("2026-04-18T07:15:00");
+    expect(getOutboundComplianceDelayMs(now, "8-21")).toBe(45 * 60 * 1000);
+  });
+
+  it("returns delay until next-day window start when window closed for day", () => {
+    const now = new Date("2026-04-18T21:15:00");
+    expect(getOutboundComplianceDelayMs(now, "8-21")).toBe(10 * 60 * 60 * 1000 + 45 * 60 * 1000);
   });
 });

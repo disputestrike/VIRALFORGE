@@ -38,3 +38,30 @@ export function assertOutboundDialAllowed(allowHoursEnv: string | undefined): vo
     );
   }
 }
+
+/**
+ * Returns milliseconds to wait until outbound dialing is allowed.
+ * `0` means it is currently inside the allowed window.
+ */
+export function getOutboundComplianceDelayMs(
+  now: Date,
+  allowHoursEnv: string | undefined
+): number {
+  const win = parseAllowHoursWindow(allowHoursEnv);
+  if (!win) return 0;
+  if (isHourInAllowWindow(now.getHours(), win.start, win.end)) return 0;
+
+  // Round to the next hour and find the first allowed hour (max 48h scan).
+  const cursor = new Date(now);
+  cursor.setMinutes(0, 0, 0);
+  cursor.setHours(cursor.getHours() + 1);
+
+  for (let i = 0; i < 48; i++) {
+    if (isHourInAllowWindow(cursor.getHours(), win.start, win.end)) {
+      return Math.max(0, cursor.getTime() - now.getTime());
+    }
+    cursor.setHours(cursor.getHours() + 1);
+  }
+
+  return 0;
+}

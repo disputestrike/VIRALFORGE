@@ -34,7 +34,7 @@ import { ENV } from "./_core/env";
 import { normalizeToE164US } from "./_core/phoneE164";
 import { scoreFromRules, type RuleEntry } from "./_core/services/leadScoringApply";
 import { assertLeadBulkCreateAllowed, assertLeadCreateAllowed, assertQueuedCallAllowance } from "./_core/services/billingPolicy";
-import { assertOutboundDialAllowed } from "./realtime/outboundCompliance";
+import { getOutboundComplianceDelayMs } from "./realtime/outboundCompliance";
 import {
   getPublicDemoConfig,
   getPublicDemoOwnerId,
@@ -170,9 +170,10 @@ const leadsRouter = router({
       }
 
       await assertQueuedCallAllowance(ctx.user.id, contacts.length);
-      if (!scheduleStart || scheduleStart.getTime() <= Date.now()) {
-        assertOutboundDialAllowed(ENV.voiceOutboundAllowHours);
-      }
+      const complianceDelayMs =
+        !scheduleStart || scheduleStart.getTime() <= Date.now()
+          ? getOutboundComplianceDelayMs(new Date(), ENV.voiceOutboundAllowHours)
+          : 0;
 
       const { addCallJob } = await import("./_core/services/queue");
       const maxPerMinute = input.maxPerMinute ?? 30;
@@ -186,7 +187,7 @@ const leadsRouter = router({
               leadId: (lead as any).id as number,
               campaignId: input.campaignId,
               userId: ctx.user.id,
-              delay: getBlastDelayMs(index, maxPerMinute, scheduleStart),
+              delay: complianceDelayMs + getBlastDelayMs(index, maxPerMinute, scheduleStart),
             });
             queued++;
           }
@@ -385,9 +386,10 @@ const campaignsRouter = router({
       }
 
       await assertQueuedCallAllowance(ctx.user.id, contacts.length);
-      if (!scheduleStart || scheduleStart.getTime() <= Date.now()) {
-        assertOutboundDialAllowed(ENV.voiceOutboundAllowHours);
-      }
+      const complianceDelayMs =
+        !scheduleStart || scheduleStart.getTime() <= Date.now()
+          ? getOutboundComplianceDelayMs(new Date(), ENV.voiceOutboundAllowHours)
+          : 0;
 
       const { addCallJob } = await import("./_core/services/queue");
       const maxPerMinute = input.maxPerMinute ?? 30;
@@ -401,7 +403,7 @@ const campaignsRouter = router({
               leadId: (lead as any).id as number,
               campaignId: input.campaignId,
               userId: ctx.user.id,
-              delay: getBlastDelayMs(index, maxPerMinute, scheduleStart),
+              delay: complianceDelayMs + getBlastDelayMs(index, maxPerMinute, scheduleStart),
             });
             queued++;
           }
@@ -686,11 +688,13 @@ const voiceAIRouter = router({
 
         // INTEGRATION: Queue the call job (asynchronous)
         await assertQueuedCallAllowance(ctx.user.id, 1);
+        const complianceDelayMs = getOutboundComplianceDelayMs(new Date(), ENV.voiceOutboundAllowHours);
         const callJob = await queueService.addCallJob({
           leadId: input.leadId,
           campaignId: input.campaignId,
           script: input.script,
           userId: ctx.user.id,
+          delay: complianceDelayMs,
         });
 
         const jobId = (callJob as any)?.jobId || `job_${Date.now()}`;
@@ -1997,15 +2001,11 @@ const demoCallRouter = router({
           createdBy: demoOwnerId,
         });
 
-        // Trigger outbound call immediately
-        const { initiateCall } = await import("./_core/services/signalwireService");
-        const result = await initiateCall({
+        const complianceDelayMs = getOutboundComplianceDelayMs(new Date(), ENV.voiceOutboundAllowHours);
+        const callJob = await queueService.addCallJob({
           leadId: leadResult.insertId,
-          phoneNumber: normalizedPhone,
           userId: demoOwnerId,
-        });
-        await db.updateMessageStatus(messageRow.insertId, "sent", {
-          sentAt: new Date(),
+          delay: complianceDelayMs,
         });
 
         await db.logActivity({
@@ -2015,15 +2015,16 @@ const demoCallRouter = router({
           action: "demo_requested",
           description: `Demo call requested by ${input.firstName} (${normalizedPhone}) — industry: ${input.industry}`,
           metadata: {
-            callSid: result.callSid,
+            jobId: (callJob as any)?.jobId,
+            complianceDelayMs,
             phone: normalizedPhone,
             email: input.email,
             messageId: messageRow.insertId,
           },
         });
 
-        console.log(`[DemoCall] Triggered for ${input.firstName} at ${normalizedPhone} | callSid: ${result.callSid}`);
-        return { success: true, message: "Your AI demo call is connecting now!" };
+        console.log(`[DemoCall] Queued for ${input.firstName} at ${normalizedPhone} | jobId: ${(callJob as any)?.jobId}`);
+        return { success: true, message: "Your AI demo call has been queued!" };
       } catch (err: any) {
         console.error("[DemoCall] Failed:", err);
         throw new TRPCError({
@@ -2092,9 +2093,12 @@ const ghlRouter = router({
 
         // Queue outbound call
         const { addCallJob } = await import("./_core/services/queue");
+        const complianceDelayMs = getOutboundComplianceDelayMs(new Date(), ENV.voiceOutboundAllowHours);
         await addCallJob({
           leadId: (lead as any).id,
           campaignId: input.campaignId,
+          userId: 1,
+          delay: complianceDelayMs,
         });
 
         console.log(`[GHL Webhook] Call queued for ${input.phone} (contactId: ${input.contactId})`);
