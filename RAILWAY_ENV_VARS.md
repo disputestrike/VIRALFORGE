@@ -24,12 +24,13 @@ Railway Dashboard → ApexAI service → Variables tab → Add Variable
 
 ## ⚠️ Add When You Have Them (Features activate automatically)
 
-### Voice Calls + SMS (Twilio)
+### Voice Calls + SMS (SignalWire)
 | Variable | Notes |
 |---|---|
-| `TWILIO_ACCOUNT_SID` | From twilio.com/console |
-| `TWILIO_AUTH_TOKEN` | From twilio.com/console |
-| `TWILIO_PHONE_NUMBER` | E.164 format: `+15551234567` |
+| `SIGNALWIRE_PROJECT_ID` | From SignalWire project settings |
+| `SIGNALWIRE_TOKEN` | From SignalWire API token settings |
+| `SIGNALWIRE_SPACE_URL` | Your SignalWire space domain (for example: `example.signalwire.com`) |
+| `SIGNALWIRE_PHONE_NUMBER` | E.164 format: `+15551234567` |
 
 Once set: outbound calls, inbound calls, SMS all activate. No code changes needed.
 
@@ -83,11 +84,11 @@ This way if the connection strings change, they auto-update.
 
 ---
 
-## Twilio Webhook URLs (configure in Twilio console)
+## SignalWire Webhook URLs (configure in SignalWire number settings)
 
 After setting `RAILWAY_PUBLIC_DOMAIN`:
 
-| Twilio Setting | URL |
+| SignalWire Setting | URL |
 |---|---|
 | Voice webhook (inbound calls) | `https://apexai-production-d567.up.railway.app/api/voice/inbound` |
 | Status callback | `https://apexai-production-d567.up.railway.app/api/voice/status` |
