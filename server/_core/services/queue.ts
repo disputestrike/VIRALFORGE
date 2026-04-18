@@ -173,12 +173,93 @@ export async function addAutomationJob(data: {
 }
 
 export function getMemoryQueueStatus() {
+  const byType = memoryQueue.reduce<Record<string, number>>((acc, job) => {
+    acc[job.type] = (acc[job.type] ?? 0) + 1;
+    return acc;
+  }, {});
   return {
     usingRedis: useRealQueue,
+    mode: useRealQueue ? "redis" : "memory",
     pendingJobs: memoryQueue.length,
+    byType,
     jobs: memoryQueue.slice(-20),
   };
 }
 
+type QueueCounts = {
+  waiting: number;
+  active: number;
+  delayed: number;
+  failed: number;
+  completed: number;
+};
+
+function normalizeCounts(raw: Record<string, number | undefined>): QueueCounts {
+  return {
+    waiting: Number(raw.waiting ?? 0),
+    active: Number(raw.active ?? 0),
+    delayed: Number(raw.delayed ?? 0),
+    failed: Number(raw.failed ?? 0),
+    completed: Number(raw.completed ?? 0),
+  };
+}
+
+export async function getQueueHealth() {
+  const queues = await getQueues();
+  const sampledAt = new Date().toISOString();
+
+  if (!queues) {
+    const mem = getMemoryQueueStatus();
+    return {
+      sampledAt,
+      mode: "memory" as const,
+      pendingJobs: mem.pendingJobs,
+      byType: mem.byType,
+      totals: {
+        waiting: mem.pendingJobs,
+        active: 0,
+        delayed: 0,
+        failed: 0,
+        completed: 0,
+      },
+      queues: null,
+    };
+  }
+
+  const [calls, sms, email, automation] = await Promise.all([
+    queues.calls.getJobCounts("waiting", "active", "delayed", "failed", "completed"),
+    queues.sms.getJobCounts("waiting", "active", "delayed", "failed", "completed"),
+    queues.email.getJobCounts("waiting", "active", "delayed", "failed", "completed"),
+    queues.automation.getJobCounts("waiting", "active", "delayed", "failed", "completed"),
+  ]);
+
+  const queueCounts = {
+    calls: normalizeCounts(calls as Record<string, number | undefined>),
+    sms: normalizeCounts(sms as Record<string, number | undefined>),
+    email: normalizeCounts(email as Record<string, number | undefined>),
+    automation: normalizeCounts(automation as Record<string, number | undefined>),
+  };
+
+  const totals = Object.values(queueCounts).reduce(
+    (acc, c) => ({
+      waiting: acc.waiting + c.waiting,
+      active: acc.active + c.active,
+      delayed: acc.delayed + c.delayed,
+      failed: acc.failed + c.failed,
+      completed: acc.completed + c.completed,
+    }),
+    { waiting: 0, active: 0, delayed: 0, failed: 0, completed: 0 }
+  );
+
+  return {
+    sampledAt,
+    mode: "redis" as const,
+    pendingJobs: totals.waiting + totals.active + totals.delayed,
+    byType: null,
+    totals,
+    queues: queueCounts,
+  };
+}
+
 export { getQueues };
-export default { addCallJob, addSmsJob, addEmailJob, addAutomationJob, getMemoryQueueStatus };
+export default { addCallJob, addSmsJob, addEmailJob, addAutomationJob, getMemoryQueueStatus, getQueueHealth };

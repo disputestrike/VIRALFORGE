@@ -100,6 +100,12 @@ function computeStageLatencies(
 // ── Router ────────────────────────────────────────────────────────────────────
 
 export const metricsRouter = router({
+  /** Queue observability snapshot across calls/sms/email/automation workers. */
+  getQueueHealth: protectedProcedure.query(async () => {
+    const { getQueueHealth } = await import("../services/queue");
+    return getQueueHealth();
+  }),
+
   /**
    * Per-call latency breakdown with p50/p90/p95/p99 percentiles.
    * Reads from voice_metric_events for the given callId.
