@@ -17,6 +17,24 @@ const checks = [
     args: ["run", "test:vaqs"],
   },
   {
+    id: "CTQ-VOICE-SMOKE",
+    name: "Voice smoke regression gate",
+    command: "node",
+    args: ["scripts/voice-ci-smoke.mjs"],
+  },
+  {
+    id: "CTQ-VOICE-REPEAT",
+    name: "Global industry repeat-control regression tests",
+    command: "pnpm",
+    args: ["exec", "vitest", "run", "server/realtime/industryFitAnswer.test.ts"],
+  },
+  {
+    id: "CTQ-VOICE-ONNX",
+    name: "ONNX classifier integration and fallback tests",
+    command: "pnpm",
+    args: ["exec", "vitest", "run", "server/realtime/bargeInClassifier.test.ts"],
+  },
+  {
     id: "CTQ-BILLING",
     name: "Billing policy guard regression tests",
     command: "pnpm",

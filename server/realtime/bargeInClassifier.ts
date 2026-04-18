@@ -96,6 +96,8 @@ export class BargeInClassifier {
   private ortPromise: Promise<RuntimeOrt | null> | null = null;
   private sessionPromise: Promise<unknown | null> | null = null;
   private tokenizerPromise: Promise<TokenizerConfig | null> | null = null;
+  private sessionFallbackReason: string | null = null;
+  private strictFallbackWarned = false;
 
   private async loadOrt(): Promise<RuntimeOrt | null> {
     if (!this.ortPromise) {
@@ -110,13 +112,19 @@ export class BargeInClassifier {
     if (!ENV.voiceBargeInClassifierEnabled) return null;
     if (!this.sessionPromise) {
       this.sessionPromise = (async () => {
+        this.sessionFallbackReason = null;
         try {
           const modelPath = path.resolve(process.cwd(), ENV.voiceBargeInClassifierModelPath);
           await fs.access(modelPath);
           const ort = await this.loadOrt();
-          if (!ort) return null;
+          if (!ort) {
+            this.sessionFallbackReason = "onnxruntime_unavailable";
+            return null;
+          }
           return await ort.InferenceSession.create(modelPath);
-        } catch {
+        } catch (error) {
+          this.sessionFallbackReason =
+            error instanceof Error && error.message ? `model_unavailable:${error.message}` : "model_unavailable";
           return null;
         }
       })();
@@ -168,11 +176,18 @@ export class BargeInClassifier {
     const session = await this.loadSession();
     const ort = await this.loadOrt();
     if (!session || !ort) {
+      const fallbackReason = this.sessionFallbackReason ?? rules.reason;
+      if (ENV.voiceBargeInClassifierRequireModel && !this.strictFallbackWarned) {
+        this.strictFallbackWarned = true;
+        console.error(
+          `[BargeInClassifier] ONNX strict mode is enabled but classifier fell back to rules (${fallbackReason}).`
+        );
+      }
       return {
         decision: rules.decision,
         provider: "rules",
         elapsedMs: Date.now() - start,
-        reason: rules.reason,
+        reason: fallbackReason,
       };
     }
 

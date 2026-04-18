@@ -124,6 +124,8 @@ export const ENV = {
   voiceWebInterruptEnabled: process.env.VOICE_WEB_INTERRUPT_ENABLED !== "false",
   /** Optional browser-side VAD flag for future web voice sessions. */
   voiceWebVadEnabled: process.env.VOICE_WEB_VAD_ENABLED !== "false",
+  /** When true, emits a high-visibility runtime warning whenever classifier falls back from ONNX to rules. */
+  voiceBargeInClassifierRequireModel: process.env.VOICE_BARGE_IN_CLASSIFIER_REQUIRE_MODEL === "true",
   /** Absolute/relative path to the ONNX classifier file used for continue/pivot decisions. */
   voiceBargeInClassifierModelPath:
     (process.env.VOICE_BARGE_IN_CLASSIFIER_MODEL_PATH ?? "server/models/bargein_classifier.onnx").trim(),

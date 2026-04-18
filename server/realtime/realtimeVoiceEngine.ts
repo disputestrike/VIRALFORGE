@@ -115,6 +115,7 @@ import {
   getSmallTalkResponse,
   MAX_SMALL_TALK_TURNS,
 } from "./smallTalkPolicy";
+import { buildIndustryFitAnswer as buildGlobalIndustryFitAnswer } from "./industryFitAnswer";
 import {
   detectConversationContext,
   checkClause,
@@ -755,59 +756,6 @@ export function createCallEngine(opts: EngineOptions): void {
     });
     clearInterruptedContext();
     return true;
-  }
-
-  function formatIndustryLabel(label: string | null | undefined): string {
-    const raw = (label ?? "").trim();
-    if (!raw) return "your industry";
-    return raw.replace(/\b(companies|company|businesses|business)\b/gi, "").replace(/\s+/g, " ").trim() || raw;
-  }
-
-  function buildIndustryFitAnswer(transcript: string): string | null {
-    const t = transcript.toLowerCase();
-    const asksForCapability =
-      /\b(can you help|do you help|help)\b/.test(t) ||
-      (/\b(tell me|show me|walk me through|explain)\b/.test(t) &&
-        /\b(what you can do|what do you do|what you do)\b/.test(t)) ||
-      /\bwhat can you do\b/.test(t);
-    if (!asksForCapability) return null;
-
-    const solarFit =
-      /\bsolar\b/.test(t) ||
-      strictFacts.industry === "solar" ||
-      /\bsolar\b/.test(clientConfig.primaryIndustryLabel || "") ||
-      /\bsolar\b/.test(industry);
-
-    if (solarFit) {
-      const repeatedSolarAnswer = recentAssistantTexts.some(
-        (recent) =>
-          /\bsolar companies\b/i.test(recent) &&
-          /\b(inbound calls|follow up with new leads|book appointments|send reminders)\b/i.test(recent)
-      );
-      if (repeatedSolarAnswer) {
-        return "Yes — for solar, the core wins are inbound lead capture, fast outbound follow-up, and booked appointments on the calendar. Which one do you want me to break down first?";
-      }
-      if (/\bexact|exactly|tell me more|what you can do|what do you do\b/.test(t)) {
-        return "For solar companies, ApexAI answers inbound calls, follows up with new leads in seconds, qualifies homeowners, books appointments on the calendar, and sends text confirmations and reminders. We can also answer common solar questions, reactivate old leads, and route hot prospects to your team right away.";
-      }
-      return "Yes. ApexAI works well for solar companies. We answer inbound calls, follow up with new leads fast, book appointments, and send reminders in a voice that sounds like your team. If you want, I can break down inbound, outbound, or booking for solar.";
-    }
-
-    const genericIndustryMatch = t.match(/\bhelp\s+([a-z][a-z\s&/-]{2,40}?)\s+(companies|businesses)\b/i);
-    if (genericIndustryMatch?.[1]) {
-      const sector = formatIndustryLabel(genericIndustryMatch[1]);
-      const repeatedGenericAnswer = recentAssistantTexts.some(
-        (recent) =>
-          new RegExp(`\\b${sector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(recent) &&
-          /\b(inbound calls|outbound follow-up|appointment setting|sms workflows|voice|business knowledge)\b/i.test(recent)
-      );
-      if (repeatedGenericAnswer) {
-        return `Yes — for ${sector}, the main value is handling inbound calls, fast follow-up, and booked next steps without sounding robotic. Which part do you want me to break down first?`;
-      }
-      return `Yes. ApexAI can support ${sector} businesses with inbound calls, outbound follow-up, appointment setting, and SMS workflows. We give each company its own number, voice, and business knowledge so it sounds like that company, not like a generic bot.`;
-    }
-
-    return null;
   }
 
   function buildAudioRepairAnswer(transcript: string): string | null {
@@ -1736,7 +1684,13 @@ export function createCallEngine(opts: EngineOptions): void {
       return;
     }
 
-    const industryFit = buildIndustryFitAnswer(transcript);
+    const industryFit = buildGlobalIndustryFitAnswer({
+      transcript,
+      recentAssistantTexts,
+      strictIndustry: strictFacts.industry,
+      primaryIndustryLabel: clientConfig.primaryIndustryLabel,
+      configuredIndustry: industry,
+    });
     if (industryFit) {
       appendHistory("user", transcript);
       await speak(industryFit, epoch);
@@ -2886,6 +2840,12 @@ export function createCallEngine(opts: EngineOptions): void {
     try { msg = JSON.parse(raw.toString()); } catch { return; }
 
     if (msg?.type === "INTERRUPT" && ENV.voiceWebInterruptEnabled) {
+      if (msg.reason === "web_vad" && !ENV.voiceWebVadEnabled) {
+        traceEvent(callId, "web_interrupt_signal", {
+          reason: "web_vad_blocked_by_flag",
+        });
+        return;
+      }
       traceEvent(callId, "web_interrupt_signal", {
         reason: msg.reason ?? "web_vad",
         energy: typeof msg.energy === "number" ? msg.energy : undefined,
