@@ -279,7 +279,7 @@ function _tokenize(text: string): string[] {
 }
 
 function _hasAnyKeyword(lower: string, keywords: Set<string>): boolean {
-  for (const kw of keywords) {
+  for (const kw of Array.from(keywords)) {
     if (lower.includes(kw)) return true;
   }
   return false;

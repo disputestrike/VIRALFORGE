@@ -2824,7 +2824,7 @@ export function createCallEngine(opts: EngineOptions): void {
               emotion: score.emotion,
               conversionScore: score.conversionScore,
               escalationRisk: score.escalationRisk,
-              flags: score.flags,
+              flags: { ...score.flags },
             })
           ).catch(() => {});
         }).catch(() => {});

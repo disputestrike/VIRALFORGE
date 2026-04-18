@@ -127,6 +127,27 @@ export async function getUserById(id: number) {
   return rows[0];
 }
 
+export async function getCurrentMonthUsage(userId: number): Promise<{ leadsThisMonth: number; callsThisMonth: number }> {
+  const db = await getDb();
+  if (!db) return { leadsThisMonth: 0, callsThisMonth: 0 };
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const [leadCountRows, callCountRows] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(leads)
+      .where(and(eq(leads.createdBy, userId), gte(leads.createdAt, monthStart))),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(callRecordings)
+      .where(and(eq(callRecordings.createdBy, userId), gte(callRecordings.createdAt, monthStart))),
+  ]);
+  return {
+    leadsThisMonth: Number(leadCountRows[0]?.count ?? 0),
+    callsThisMonth: Number(callCountRows[0]?.count ?? 0),
+  };
+}
+
 /** Partial `users` row update (settings screen, admin tools). */
 export async function updateUserById(userId: number, patch: Record<string, unknown>): Promise<void> {
   const db = await getDb();

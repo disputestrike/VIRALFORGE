@@ -75,92 +75,11 @@ async function runMigrations() {
     await ensureCriticalVoiceSchema(connection);
     await connection.end();
     console.log("[Migration] Migrations completed successfully");
-
-    // ── Add missing columns (safe ALTER TABLE IF NOT EXISTS workaround) ──────
-    try {
-      const { default: mysql2 } = await import("mysql2/promise");
-      const conn2 = await mysql2.createConnection({ uri: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
-      if (conn2) {
-        const alterStatements = [
-          "ALTER TABLE `users` ADD COLUMN `transferNumber` varchar(50) NULL",
-          "ALTER TABLE `users` ADD COLUMN `language` varchar(10) DEFAULT 'en'",
-          "ALTER TABLE `users` ADD COLUMN `plan` varchar(50) DEFAULT 'trial'",
-          "ALTER TABLE `users` ADD COLUMN `isAgency` tinyint(1) DEFAULT 0",
-          "ALTER TABLE `users` ADD COLUMN `agencyName` varchar(255) NULL",
-          "ALTER TABLE `users` ADD COLUMN `whiteLabel` tinyint(1) DEFAULT 0",
-          "ALTER TABLE `users` ADD COLUMN `picture` varchar(512) NULL",
-          "ALTER TABLE `users` ADD COLUMN `voiceProfileId` varchar(100) NULL",
-"CREATE TABLE IF NOT EXISTS `zapier_webhooks` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `targetUrl` varchar(2048) NOT NULL, `events` varchar(500), `isActive` tinyint(1) DEFAULT 1 NOT NULL, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
-          "ALTER TABLE `users` ADD COLUMN `stripeCustomerId` varchar(255) NULL",
-          "ALTER TABLE `users` ADD COLUMN `stripeSubscriptionId` varchar(255) NULL",
-          "ALTER TABLE `users` ADD COLUMN `stripeSubscriptionStatus` varchar(64) NULL",
-          "ALTER TABLE `knowledge_bases` ADD COLUMN `brandProfile` text NULL",
-          "ALTER TABLE `users` ADD COLUMN `gcalRefreshToken` text NULL",
-          "ALTER TABLE `users` ADD COLUMN `gcalBookingUrl` varchar(500) NULL",
-          "ALTER TABLE `users` ADD COLUMN `businessName` varchar(200) NULL",
-          "ALTER TABLE `users` ADD COLUMN `primaryIndustryLabel` varchar(200) NULL",
-          "ALTER TABLE `users` ADD COLUMN `voiceIndustryContext` text NULL",
-          "ALTER TABLE `users` ADD COLUMN `voiceKeyPhrases` text NULL",
-          "ALTER TABLE `users` ADD COLUMN `voiceRestrictionNotes` text NULL",
-          "ALTER TABLE `users` ADD COLUMN `voiceAgentDisplayName` varchar(80) NULL",
-          // ── Create missing feature tables ──
-          "CREATE TABLE IF NOT EXISTS `crm_connections` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `provider` varchar(50) NOT NULL, `status` varchar(50) DEFAULT 'pending', `displayName` varchar(255), `externalAccountId` varchar(255), `lastSyncAt` timestamp NULL, `meta` text, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, UNIQUE KEY `uniq_user_provider` (`userId`, `provider`))",
-          "CREATE TABLE IF NOT EXISTS `knowledge_bases` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `name` varchar(255) NOT NULL, `description` text, `status` varchar(50) DEFAULT 'training', `trainingProgress` int DEFAULT 0, `brandProfile` text, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
-          "CREATE TABLE IF NOT EXISTS `knowledge_base_sources` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `knowledgeBaseId` int NOT NULL, `sourceType` varchar(50) NOT NULL, `sourceUrl` varchar(2048), `status` varchar(50) DEFAULT 'pending', `errorMessage` text, `chunkCount` int DEFAULT 0, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
-          "CREATE TABLE IF NOT EXISTS `knowledge_base_chunks` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `knowledgeBaseId` int NOT NULL, `sourceId` int, `content` text NOT NULL, `embedding` text, `metadata` text, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP)",
-          "CREATE TABLE IF NOT EXISTS `workflows` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `name` varchar(200) NOT NULL, `trigger` varchar(100) DEFAULT 'manual', `description` text, `definition` json, `isActive` tinyint(1) DEFAULT 1, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
-          "CREATE TABLE IF NOT EXISTS `customer_memories` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `leadId` int, `content` text NOT NULL, `source` varchar(64) DEFAULT 'manual', `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP)",
-          // Ensure customer_memories has content + source columns (old schema had key/value)
-          // NOTE: TEXT columns cannot have DEFAULT in MySQL strict mode
-          "ALTER TABLE `customer_memories` ADD COLUMN `content` text NOT NULL",
-          "ALTER TABLE `customer_memories` ADD COLUMN `source` varchar(64) DEFAULT 'manual'",
-          // Drop old columns if they exist (safe — error 1091 = doesn't exist, ignored)
-          "ALTER TABLE `customer_memories` DROP COLUMN `key`",
-          "ALTER TABLE `customer_memories` DROP COLUMN `value`",
-          "ALTER TABLE `customer_memories` DROP COLUMN `updatedAt`",
-          "CREATE TABLE IF NOT EXISTS `support_tickets` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `leadId` int, `subject` varchar(500), `body` text, `status` varchar(50) DEFAULT 'open', `priority` varchar(20) DEFAULT 'medium', `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
-          "CREATE TABLE IF NOT EXISTS `email_sequences` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `name` varchar(255) NOT NULL, `trigger` varchar(100) DEFAULT 'manual', `steps` json, `isActive` tinyint(1) DEFAULT 1, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
-          "CREATE TABLE IF NOT EXISTS `mobile_devices` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `deviceToken` varchar(512), `platform` varchar(20), `isActive` tinyint(1) DEFAULT 1, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP)",
-          "CREATE TABLE IF NOT EXISTS `social_connections` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `platform` varchar(50) NOT NULL, `accountId` varchar(255), `status` varchar(50) DEFAULT 'pending', `meta` text, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
-          "CREATE TABLE IF NOT EXISTS `webchat_widgets` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `name` varchar(255), `config` json, `isActive` tinyint(1) DEFAULT 1, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
-          "CREATE TABLE IF NOT EXISTS `rcs_registrations` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `agentId` varchar(255), `brandName` varchar(255), `status` varchar(50) DEFAULT 'pending', `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
-          "CREATE TABLE IF NOT EXISTS `lead_scoring_rules` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `rules` json, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
-          "CREATE TABLE IF NOT EXISTS `blocked_phone_numbers` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `phone` varchar(20) NOT NULL, `reason` varchar(255), `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP)",
-          "CREATE TABLE IF NOT EXISTS `escalation_rules` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `name` varchar(255), `conditions` json, `targetNumber` varchar(20), `isActive` tinyint(1) DEFAULT 1, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
-          "CREATE TABLE IF NOT EXISTS `onboardings` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `clientName` varchar(200) NOT NULL, `industry` varchar(100), `status` enum('not_started','in_progress','completed') DEFAULT 'not_started', `setupDay` timestamp NULL, `supportEndDate` timestamp NULL, `completedSteps` text, `notes` text, `specialistName` varchar(200), `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
-          "CREATE TABLE IF NOT EXISTS `voice_metric_events` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `sessionId` varchar(128), `callId` varchar(128), `phase` varchar(64) NOT NULL, `msSinceCallStart` int, `extra` json, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP)",
-          "CREATE TABLE IF NOT EXISTS `call_quality_scores` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `callId` varchar(128) NOT NULL, `sessionId` varchar(128), `sentiment` varchar(32) NOT NULL DEFAULT 'neutral', `emotion` varchar(32) NOT NULL DEFAULT 'neutral', `conversionScore` int NOT NULL DEFAULT 0, `escalationRisk` int NOT NULL DEFAULT 0, `flags` json, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP)",
-          "CREATE TABLE IF NOT EXISTS `leads` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `firstName` varchar(100) NOT NULL, `lastName` varchar(100) NOT NULL, `email` varchar(320), `phone` varchar(30), `company` varchar(200), `industry` varchar(100), `title` varchar(150), `linkedinUrl` varchar(500), `website` varchar(500), `city` varchar(100), `state` varchar(100), `country` varchar(100), `score` int DEFAULT 0 NOT NULL, `segment` enum('hot','warm','cold','unqualified') DEFAULT 'cold' NOT NULL, `verificationStatus` enum('verified','unverified','bounced','pending') DEFAULT 'pending' NOT NULL, `status` enum('new','contacted','qualified','converted','lost') DEFAULT 'new' NOT NULL, `source` varchar(100), `createdBy` int, `notes` text, `tags` text, `customFields` text, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL)",
-          "CREATE TABLE IF NOT EXISTS `campaigns` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `name` varchar(200) NOT NULL, `description` text, `channels` text, `status` enum('draft','active','paused','completed','archived') DEFAULT 'draft' NOT NULL, `goal` enum('appointments','demos','sales','awareness','follow_up') DEFAULT 'appointments' NOT NULL, `industry` varchar(100), `startDate` timestamp NULL, `endDate` timestamp NULL, `dailyLimit` int DEFAULT 50, `totalContacts` int DEFAULT 0, `sentCount` int DEFAULT 0, `responseCount` int DEFAULT 0, `scheduledCount` int DEFAULT 0, `showCount` int DEFAULT 0, `convertedCount` int DEFAULT 0, `revenueGenerated` float DEFAULT 0, `settings` text, `createdBy` int, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL)",
-          "CREATE TABLE IF NOT EXISTS `campaign_contacts` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `campaignId` int NOT NULL, `leadId` int NOT NULL, `status` enum('pending','contacted','responded','scheduled','showed','converted','failed','opted_out') DEFAULT 'pending' NOT NULL, `channel` enum('sms','email','voice','social'), `lastContactedAt` timestamp NULL, `nextContactAt` timestamp NULL, `attempts` int DEFAULT 0, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL)",
-          "CREATE TABLE IF NOT EXISTS `messages` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `campaignId` int, `leadId` int NOT NULL, `channel` enum('sms','email','voice','social') NOT NULL, `direction` enum('outbound','inbound') DEFAULT 'outbound' NOT NULL, `status` enum('queued','sent','delivered','read','replied','failed','bounced') DEFAULT 'queued' NOT NULL, `subject` varchar(500), `body` text, `templateId` int, `sentAt` timestamp NULL, `deliveredAt` timestamp NULL, `readAt` timestamp NULL, `repliedAt` timestamp NULL, `metadata` text, `createdBy` int, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL)",
-          "CREATE TABLE IF NOT EXISTS `templates` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `name` varchar(200) NOT NULL, `channel` enum('sms','email','voice','social') NOT NULL, `subject` varchar(500), `body` text NOT NULL, `variables` text, `isActive` tinyint(1) DEFAULT 1 NOT NULL, `createdBy` int, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL)",
-          "CREATE TABLE IF NOT EXISTS `call_recordings` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `leadId` int NOT NULL, `campaignId` int, `sessionId` varchar(128), `recordingUrl` varchar(1000), `transcription` longtext, `summary` text, `sentiment` varchar(50), `duration` int DEFAULT 0, `outcome` varchar(100), `callerPhone` varchar(30), `metadata` text, `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL)",
-          "CREATE TABLE IF NOT EXISTS `user_industry_packs` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `industry` varchar(100) NOT NULL, `isActive` tinyint(1) DEFAULT 1, `isPrimary` tinyint(1) DEFAULT 0, `planTier` varchar(50) DEFAULT 'base', `createdAt` timestamp DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
-          // A/B Testing tables
-          "CREATE TABLE IF NOT EXISTS `prompt_variants` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `userId` int NOT NULL, `testName` varchar(200) NOT NULL, `variantKey` varchar(64) NOT NULL, `promptOverride` text, `promptSuffix` text, `weight` int NOT NULL DEFAULT 50, `isActive` tinyint(1) NOT NULL DEFAULT 1, `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)",
-          "CREATE TABLE IF NOT EXISTS `ab_test_results` (`id` int NOT NULL AUTO_INCREMENT PRIMARY KEY, `variantId` int NOT NULL, `callId` varchar(128), `sessionId` varchar(128), `leadId` int, `outcome` varchar(64), `converted` tinyint(1) NOT NULL DEFAULT 0, `durationSeconds` int DEFAULT 0, `sentiment` varchar(32), `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP)",
-        ];
-        for (const sql of alterStatements) {
-          try {
-            await conn2.execute(sql);
-          } catch (e: any) {
-            // Error 1060 = Duplicate column, 1050 = Table already exists — safe to ignore
-            if (e.errno !== 1060 && e.errno !== 1050 && !e.message?.includes("Duplicate column name") && !e.message?.includes("already exists")) {
-              console.log(`[Migration] ALTER note: ${e.message?.slice(0, 80)}`);
-            }
-          }
-        }
-        console.log("[Migration] Column checks complete");
-        await conn2.end();
-      }
-    } catch (e: any) {
-      console.log("[Migration] Column check skipped:", e.message?.slice(0, 80));
-    }
   } catch (error) {
     console.error("[Migration] Migration failed:", error);
-    // Don't crash the server — let it start even if migrations fail
-    // The DB might already be up to date
+    if (process.env.NODE_ENV === "production") {
+      throw error;
+    }
   }
 }
 
@@ -187,20 +106,7 @@ async function ensureCriticalVoiceSchema(connection: any) {
     const count = Number((rows as Array<{ count: number }>)[0]?.count ?? 0);
     if (count > 0) continue;
 
-    console.warn(`[Migration] ${table}.createdBy missing after migration run — applying fallback ALTER TABLE`);
-    try {
-      await connection.execute(`ALTER TABLE \`${table}\` ADD COLUMN createdBy INT DEFAULT NULL`);
-    } catch (e: any) {
-      if (e.errno !== 1060 && !String(e.message).includes("Duplicate column")) throw e;
-    }
-    try {
-      await connection.execute(`CREATE INDEX \`${index}\` ON \`${table}\` (createdBy)`);
-    } catch (e: any) {
-      if (e.errno !== 1061 && !String(e.message).includes("Duplicate key")) {
-        console.warn(`[Migration] Index ${index} note:`, String(e.message).slice(0, 120));
-      }
-    }
-    console.log(`[Migration] Added fallback ${table}.createdBy`);
+    throw new Error(`[Migration] Missing required column ${table}.createdBy after migrations. Run Drizzle migrations before startup.`);
   }
 }
 
@@ -525,7 +431,98 @@ async function startServer() {
       console.error(`[EmailWorker] Job ${job?.id} failed:`, err);
     });
 
-    console.log("[Server] SMS and Email workers initialized");
+    const automationWorker = new Worker(
+      "automation",
+      async (job) => {
+        const dbMod = await import("../db");
+        const data = job.data as {
+          action: "lead.created";
+          userId: number;
+          payload: {
+            leadId: number;
+            score?: number;
+            segment?: string;
+            firstName?: string;
+            lastName?: string;
+            company?: string;
+            source?: string;
+            email?: string;
+            phone?: string;
+          };
+        };
+
+        if (data.action !== "lead.created") {
+          console.warn(`[AutomationWorker] Unknown action: ${String((data as any).action)}`);
+          return { skipped: true };
+        }
+
+        try {
+          const { emitZapierEvent } = await import("./services/zapierEmit");
+          const { runEmailSequencesForLeadCreated } = await import("./services/emailSequenceTrigger");
+          const { runWorkflowsOnLeadCreated } = await import("./services/workflowEngine");
+
+          await emitZapierEvent(data.userId, "lead.created", {
+            leadId: data.payload.leadId,
+            score: data.payload.score,
+            segment: data.payload.segment,
+            firstName: data.payload.firstName,
+            lastName: data.payload.lastName,
+            company: data.payload.company,
+            source: data.payload.source,
+          });
+
+          await runEmailSequencesForLeadCreated(data.userId, {
+            id: data.payload.leadId,
+            firstName: data.payload.firstName ?? "",
+            lastName: data.payload.lastName ?? "",
+            email: data.payload.email,
+            company: data.payload.company,
+            phone: data.payload.phone,
+          });
+
+          await runWorkflowsOnLeadCreated(data.userId, {
+            id: data.payload.leadId,
+            firstName: data.payload.firstName,
+            lastName: data.payload.lastName,
+            email: data.payload.email,
+            phone: data.payload.phone,
+            company: data.payload.company,
+            source: data.payload.source,
+          });
+
+          await dbMod.logActivity({
+            userId: data.userId,
+            entityType: "lead",
+            entityId: data.payload.leadId,
+            action: "automation_completed",
+            description: `Lead-created automations completed for lead ${data.payload.leadId}`,
+          });
+
+          return { success: true };
+        } catch (error) {
+          await dbMod.logActivity({
+            userId: data.userId,
+            entityType: "lead",
+            entityId: data.payload.leadId,
+            action: "automation_failed",
+            description: `Lead-created automation failed: ${(error as Error).message}`,
+            metadata: { jobId: job.id },
+          }).catch(() => {});
+          throw error;
+        }
+      },
+      { connection: redisConnection as any, concurrency: 15 }
+    );
+
+    automationWorker.on("completed", (job) => {
+      console.log(`[AutomationWorker] ✅ COMPLETED | jobId: ${job.id}`);
+    });
+
+    automationWorker.on("failed", (job, err) => {
+      console.error(`[AutomationWorker] ❌ FAILED | jobId: ${job?.id} | error: ${err.message}`);
+    });
+
+    console.log("[Server] SMS, Email, and Automation workers initialized");
     } // end if(redisConnection)
   } catch (error) {
     console.warn("[Server] Job queue initialization warning:", error);

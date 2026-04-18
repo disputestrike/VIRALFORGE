@@ -8,6 +8,7 @@ let bullmqQueues: {
   calls: import("bullmq").Queue;
   sms: import("bullmq").Queue;
   email: import("bullmq").Queue;
+  automation: import("bullmq").Queue;
 } | null = null;
 
 // In-memory fallback queue
@@ -31,6 +32,7 @@ async function getQueues() {
       calls: new Queue("calls", { connection: connection as any }),
       sms: new Queue("sms", { connection: connection as any }),
       email: new Queue("email", { connection: connection as any }),
+      automation: new Queue("automation", { connection: connection as any }),
     };
 
     useRealQueue = true;
@@ -48,6 +50,7 @@ export async function addCallJob(data: {
   script?: string;
   sessionId?: string;
   userId?: number;
+  delay?: number;
 }): Promise<{ jobId: string; status: string }> {
   const queues = await getQueues();
   const jobId = `call_${data.leadId}_${Date.now()}`;
@@ -55,6 +58,7 @@ export async function addCallJob(data: {
   if (queues) {
     const job = await queues.calls.add("initiate-call", data, {
       jobId,
+      delay: data.delay,
       attempts: 3,
       backoff: { type: "exponential", delay: 5000 },
       removeOnComplete: 100,
@@ -134,6 +138,40 @@ export async function addEmailJob(data: {
   return { jobId, status: "queued_memory" };
 }
 
+export async function addAutomationJob(data: {
+  action: "lead.created";
+  userId: number;
+  payload: {
+    leadId: number;
+    score?: number;
+    segment?: string;
+    firstName?: string;
+    lastName?: string;
+    company?: string;
+    source?: string;
+    email?: string;
+    phone?: string;
+  };
+}): Promise<{ jobId: string; status: string }> {
+  const queues = await getQueues();
+  const jobId = `automation_${data.action}_${data.payload.leadId}_${Date.now()}`;
+
+  if (queues) {
+    const job = await queues.automation.add("automation-event", data, {
+      jobId,
+      attempts: 5,
+      backoff: { type: "exponential", delay: 4000 },
+      removeOnComplete: 200,
+      removeOnFail: 200,
+    });
+    return { jobId: job.id || jobId, status: "queued" };
+  }
+
+  memoryQueue.push({ type: "automation", data, id: jobId, addedAt: Date.now() });
+  console.log(`[Queue] Automation job added (in-memory): ${jobId}`);
+  return { jobId, status: "queued_memory" };
+}
+
 export function getMemoryQueueStatus() {
   return {
     usingRedis: useRealQueue,
@@ -143,4 +181,4 @@ export function getMemoryQueueStatus() {
 }
 
 export { getQueues };
-export default { addCallJob, addSmsJob, addEmailJob, getMemoryQueueStatus };
+export default { addCallJob, addSmsJob, addEmailJob, addAutomationJob, getMemoryQueueStatus };

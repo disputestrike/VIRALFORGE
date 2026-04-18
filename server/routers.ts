@@ -33,10 +33,19 @@ import { metricsRouter } from "./_core/routes/metricsRouter";
 import { ENV } from "./_core/env";
 import { normalizeToE164US } from "./_core/phoneE164";
 import { scoreFromRules, type RuleEntry } from "./_core/services/leadScoringApply";
+import { assertLeadCreateAllowed, assertQueuedCallAllowance } from "./_core/services/billingPolicy";
+import { assertOutboundDialAllowed } from "./realtime/outboundCompliance";
 import {
   getPublicDemoConfig,
   getPublicDemoOwnerId,
 } from "./realtime/tenantVoiceRuntime";
+
+function getBlastDelayMs(index: number, maxPerMinute: number, startAt?: Date): number {
+  const pace = Math.max(1, maxPerMinute);
+  const spacingMs = Math.ceil(60000 / pace);
+  const baseMs = Math.max(0, (startAt?.getTime() ?? Date.now()) - Date.now());
+  return baseMs + index * spacingMs;
+}
 
 // ─── Admin guard ──────────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -77,6 +86,7 @@ const leadsRouter = router({
       tags: z.array(z.string()).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      await assertLeadCreateAllowed(ctx.user.id);
       let score = calculateLeadScore(input);
       const custom = await db.getDefaultLeadScoringRule(ctx.user.id);
       if (custom?.rules && Array.isArray(custom.rules)) {
@@ -101,35 +111,21 @@ const leadsRouter = router({
       const segment = score >= 70 ? "hot" : score >= 40 ? "warm" : "cold";
       const { insertId: leadId } = await db.createLead({ ...input, score, segment, tags: input.tags ? JSON.stringify(input.tags) : undefined , createdBy: ctx.user.id });
       await db.logActivity({ userId: ctx.user.id, entityType: "lead", action: "created", description: `Created lead: ${input.firstName} ${input.lastName}` });
-      const { emitZapierEvent } = await import("./_core/services/zapierEmit");
-      void emitZapierEvent(ctx.user.id, "lead.created", {
-        leadId,
-        score,
-        segment,
-        firstName: input.firstName,
-        lastName: input.lastName,
-        company: input.company ?? undefined,
-        source: input.source ?? undefined,
+      await queueService.addAutomationJob({
+        action: "lead.created",
+        userId: ctx.user.id,
+        payload: {
+          leadId,
+          score,
+          segment,
+          firstName: input.firstName,
+          lastName: input.lastName,
+          company: input.company ?? undefined,
+          source: input.source ?? undefined,
+          email: input.email,
+          phone: input.phone,
+        },
       });
-      const { runEmailSequencesForLeadCreated } = await import("./_core/services/emailSequenceTrigger");
-      void runEmailSequencesForLeadCreated(ctx.user.id, {
-        id: leadId,
-        firstName: input.firstName,
-        lastName: input.lastName,
-        email: input.email,
-        company: input.company,
-        phone: input.phone,
-      }).catch((e) => console.warn("[EmailSequence] lead.created:", e));
-      const { runWorkflowsOnLeadCreated } = await import("./_core/services/workflowEngine");
-      void runWorkflowsOnLeadCreated(ctx.user.id, {
-        id: leadId,
-        firstName: input.firstName,
-        lastName: input.lastName,
-        email: input.email,
-        phone: input.phone,
-        company: input.company,
-        source: input.source,
-      }).catch((e) => console.warn("[Workflow] lead.created:", e));
       return { success: true };
     }),
 
@@ -159,7 +155,7 @@ const leadsRouter = router({
 
   // High-speed bulk blast — queue ALL campaign contacts simultaneously
   blast: protectedProcedure
-    .input(z.object({ campaignId: z.number() }))
+    .input(z.object({ campaignId: z.number(), scheduleStartAt: z.string().datetime().optional(), maxPerMinute: z.number().int().min(1).max(120).optional() }))
     .mutation(async ({ input, ctx }) => {
       const campaign = await db.getCampaignById(input.campaignId);
       if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
@@ -168,14 +164,30 @@ const leadsRouter = router({
       const contacts = await db.getCampaignContacts(input.campaignId);
       if (!contacts.length) throw new TRPCError({ code: "BAD_REQUEST", message: "No contacts in campaign" });
 
+      const scheduleStart = input.scheduleStartAt ? new Date(input.scheduleStartAt) : undefined;
+      if (scheduleStart && Number.isNaN(scheduleStart.getTime())) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid scheduleStartAt" });
+      }
+
+      await assertQueuedCallAllowance(ctx.user.id, contacts.length);
+      if (!scheduleStart || scheduleStart.getTime() <= Date.now()) {
+        assertOutboundDialAllowed(ENV.voiceOutboundAllowHours);
+      }
+
       const { addCallJob } = await import("./_core/services/queue");
+      const maxPerMinute = input.maxPerMinute ?? 30;
       let queued = 0;
-      // Queue ALL simultaneously — BullMQ handles concurrency (50 at a time)
-      await Promise.all(contacts.map(async (c) => {
+
+      await Promise.all(contacts.map(async (c, index) => {
         try {
           const lead = await db.getLeadById(c.leadId);
           if ((lead as any)?.phone) {
-            await addCallJob({ leadId: (lead as any).id as number, campaignId: input.campaignId });
+            await addCallJob({
+              leadId: (lead as any).id as number,
+              campaignId: input.campaignId,
+              userId: ctx.user.id,
+              delay: getBlastDelayMs(index, maxPerMinute, scheduleStart),
+            });
             queued++;
           }
         } catch {}
@@ -187,10 +199,10 @@ const leadsRouter = router({
         entityType: "campaign",
         entityId: input.campaignId,
         action: "blast",
-        description: `High-speed blast: ${queued} calls queued simultaneously`,
+        description: `Paced blast queued: ${queued} calls at up to ${maxPerMinute}/min`,
       });
 
-      return { success: true, queued, message: `${queued} calls queued simultaneously` };
+      return { success: true, queued, message: `${queued} calls queued (paced at up to ${maxPerMinute}/min)` };
     }),
 
   delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
@@ -353,24 +365,45 @@ const campaignsRouter = router({
 
   // High-speed bulk blast — queue ALL contacts simultaneously
   blast: protectedProcedure
-    .input(z.object({ campaignId: z.number() }))
+    .input(z.object({ campaignId: z.number(), scheduleStartAt: z.string().datetime().optional(), maxPerMinute: z.number().int().min(1).max(120).optional() }))
     .mutation(async ({ input, ctx }) => {
       const campaign = await db.getCampaignById(input.campaignId);
       if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });
       if (campaign.createdBy !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
       const contacts = await db.getCampaignContacts(input.campaignId);
       if (!contacts.length) throw new TRPCError({ code: "BAD_REQUEST", message: "No contacts in campaign" });
+
+      const scheduleStart = input.scheduleStartAt ? new Date(input.scheduleStartAt) : undefined;
+      if (scheduleStart && Number.isNaN(scheduleStart.getTime())) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid scheduleStartAt" });
+      }
+
+      await assertQueuedCallAllowance(ctx.user.id, contacts.length);
+      if (!scheduleStart || scheduleStart.getTime() <= Date.now()) {
+        assertOutboundDialAllowed(ENV.voiceOutboundAllowHours);
+      }
+
       const { addCallJob } = await import("./_core/services/queue");
+      const maxPerMinute = input.maxPerMinute ?? 30;
       let queued = 0;
-      await Promise.all(contacts.map(async (c) => {
+
+      await Promise.all(contacts.map(async (c, index) => {
         try {
           const lead = await db.getLeadById(c.leadId);
-          if ((lead as any)?.phone) { await addCallJob({ leadId: (lead as any).id as number, campaignId: input.campaignId }); queued++; }
+          if ((lead as any)?.phone) {
+            await addCallJob({
+              leadId: (lead as any).id as number,
+              campaignId: input.campaignId,
+              userId: ctx.user.id,
+              delay: getBlastDelayMs(index, maxPerMinute, scheduleStart),
+            });
+            queued++;
+          }
         } catch {}
       }));
       await db.updateCampaign(input.campaignId, { status: "active" });
-      await db.logActivity({ userId: ctx.user.id, entityType: "campaign", entityId: input.campaignId, action: "blast", description: `High-speed blast: ${queued} calls queued simultaneously` });
-      return { success: true, queued, message: `${queued} calls queued simultaneously` };
+      await db.logActivity({ userId: ctx.user.id, entityType: "campaign", entityId: input.campaignId, action: "blast", description: `Paced blast queued: ${queued} calls at up to ${maxPerMinute}/min` });
+      return { success: true, queued, message: `${queued} calls queued (paced at up to ${maxPerMinute}/min)` };
     }),
 
   delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
