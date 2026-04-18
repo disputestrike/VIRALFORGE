@@ -19,7 +19,7 @@
 | `VOICE_GROK_JSON_ENVELOPE` | off | `true` → parse `{"spoken_text":"..."}` from Grok for TTS. |
 | `VOICE_CARTESIA_EMOTION` | on | Set `false` if `generation_config.emotion` causes API errors. |
 | `VOICE_DEEPGRAM_ENDPOINTING_MS` | `250` | End-of-utterance sensitivity. |
-| `VOICE_RESPONSE_MICRO_PAUSE_MS` | `275` | Delay after STT final before LLM. |
+| `VOICE_RESPONSE_MICRO_PAUSE_MS` | `40` | Delay after STT final before LLM. |
 | `VOICE_TTS_SPEED_SCALE` | `1.0` | Scales Cartesia speed. |
 
 ## Smoke checks
