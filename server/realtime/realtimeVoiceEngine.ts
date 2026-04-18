@@ -2474,7 +2474,6 @@ export function createCallEngine(opts: EngineOptions): void {
         callId,
       });
     }
-    }
 
     // Loop detection — if agent is saying the same thing repeatedly
     if (isResponseLooping(cleanResponse, recentAssistantTexts)) {
@@ -3085,6 +3084,9 @@ export function createCallEngine(opts: EngineOptions): void {
           ensureAudioPipeline();
           void maybeSendInitialGreeting("media_first_fallback");
         }
+      }
+
+      const audio = Buffer.from(payload, "base64");
       if (audio.length === 0) return;
 
       // Instant barge-in: energy on raw mu-law (same strategy as VoiceRealtimePipeline).

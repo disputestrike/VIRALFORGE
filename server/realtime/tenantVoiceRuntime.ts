@@ -126,6 +126,7 @@ export async function getTenantVoiceRuntimeProfile(
   if (!userId) return DEFAULT_TENANT_VOICE_RUNTIME;
   const db = await getDb();
   if (!db) return DEFAULT_TENANT_VOICE_RUNTIME;
+  if (typeof (db as any).select !== "function") return DEFAULT_TENANT_VOICE_RUNTIME;
   const [row] = await db
     .select()
     .from(systemConfig)

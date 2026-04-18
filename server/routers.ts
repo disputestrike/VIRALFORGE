@@ -516,7 +516,14 @@ const messagesRouter = router({
 
       // Batch-fetch all leads in a single query instead of one per contact (N+1 fix)
       const leadIds = contacts.map((c) => c.leadId);
-      const leadList = await db.getLeadsByIds(leadIds);
+      let leadList: any[] = [];
+      try {
+        leadList = await (db as any).getLeadsByIds(leadIds);
+      } catch {
+        leadList = (await Promise.all(leadIds.map((id) => db.getLeadById(id)))).filter(
+          (lead) => lead != null
+        ) as any[];
+      }
       const leadsMap = new Map(leadList.map((l) => [l.id, l]));
 
       let sent = 0;
