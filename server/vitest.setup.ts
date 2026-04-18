@@ -83,6 +83,10 @@ function buildMock() {
 
     getUserById: vi.fn().mockImplementation(async (id: number) => _users.find((u) => u.id === id) ?? undefined),
 
+    getCurrentMonthUsage: vi
+      .fn()
+      .mockImplementation(async (_userId: number) => ({ leadsThisMonth: 0, callsThisMonth: 0 })),
+
     updateUserById: vi.fn().mockImplementation(async (userId: number, patch: Record<string, unknown>) => {
       const u = _users.find((x) => x.id === userId);
       if (!u) throw new Error("Database not available");

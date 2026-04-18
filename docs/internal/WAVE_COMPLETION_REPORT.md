@@ -1,6 +1,6 @@
 # Wave Completion Report (Six Sigma Gate)
 
-- Generated: 2026-04-18T12:16:48.288Z
+- Generated: 2026-04-18T12:19:50.877Z
 - Release Decision: **APPROVED**
 - Scope: Wave completion verification gates
 
@@ -8,12 +8,12 @@
 
 | ID | Gate | Result | Exit | Duration |
 | --- | --- | --- | --- | --- |
-| CTQ-ENG-TS | TypeScript static quality gate | PASS | 0 | 22.1s |
-| CTQ-VOICE-VAQS | Voice quality spec compliance gate | PASS | 0 | 3.0s |
-| CTQ-BILLING | Billing policy guard regression tests | PASS | 0 | 3.1s |
-| CTQ-QUEUE | Queue observability regression tests | PASS | 0 | 3.0s |
-| CTQ-COMPLIANCE | Outbound compliance scheduling tests | PASS | 0 | 2.7s |
-| CTQ-BUILD | Production build gate | PASS | 0 | 35.2s |
+| CTQ-ENG-TS | TypeScript static quality gate | PASS | 0 | 19.7s |
+| CTQ-VOICE-VAQS | Voice quality spec compliance gate | PASS | 0 | 2.9s |
+| CTQ-BILLING | Billing policy guard regression tests | PASS | 0 | 2.6s |
+| CTQ-QUEUE | Queue observability regression tests | PASS | 0 | 2.5s |
+| CTQ-COMPLIANCE | Outbound compliance scheduling tests | PASS | 0 | 2.6s |
+| CTQ-BUILD | Production build gate | PASS | 0 | 34.8s |
 
 ## Six Sigma Summary (Engineering Proxy)
 
