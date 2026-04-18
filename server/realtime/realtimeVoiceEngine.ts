@@ -103,6 +103,7 @@ import { computeInterruptAck } from "./interruptAck";
 import { logVoiceControllerEvent } from "./voiceControllerLog";
 import { extractLastQuestion } from "./repeatGuard";
 import { emptyStrictFacts, HARD_RULES, type StrictFacts } from "./strictTypes";
+import { BargeInClassifier } from "./bargeInClassifier";
 import {
   classifySmallTalk,
   getSmallTalkResponse,
@@ -435,6 +436,12 @@ export function createCallEngine(opts: EngineOptions): void {
   let activeAbVariant: { variantId: number; variantKey: string; promptOverride?: string | null; promptSuffix?: string | null } | null = null;
   /** Prevent duplicate rows if finalize runs twice */
   let abResultRecorded = false;
+  let activeLlmAbortController: AbortController | null = null;
+  let assistantTurnSpokenText = "";
+  let interruptedAtText = "";
+  let interruptedAtTs = 0;
+  let lastInterruptReason = "";
+  const bargeInClassifier = new BargeInClassifier();
 
   // ── Guardrail state ───────────────────────────────────────────────────────
   /** Consecutive turns that were pure small talk (reset when business content appears). */
@@ -623,6 +630,123 @@ export function createCallEngine(opts: EngineOptions): void {
     if (!normalized) return;
     recentAssistantTexts.push(normalized);
     if (recentAssistantTexts.length > 5) recentAssistantTexts.shift();
+  }
+
+  function appendAssistantPlaybackText(text: string): void {
+    const cleaned = text.trim();
+    if (!cleaned) return;
+    assistantTurnSpokenText = `${assistantTurnSpokenText} ${cleaned}`.trim().slice(-ENV.voiceInterruptContextChars * 2);
+  }
+
+  function clearInterruptedContext(): void {
+    interruptedAtText = "";
+    interruptedAtTs = 0;
+    lastInterruptReason = "";
+  }
+
+  function freezeInterruptedContext(reason: string, transcriptHint?: string): void {
+    const source =
+      assistantTurnSpokenText.trim() ||
+      transcriptHint?.trim() ||
+      recentAssistantTexts[recentAssistantTexts.length - 1] ||
+      "";
+    interruptedAtText = source.slice(-ENV.voiceInterruptContextChars).trim();
+    interruptedAtTs = Date.now();
+    lastInterruptReason = reason;
+    traceEvent(callId, "interrupt_context_frozen", {
+      reason,
+      chars: interruptedAtText.length,
+    });
+  }
+
+  function abortActiveLlm(reason: string): void {
+    if (!ENV.voiceInterruptAbortLlm) return;
+    if (!activeLlmAbortController) return;
+    try {
+      activeLlmAbortController.abort(reason);
+    } catch {
+      // ignore abort races
+    }
+    activeLlmAbortController = null;
+  }
+
+  function registerBargeIn(reason: string, sttConfidence: number, transcriptHint?: string): void {
+    if (!greetingDone) return;
+    if (!isSpeaking && !assistantResponseInProgress) return;
+    traceEvent(callId, "barge_in_detected", {
+      reason,
+      confidence: sttConfidence,
+      assistantResponseInProgress,
+      isSpeaking,
+    });
+    clearDeepgramFinalDebounce(reason);
+    clearPredictiveCommit(reason);
+    const ackSpeechMs = assistantPlaybackStartAt ? Date.now() - assistantPlaybackStartAt : 0;
+    const ackInProgress = assistantResponseInProgress;
+    turnCtl = onUserSpeechStart(turnCtl);
+    generationEpoch++;
+    freezeInterruptedContext(reason, transcriptHint);
+    abortActiveLlm(reason);
+    stopSpeaking();
+    traceEvent(callId, "tts_interrupted", { reason });
+    scheduleBlueprintInterruptAck(sttConfidence, ackSpeechMs, ackInProgress);
+    if (activeSessionId) {
+      const s = voiceSessionManager.getSession(activeSessionId);
+      if (s) {
+        voiceSessionManager.updateSession(activeSessionId, {
+          interruptCount: (s.interruptCount ?? 0) + 1,
+          orchestrationFloor: floorAfterUserBargeIn(),
+          orchestrationSnapshot: patchOrchestrationSnapshot(s.orchestrationSnapshot, {
+            lastFastIntentHints: transcriptHint ? [reason] : s.orchestrationSnapshot?.lastFastIntentHints,
+          }),
+        });
+      }
+    }
+  }
+
+  async function maybeHandleInterruptedContinuation(
+    transcript: string,
+    epoch: number
+  ): Promise<boolean> {
+    if (!interruptedAtText || !interruptedAtTs) return false;
+    if (Date.now() - interruptedAtTs > 12000) {
+      clearInterruptedContext();
+      return false;
+    }
+
+    const prediction = await bargeInClassifier.predict(interruptedAtText, transcript);
+    traceEvent(callId, "interrupt_decision", {
+      decision: prediction.decision,
+      provider: prediction.provider,
+      elapsedMs: prediction.elapsedMs,
+      reason: prediction.reason,
+    });
+
+    if (prediction.decision !== "CONTINUE") {
+      traceEvent(callId, "interrupt_pivot_resume", {
+        provider: prediction.provider,
+        reason: prediction.reason,
+      });
+      clearInterruptedContext();
+      return false;
+    }
+
+    appendHistory("user", transcript);
+    const continuationBlock =
+      `=== INTERRUPTED CONTINUATION ===\n` +
+      `You were in the middle of saying: "${interruptedAtText}".\n` +
+      `The caller interrupted with: "${transcript}".\n` +
+      `If the interruption sounds like "continue", "go on", or a short acknowledgement, continue your prior thought naturally in one or two short spoken sentences.\n` +
+      `If the interruption slightly redirects you, adapt gracefully but do not restart from the top.`;
+    await respondVoiceLlm(epoch, transcript, continuationBlock, false, {
+      blueprintIntentOverride: "recovery",
+    });
+    traceEvent(callId, "interrupt_continue_resume", {
+      provider: prediction.provider,
+      reason: prediction.reason,
+    });
+    clearInterruptedContext();
+    return true;
   }
 
   function formatIndustryLabel(label: string | null | undefined): string {
@@ -1133,6 +1257,7 @@ export function createCallEngine(opts: EngineOptions): void {
     const rawSpeed = Math.min(1.2, Math.max(0.55, voiceProfile.speed * ENV.voiceTtsSpeedScale));
     const ttsSpeed = Math.min(0.98, Math.max(0.94, rawSpeed));
     log(`cartesiaSend: "${text.slice(0,40)}" voiceId=${voiceProfile.cartesiaId} speed=${ttsSpeed}`);
+    appendAssistantPlaybackText(text);
     const hadNoContext = !cartesiaContextId;
     if (!cartesiaContextId) {
       cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -1334,25 +1459,7 @@ export function createCallEngine(opts: EngineOptions): void {
             if (fast.semanticInterrupt) {
               log(`[BARGE-IN] fast intent (interim): "${transcript.slice(0, 80)}"`);
               traceEvent(callId, "fast_intent_interim", { hints: fast.hints });
-              clearDeepgramFinalDebounce("fast_intent_interim");
-              const ackSpeechMs = assistantPlaybackStartAt ? Date.now() - assistantPlaybackStartAt : 0;
-              const ackInProgress = assistantResponseInProgress;
-              turnCtl = onUserSpeechStart(turnCtl);
-              generationEpoch++;
-              stopSpeaking();
-              scheduleBlueprintInterruptAck(lastFinalSttConfidence, ackSpeechMs, ackInProgress);
-              if (activeSessionId) {
-                const s = voiceSessionManager.getSession(activeSessionId);
-                if (s) {
-                  voiceSessionManager.updateSession(activeSessionId, {
-                    interruptCount: (s.interruptCount ?? 0) + 1,
-                    orchestrationFloor: floorAfterUserBargeIn(),
-                    orchestrationSnapshot: patchOrchestrationSnapshot(s.orchestrationSnapshot, {
-                      lastFastIntentHints: fast.hints,
-                    }),
-                  });
-                }
-              }
+              registerBargeIn("fast_intent_interim", Math.max(confidence || 0, lastFinalSttConfidence || 0.92), transcript);
             }
           }
 
@@ -1426,20 +1533,7 @@ export function createCallEngine(opts: EngineOptions): void {
 
           if (sttBackupBarge) {
             log(`[BARGE-IN] STT (final): "${transcript}"`);
-            clearDeepgramFinalDebounce("stt_barge_in");
-            const ackSpeechMs = assistantPlaybackStartAt ? Date.now() - assistantPlaybackStartAt : 0;
-            const ackInProgress = assistantResponseInProgress;
-            turnCtl = onUserSpeechStart(turnCtl);
-            generationEpoch++;
-            stopSpeaking();
-            scheduleBlueprintInterruptAck(conf, ackSpeechMs, ackInProgress);
-            if (activeSessionId) {
-              const s = voiceSessionManager.getSession(activeSessionId);
-              if (s)
-                voiceSessionManager.updateSession(activeSessionId, {
-                  interruptCount: (s.interruptCount ?? 0) + 1,
-                });
-            }
+            registerBargeIn("stt_barge_in", conf, transcript);
           }
 
           if (isFinal && speechFinal && greetingDone) {
@@ -1560,6 +1654,14 @@ export function createCallEngine(opts: EngineOptions): void {
     turnCtl = onProcessing(turnCtl);
     const epoch = ++generationEpoch;
     turnStartedAt = Date.now();
+
+    if (await maybeHandleInterruptedContinuation(transcript, epoch)) {
+      traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
+      return;
+    }
+    if (interruptedAtText) {
+      clearInterruptedContext();
+    }
 
     if (optOutFromFinal(transcript) && activeSessionId) {
       const s = voiceSessionManager.getSession(activeSessionId);
@@ -1852,11 +1954,21 @@ export function createCallEngine(opts: EngineOptions): void {
       await respondVoiceLlm(epoch, transcript, plan.strictBlock, recoveryPrefixForLlm);
       clearLatencyTimer();
     } catch (e: any) {
+      if (e?.name === "AbortError" || String(e?.message ?? e).toLowerCase().includes("aborted")) {
+        clearLatencyTimer();
+        log("[Voice LLM] Aborted due to fresh barge-in");
+        return;
+      }
       log(`[Voice LLM] Failed: ${e?.message ?? e}`);
       try {
         await new Promise((r) => setTimeout(r, 350));
         await respondVoiceLlm(epoch, transcript, plan.strictBlock, recoveryPrefixForLlm);
       } catch (e2: any) {
+        if (e2?.name === "AbortError" || String(e2?.message ?? e2).toLowerCase().includes("aborted")) {
+          clearLatencyTimer();
+          log("[Voice LLM] Retry aborted due to fresh barge-in");
+          return;
+        }
         log(`[Voice LLM] Retry failed: ${e2?.message ?? e2}`);
         if (activeSessionId) {
           const s = voiceSessionManager.getSession(activeSessionId);
@@ -2029,18 +2141,27 @@ export function createCallEngine(opts: EngineOptions): void {
 
     const textForGuard = cue ? "" : userTranscript;
 
-    const { stream, model } = await cerebrasChatCompletionStream({
-      model: ENV.cerebrasModel,
-      messages: [{ role: "system", content: prompt }, ...messages],
-      maxTokens: ENV.voiceLlmMaxTokens,
-      temperature: ENV.voiceLlmTemperature,
-    });
-    traceEvent(callId, "llm_stream_start", {
-      provider: "cerebras",
-      model,
-    });
-    const { clean, full } = await streamToCartesia(stream, epoch, textForGuard);
-    if (!clean.trim() && !full.trim()) throw new Error("Empty LLM response");
+    const abortController = new AbortController();
+    activeLlmAbortController = abortController;
+    try {
+      const { stream, model } = await cerebrasChatCompletionStream({
+        model: ENV.cerebrasModel,
+        messages: [{ role: "system", content: prompt }, ...messages],
+        maxTokens: ENV.voiceLlmMaxTokens,
+        temperature: ENV.voiceLlmTemperature,
+        signal: abortController.signal,
+      });
+      traceEvent(callId, "llm_stream_start", {
+        provider: "cerebras",
+        model,
+      });
+      const { clean, full } = await streamToCartesia(stream, epoch, textForGuard);
+      if (!clean.trim() && !full.trim()) throw new Error("Empty LLM response");
+    } finally {
+      if (activeLlmAbortController === abortController) {
+        activeLlmAbortController = null;
+      }
+    }
   }
 
   function sendTransientBridge(text: string, epoch: number): void {
@@ -2049,6 +2170,7 @@ export function createCallEngine(opts: EngineOptions): void {
     if (!line) return;
     stopSpeaking();
     transientBridgeActive = true;
+    assistantTurnSpokenText = "";
     cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     cartesiaSend(line, false);
     traceEvent(callId, "transient_bridge_sent", {
@@ -2071,6 +2193,7 @@ export function createCallEngine(opts: EngineOptions): void {
     userTranscript: string
   ): Promise<{ clean: string; full: string }> {
     stopSpeaking();
+    assistantTurnSpokenText = "";
     disarmOutboundSilenceWatch();
     clearUserSilenceReengageTimer();
     lastOutboundAudioAt = Date.now();
@@ -2341,6 +2464,7 @@ export function createCallEngine(opts: EngineOptions): void {
     }
     // Cancel prior synthesis + clear SW buffer so short replies (greeting, reprompt) never overlap.
     stopSpeaking();
+    assistantTurnSpokenText = "";
     // Always start a new Cartesia context — reusing ctx after greeting without a timely
     // `done` causes 400 "unable to infer voice mode" and loops the sorry line.
     cartesiaContextId = `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -2660,6 +2784,15 @@ export function createCallEngine(opts: EngineOptions): void {
     let msg: any;
     try { msg = JSON.parse(raw.toString()); } catch { return; }
 
+    if (msg?.type === "INTERRUPT" && ENV.voiceWebInterruptEnabled) {
+      traceEvent(callId, "web_interrupt_signal", {
+        reason: msg.reason ?? "web_vad",
+        energy: typeof msg.energy === "number" ? msg.energy : undefined,
+      });
+      registerBargeIn("web_interrupt", lastFinalSttConfidence);
+      return;
+    }
+
     const event = msg.event;
 
     if (event === "connected") {
@@ -2872,20 +3005,7 @@ export function createCallEngine(opts: EngineOptions): void {
           bargeInEnergyFrameCount = 0;
           log(`[BARGE-IN] energy=${energy} (threshold=${th}, sustained=${sustainRequired}f)`);
           traceEvent(callId, "barge_in_energy", { energy, threshold: th, sustainFrames: sustainRequired });
-          clearDeepgramFinalDebounce("energy_barge");
-          const ackSpeechMs = assistantPlaybackStartAt ? Date.now() - assistantPlaybackStartAt : 0;
-          const ackInProgress = assistantResponseInProgress;
-          turnCtl = onUserSpeechStart(turnCtl);
-          generationEpoch++;
-          stopSpeaking();
-          scheduleBlueprintInterruptAck(lastFinalSttConfidence, ackSpeechMs, ackInProgress);
-          if (activeSessionId) {
-            const s = voiceSessionManager.getSession(activeSessionId);
-            if (s)
-              voiceSessionManager.updateSession(activeSessionId, {
-                interruptCount: (s.interruptCount ?? 0) + 1,
-              });
-          }
+          registerBargeIn("energy_barge", lastFinalSttConfidence);
         }
       } else if (!isSpeaking) {
         // Not speaking — reset frame counter

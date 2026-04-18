@@ -114,6 +114,24 @@ export const ENV = {
   voiceDeepgramUtteranceEndMs: Math.max(300, Math.min(3000, parseInt(process.env.VOICE_DEEPGRAM_UTTERANCE_END_MS ?? "1000", 10) || 1000)),
   /** Minimum STT confidence to process a turn (below this = likely noise, ignored). */
   voiceSttMinConfidence: Math.max(0, Math.min(1, parseFloat(process.env.VOICE_STT_MIN_CONFIDENCE ?? "0.38") || 0.38)),
+  /** Full-duplex barge-in: allow the engine to freeze interruption context and decide continue/pivot. */
+  voiceBargeInClassifierEnabled: process.env.VOICE_BARGE_IN_CLASSIFIER_ENABLED !== "false",
+  /** Browser/web voice path can send explicit INTERRUPT control frames on the shared realtime socket. */
+  voiceWebInterruptEnabled: process.env.VOICE_WEB_INTERRUPT_ENABLED !== "false",
+  /** Optional browser-side VAD flag for future web voice sessions. */
+  voiceWebVadEnabled: process.env.VOICE_WEB_VAD_ENABLED !== "false",
+  /** Absolute/relative path to the ONNX classifier file used for continue/pivot decisions. */
+  voiceBargeInClassifierModelPath:
+    (process.env.VOICE_BARGE_IN_CLASSIFIER_MODEL_PATH ?? "server/models/bargein_classifier.onnx").trim(),
+  /** Optional tokenizer directory for the ONNX classifier. */
+  voiceBargeInClassifierTokenizerPath:
+    (process.env.VOICE_BARGE_IN_CLASSIFIER_TOKENIZER_PATH ?? "server/models/bargein_classifier_tokenizer").trim(),
+  /** How much of the assistant's last spoken text to preserve when interrupted. */
+  voiceInterruptContextChars: Math.max(80, Math.min(500, parseInt(process.env.VOICE_INTERRUPT_CONTEXT_CHARS ?? "220", 10) || 220)),
+  /** Silence window after transcript final used to treat a barge-in as a complete utterance. */
+  voiceBargeInContinueSilenceMs: Math.max(250, Math.min(1500, parseInt(process.env.VOICE_BARGE_IN_CONTINUE_SILENCE_MS ?? "700", 10) || 700)),
+  /** Abort in-flight LLM generation immediately when a caller barges in. */
+  voiceInterruptAbortLlm: process.env.VOICE_INTERRUPT_ABORT_LLM !== "false",
   /** Voice LLM max tokens per turn. */
   voiceLlmMaxTokens: Math.min(1200, Math.max(200, parseInt(process.env.VOICE_LLM_MAX_TOKENS ?? "600", 10) || 350)),
   /** Voice LLM temperature. */

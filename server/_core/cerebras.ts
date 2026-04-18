@@ -12,6 +12,7 @@ export type CerebrasChatParams = {
   model?: string;
   maxTokens?: number;
   temperature?: number;
+  signal?: AbortSignal;
 };
 
 const CEREBRAS_CHAT_COMPLETIONS_PATH = "/chat/completions";
@@ -98,6 +99,7 @@ async function requestCerebras(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
+      signal: params.signal,
     });
 
     if (response.ok) {
