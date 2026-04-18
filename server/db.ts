@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import { and, desc, eq, isNull, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, like, lte, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import type { MySql2Database } from "drizzle-orm/mysql2";
 import type { ResultSetHeader } from "mysql2";
@@ -36,6 +36,7 @@ import {
   voiceMetricEvents,
   promptVariants,
   abTestResults,
+  callQualityScores,
   type InsertPromptVariant,
   type InsertAbTestResult,
   type InsertUserPhoneNumber,
@@ -612,6 +613,118 @@ export async function getVoiceMetricLatencyStats(sampleLimit = 500): Promise<{
     return { count: msList.length, p50, p95, avg };
   } catch {
     return { count: 0, p50: null, p95: null, avg: null };
+  }
+}
+
+// ─── Call Quality Scores ──────────────────────────────────────────────────────
+
+export async function insertCallQualityScore(data: {
+  callId: string;
+  sessionId?: string | null;
+  sentiment: string;
+  emotion: string;
+  conversionScore: number;
+  escalationRisk: number;
+  flags?: Record<string, unknown> | null;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.insert(callQualityScores).values({
+      callId: data.callId,
+      sessionId: data.sessionId ?? null,
+      sentiment: data.sentiment,
+      emotion: data.emotion,
+      conversionScore: data.conversionScore,
+      escalationRisk: data.escalationRisk,
+      flags: data.flags ?? null,
+    });
+  } catch (e) {
+    console.warn("[DB] call_quality_scores insert skipped:", (e as Error).message);
+  }
+}
+
+export async function getCallQualityScore(callId: string) {
+  const db = await getDb();
+  if (!db) return null;
+  try {
+    const rows = await db
+      .select()
+      .from(callQualityScores)
+      .where(eq(callQualityScores.callId, callId))
+      .orderBy(desc(callQualityScores.createdAt))
+      .limit(1);
+    return rows[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getCallQualityScoresByTimeRange(opts: {
+  fromDate: Date;
+  toDate: Date;
+  limit?: number;
+}): Promise<typeof callQualityScores.$inferSelect[]> {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    return db
+      .select()
+      .from(callQualityScores)
+      .where(
+        and(
+          gte(callQualityScores.createdAt, opts.fromDate),
+          lte(callQualityScores.createdAt, opts.toDate)
+        )
+      )
+      .orderBy(desc(callQualityScores.createdAt))
+      .limit(Math.min(1000, opts.limit ?? 200));
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch voice_metric_events for a specific callId, ordered by msSinceCallStart. */
+export async function getVoiceMetricEventsByCallId(
+  callId: string
+): Promise<typeof voiceMetricEvents.$inferSelect[]> {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    return db
+      .select()
+      .from(voiceMetricEvents)
+      .where(eq(voiceMetricEvents.callId, callId))
+      .orderBy(voiceMetricEvents.msSinceCallStart);
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch voice_metric_events for a specific phase within a time range (for trend analysis). */
+export async function getVoiceMetricEventsByPhaseAndTimeRange(opts: {
+  phase: string;
+  fromDate: Date;
+  toDate: Date;
+  limit?: number;
+}): Promise<typeof voiceMetricEvents.$inferSelect[]> {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    return db
+      .select()
+      .from(voiceMetricEvents)
+      .where(
+        and(
+          eq(voiceMetricEvents.phase, opts.phase),
+          gte(voiceMetricEvents.createdAt, opts.fromDate),
+          lte(voiceMetricEvents.createdAt, opts.toDate)
+        )
+      )
+      .orderBy(desc(voiceMetricEvents.createdAt))
+      .limit(Math.min(2000, opts.limit ?? 500));
+  } catch {
+    return [];
   }
 }
 

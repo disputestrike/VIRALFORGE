@@ -642,3 +642,24 @@ export const abTestResults = mysqlTable("ab_test_results", {
 
 export type AbTestResult = typeof abTestResults.$inferSelect;
 export type InsertAbTestResult = typeof abTestResults.$inferInsert;
+
+// ─── Call quality scores (computed post-call by callQualityScorer) ────────────
+export const callQualityScores = mysqlTable("call_quality_scores", {
+  id: int("id").autoincrement().primaryKey(),
+  callId: varchar("callId", { length: 128 }).notNull(),
+  sessionId: varchar("sessionId", { length: 128 }),
+  /** positive | neutral | negative */
+  sentiment: varchar("sentiment", { length: 32 }).notNull().default("neutral"),
+  /** neutral | frustrated | confused | excited | angry | satisfied */
+  emotion: varchar("emotion", { length: 32 }).notNull().default("neutral"),
+  /** 0–100 likelihood of conversion */
+  conversionScore: int("conversionScore").notNull().default(0),
+  /** 0–100 likelihood of needing human escalation */
+  escalationRisk: int("escalationRisk").notNull().default(0),
+  /** JSON: QualityFlags object */
+  flags: json("flags"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type CallQualityScore = typeof callQualityScores.$inferSelect;
+export type InsertCallQualityScore = typeof callQualityScores.$inferInsert;

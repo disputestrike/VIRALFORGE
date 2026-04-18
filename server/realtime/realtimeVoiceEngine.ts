@@ -43,6 +43,12 @@ import {
   optOutFromFinal,
   predictiveTurnFromInterim,
 } from "./fastIntentRouter";
+import {
+  startLatencyTracking,
+  recordEvent as recordLatencyEvent,
+  getLatencySummary,
+  clearLatencySession,
+} from "../_core/services/latencyTracker";
 import { patchOrchestrationSnapshot } from "./callOrchestrationTypes";
 import { speakableLine } from "./speakability";
 import { floorAfterAgentStops, floorAfterUserBargeIn } from "./turnManager";
@@ -284,6 +290,8 @@ export function createCallEngine(opts: EngineOptions): void {
   traceStart(callId);
   registerCallSessionForMetrics(callId, sessionId);
   traceEvent(callId, "engine_init");
+  // Latency tracker — initialise with sessionId (may be undefined until stream_start)
+  startLatencyTracking(sessionId ?? callId, callId);
   const log = (msg: string) => console.log(`[${callId}] ${msg}`);
 
   let businessName = optBusinessName;
@@ -1192,7 +1200,14 @@ export function createCallEngine(opts: EngineOptions): void {
           }
           // Cartesia returns pcm_s16le — convert to mulaw for SignalWire
           if (streamSid && sigWs.readyState === WebSocket.OPEN) {
-            if (greetingDone) logSttFinalToTtsLatencyIfPending(callId);
+            if (greetingDone) {
+              logSttFinalToTtsLatencyIfPending(callId);
+              // Record tts_first_audio on the very first chunk after user speech
+              recordLatencyEvent(activeSessionId ?? callId, "tts_first_audio", {
+                callId,
+                bytes: Buffer.from(msg.data, "base64").length,
+              });
+            }
             const pcm16 = Buffer.from(msg.data, "base64");
             const mulaw = pcm16ToMulaw(pcm16);
             sigWs.send(JSON.stringify({
@@ -1215,6 +1230,10 @@ export function createCallEngine(opts: EngineOptions): void {
           // continue:false already closed the context; clearing here races with in-flight audio chunks → silence.
         } else if (msg.type === "done") {
           isSpeaking = false;
+          // Record TTS complete — enables turn_latency computation
+          if (greetingDone) {
+            recordLatencyEvent(activeSessionId ?? callId, "tts_complete", { callId });
+          }
           if (activeSessionId) {
             try {
               voiceSessionManager.updateSession(activeSessionId, {
@@ -1447,6 +1466,14 @@ export function createCallEngine(opts: EngineOptions): void {
 
           if (!transcript.trim()) return;
 
+          // Track STT partial events for latency measurement
+          if (!isFinal && greetingDone) {
+            recordLatencyEvent(activeSessionId ?? callId, "stt_partial", {
+              textLen: transcript.length,
+              callId,
+            });
+          }
+
           // Interim: phrase-level semantic interrupt (e.g. "wait", "stop") — faster than waiting for speech_final.
           if (
             !isFinal &&
@@ -1539,6 +1566,10 @@ export function createCallEngine(opts: EngineOptions): void {
           if (isFinal && speechFinal && greetingDone) {
             clearPredictiveCommit("deepgram_final");
             traceEvent(callId, "stt_final", { textLen: transcript.length });
+            recordLatencyEvent(activeSessionId ?? callId, "stt_final", {
+              textLen: transcript.length,
+              callId,
+            });
             log(`[STT] Final: "${transcript}"`);
             markSttFinalForLatency(callId);
             pendingDeepgramFinalText = transcript;
@@ -1900,6 +1931,11 @@ export function createCallEngine(opts: EngineOptions): void {
       path: activeProvider,
       model: activeModel,
     });
+    recordLatencyEvent(activeSessionId ?? callId, "llm_start", {
+      provider: activeProvider,
+      model: activeModel,
+      callId,
+    });
     log(`[ROUTE] Voice LLM: provider=${activeProvider} (streaming) model=${activeModel}`);
 
     if (!ENV.voiceRealtimeReady) {
@@ -2229,6 +2265,7 @@ export function createCallEngine(opts: EngineOptions): void {
 
     let fullText = "";
     let tokenBuffer = ""; // accumulates tokens until a speakable clause boundary
+    let llmTtftRecorded = false;
 
     // Sentence-boundary detector for streaming tokens.
     // Returns the next complete clause to speak and the remaining buffer.
@@ -2320,6 +2357,11 @@ export function createCallEngine(opts: EngineOptions): void {
             clearTimeout(llmAckTimer);
             llmAckTimer = null;
           }
+          // Record LLM time-to-first-token on the very first delta
+          if (!llmTtftRecorded) {
+            llmTtftRecorded = true;
+            recordLatencyEvent(activeSessionId ?? callId, "llm_ttft", { callId });
+          }
           fullText += delta;
           tokenBuffer += delta;
 
@@ -2359,7 +2401,13 @@ export function createCallEngine(opts: EngineOptions): void {
       return { clean: "", full: fullText };
     }
 
-      if (ENV.voiceLlmJsonEnvelope) {
+    // LLM stream complete — record before TTS synthesis begins
+    recordLatencyEvent(activeSessionId ?? callId, "llm_complete", {
+      fullTextLen: fullText.length,
+      callId,
+    });
+
+    if (ENV.voiceLlmJsonEnvelope) {
       const extracted = tryExtractJsonSpokenText(fullText);
       if (extracted) {
         // Re-process: flush the extracted text as streaming clauses
@@ -2418,6 +2466,16 @@ export function createCallEngine(opts: EngineOptions): void {
       });
       // Note: if the clause-level guardrail already caught this, the audio is already wrong.
       // We log it here for post-call QA. In future: pre-stream the full text before TTS.
+    }
+
+    // Record TTS start before first clause dispatch
+    const toSpeak = parts.length > 0 ? parts : [cleanResponse];
+    if (toSpeak.some((s) => s.trim())) {
+      recordLatencyEvent(activeSessionId ?? callId, "tts_start", {
+        clauseCount: toSpeak.length,
+        callId,
+      });
+    }
     }
 
     // Loop detection — if agent is saying the same thing repeatedly
@@ -2730,6 +2788,52 @@ export function createCallEngine(opts: EngineOptions): void {
       } catch {}
     }
 
+    // Compute and persist latency summary + call quality score asynchronously
+    const finalSessionId = activeSessionId ?? callId;
+    const finalHistory = [...conversationHistory];
+    const finalCallId = callId;
+    setImmediate(() => {
+      // Latency summary
+      const summary = getLatencySummary(finalSessionId);
+      if (summary) {
+        console.log(
+          `[LatencyTracker] ${finalCallId} | stt=${summary.sttLatencyMs ?? "?"}ms llm_ttft=${summary.llmTtftMs ?? "?"}ms tts=${summary.ttsLatencyMs ?? "?"}ms turn=${summary.turnLatencyMs ?? "?"}ms`
+        );
+      }
+      clearLatencySession(finalSessionId);
+
+      // Call quality scoring
+      if (finalHistory.length > 1) {
+        void import("../_core/services/callQualityScorer").then(({ scoreCall }) => {
+          const transcript = finalHistory
+            .map((m) => (m.role === "user" ? "Caller" : "AI") + ": " + m.content)
+            .join("\n");
+          const score = scoreCall({
+            transcript,
+            durationSeconds: summary ? Math.round((summary.turnLatencyMs ?? 0) / 1000) : 0,
+            turnCount: finalHistory.length,
+            bookingDetected: opts.outcome === "scheduled",
+            outcome: opts.outcome,
+          });
+          console.log(
+            `[CallQuality] ${finalCallId} | sentiment=${score.sentiment} emotion=${score.emotion} conversion=${score.conversionScore} escalation=${score.escalationRisk}`
+          );
+          // Persist quality score to DB
+          void import("../db").then(({ insertCallQualityScore }) =>
+            insertCallQualityScore({
+              callId: finalCallId,
+              sessionId: finalSessionId,
+              sentiment: score.sentiment,
+              emotion: score.emotion,
+              conversionScore: score.conversionScore,
+              escalationRisk: score.escalationRisk,
+              flags: score.flags,
+            })
+          ).catch(() => {});
+        }).catch(() => {});
+      }
+    });
+
     traceEnd(callId);
     if (activeSessionId) {
       const sessionIdForNotify = activeSessionId;
@@ -2968,6 +3072,7 @@ export function createCallEngine(opts: EngineOptions): void {
       if (!firstMediaLogged) {
         firstMediaLogged = true;
         traceEvent(callId, "first_media_in");
+        recordLatencyEvent(activeSessionId ?? callId, "audio_received", { callId });
         if (!signalWireConnectedSeen || !signalWireStartSeen) {
           traceEvent(callId, "stream_start", {
             streamSid,
@@ -2982,9 +3087,6 @@ export function createCallEngine(opts: EngineOptions): void {
           ensureAudioPipeline();
           void maybeSendInitialGreeting("media_first_fallback");
         }
-      }
-
-      const audio = Buffer.from(payload, "base64");
       if (audio.length === 0) return;
 
       // Instant barge-in: energy on raw mu-law (same strategy as VoiceRealtimePipeline).
