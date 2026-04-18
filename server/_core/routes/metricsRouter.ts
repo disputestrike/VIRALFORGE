@@ -106,6 +106,62 @@ export const metricsRouter = router({
     return getQueueHealth();
   }),
 
+  /** Automation ops summary for lead-created workflows (success/failure + recent errors). */
+  getAutomationOps: protectedProcedure
+    .input(
+      z
+        .object({
+          timeRange: z.enum(["1h", "6h", "24h", "7d", "30d"]).default("24h"),
+          recentFailureLimit: z.number().int().min(1).max(50).default(10),
+        })
+        .optional()
+    )
+    .query(async ({ ctx, input }) => {
+      const { fromDate } = parseDateRange(input?.timeRange ?? "24h");
+      const { getActivityLogs } = await import("../../db");
+      const logs = await getActivityLogs({ userId: ctx.user.id, limit: 500 });
+
+      const automationEvents = logs.filter((l) => {
+        if (!l?.createdAt || l.createdAt < fromDate) return false;
+        if (l.entityType !== "lead") return false;
+        return l.action === "automation_failed" || l.action === "automation_completed";
+      });
+
+      const failed = automationEvents.filter((l) => l.action === "automation_failed");
+      const completed = automationEvents.filter((l) => l.action === "automation_completed");
+      const total = automationEvents.length;
+      const failureRatePct = total > 0 ? Math.round((failed.length / total) * 100) : 0;
+
+      const recentFailures = failed.slice(0, input?.recentFailureLimit ?? 10).map((f) => {
+        let metadata: Record<string, unknown> | null = null;
+        if (typeof f.metadata === "string") {
+          try {
+            metadata = JSON.parse(f.metadata) as Record<string, unknown>;
+          } catch {
+            metadata = null;
+          }
+        } else if (f.metadata && typeof f.metadata === "object") {
+          metadata = f.metadata as Record<string, unknown>;
+        }
+        return {
+          id: f.id,
+          entityId: f.entityId,
+          description: f.description,
+          createdAt: f.createdAt,
+          metadata,
+        };
+      });
+
+      return {
+        timeRange: input?.timeRange ?? "24h",
+        totalEvents: total,
+        completedCount: completed.length,
+        failedCount: failed.length,
+        failureRatePct,
+        recentFailures,
+      };
+    }),
+
   /**
    * Per-call latency breakdown with p50/p90/p95/p99 percentiles.
    * Reads from voice_metric_events for the given callId.
