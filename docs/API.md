@@ -47,6 +47,21 @@ Inbound SMS from SignalWire.
 - `voiceAI.generateScript` — AI script generation
 - `voiceAI.listCallRecordings` — Call history
 
+### Metrics / Ops
+- `metrics.getQueueHealth` — Queue snapshot across `calls`, `sms`, `email`, `automation`
+	- Returns mode (`redis` or `memory`), pending counts, and per-queue job counts
+- `metrics.getAutomationOps` — Lead-created automation ops summary
+	- Returns completed/failed counts, failure rate, and recent failure details
+- `metrics.getCallLatencies` — Per-call latency stages and percentiles
+- `metrics.getCallQuality` — Sentiment/emotion/conversion/escalation score by call
+- `metrics.getProviderMetrics` — Provider latency stats by time window
+- `metrics.getLatencyTrend` — Time-series latency percentiles for dashboards
+
+## Outbound Compliance Behavior
+- Outbound queueing respects `VOICE_OUTBOUND_ALLOW_HOURS`.
+- If current time is outside allowed hours, calls are queued with a delay to the next allowed window instead of failing immediately.
+- Applies to blast queueing and direct queued outbound call paths.
+
 ### Onboarding
 - `onboarding.provisionNumber` — Buy SignalWire phone number
 - `onboarding.create` — Create onboarding record
@@ -63,6 +78,7 @@ SIGNALWIRE_PROJECT_ID — SignalWire project
 SIGNALWIRE_TOKEN      — SignalWire API token
 SIGNALWIRE_SPACE_URL  — SignalWire space URL
 SIGNALWIRE_PHONE_NUMBER — Main phone number
+VOICE_OUTBOUND_ALLOW_HOURS — Allowed outbound call window (example: `8-21`)
 OPENAI_API_KEY        — Whisper STT
 ANTHROPIC_API_KEY     — Claude LLM
 CARTESIA_API_KEY      — Cartesia TTS
