@@ -52,6 +52,9 @@ Inbound SMS from SignalWire.
 	- Returns mode (`redis` or `memory`), pending counts, and per-queue job counts
 - `metrics.getAutomationOps` — Lead-created automation ops summary
 	- Returns completed/failed counts, failure rate, and recent failure details
+- `metrics.retryLeadCreatedAutomation` — Requeue lead-created automation for a lead you own
+	- Input: `leadId`
+	- Returns queued `jobId` for operational recovery workflows
 - `metrics.getCallLatencies` — Per-call latency stages and percentiles
 - `metrics.getCallQuality` — Sentiment/emotion/conversion/escalation score by call
 - `metrics.getProviderMetrics` — Provider latency stats by time window

@@ -9,6 +9,7 @@
  */
 
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../trpc";
 import { computePercentiles } from "../services/latencyTracker";
 
@@ -159,6 +160,55 @@ export const metricsRouter = router({
         failedCount: failed.length,
         failureRatePct,
         recentFailures,
+      };
+    }),
+
+  /** Retry lead-created automation for a specific lead owned by current user. */
+  retryLeadCreatedAutomation: protectedProcedure
+    .input(z.object({ leadId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const { getLeadById, logActivity } = await import("../../db");
+      const lead = await getLeadById(input.leadId);
+      if (!lead) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
+      }
+      if ((lead as { createdBy?: number | null }).createdBy !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Lead does not belong to current user" });
+      }
+
+      const { addAutomationJob } = await import("../services/queue");
+      const payload = {
+        leadId: (lead as { id: number }).id,
+        score: (lead as { score?: number | null }).score ?? undefined,
+        segment: (lead as { segment?: string | null }).segment ?? undefined,
+        firstName: (lead as { firstName?: string | null }).firstName ?? undefined,
+        lastName: (lead as { lastName?: string | null }).lastName ?? undefined,
+        company: (lead as { company?: string | null }).company ?? undefined,
+        source: (lead as { source?: string | null }).source ?? undefined,
+        email: (lead as { email?: string | null }).email ?? undefined,
+        phone: (lead as { phone?: string | null }).phone ?? undefined,
+      };
+
+      const out = await addAutomationJob({
+        action: "lead.created",
+        userId: ctx.user.id,
+        payload,
+      });
+
+      await logActivity({
+        userId: ctx.user.id,
+        entityType: "lead",
+        entityId: input.leadId,
+        action: "automation_requeued",
+        description: `Lead-created automation requeued for lead ${input.leadId}`,
+        metadata: { jobId: out.jobId },
+      });
+
+      return {
+        success: true as const,
+        leadId: input.leadId,
+        jobId: out.jobId,
+        status: out.status,
       };
     }),
 
