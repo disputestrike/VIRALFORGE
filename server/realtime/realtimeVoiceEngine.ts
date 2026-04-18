@@ -459,6 +459,8 @@ export function createCallEngine(opts: EngineOptions): void {
   let assistantTurnSpokenText = "";
   /** Conversation state machine — topic lock, repeat detection, frustration, hard_no_reset. */
   let convState: ConversationState = createConversationState();
+  /** Track last three responses to detect template repetition */
+  let lastThreeResponses: string[] = [];
   let interruptedAtText = "";
   let interruptedAtTs = 0;
   let lastInterruptReason = "";
@@ -2477,6 +2479,30 @@ export function createCallEngine(opts: EngineOptions): void {
       // We log it here for post-call QA. In future: pre-stream the full text before TTS.
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // CRITICAL FIX: Truncate responses when repeat_count >= 2 to prevent loops
+    // ─────────────────────────────────────────────────────────────────────────
+    if (convState.repeat_count >= 2) {
+      const originalLength = cleanResponse.length;
+      cleanResponse = truncateAndDeduplicateResponse(
+        cleanResponse,
+        convState.repeat_count,
+        lastThreeResponses
+      );
+      logVoiceControllerEvent(callId, "guardrail", {
+        bucket: "repeat_truncation",
+        repeat_count: convState.repeat_count,
+        originalLength,
+        truncatedLength: cleanResponse.length,
+        wasModified: originalLength !== cleanResponse.length,
+      });
+    }
+
+    // Track this response for template deduplication
+    lastThreeResponses.push(cleanResponse);
+    if (lastThreeResponses.length > 3) lastThreeResponses.shift();
+    // ─────────────────────────────────────────────────────────────────────────
+
     const toSpeak = parts.length > 0 ? parts : [cleanResponse];
 
     // Loop detection — if agent is saying the same thing repeatedly
@@ -2540,6 +2566,75 @@ export function createCallEngine(opts: EngineOptions): void {
     cartesiaSend(line, false);
     appendHistory("assistant", line);
     rememberAssistantResponse(line);
+  }
+
+  /**
+   * CRITICAL FIX: Truncate and deduplicate responses when user repeats themselves.
+   * When repeat_count >= 2: strip discovery questions, truncate to first sentence.
+   */
+  function truncateAndDeduplicateResponse(
+    fullResponse: string,
+    repeatCount: number,
+    lastResponses: string[]
+  ): string {
+    let cleaned = fullResponse.trim();
+
+    // Template deduplication: if we've said "ApexAI can support..." before, don't repeat
+    const templateMatch = cleaned.match(
+      /^(Yes[.,]?\s+)?ApexAI can support[^.!?]*[.!?]/i
+    );
+    if (templateMatch && lastResponses.length >= 2) {
+      const lastResp = lastResponses[lastResponses.length - 1] || "";
+      if (lastResp.includes("ApexAI can support")) {
+        // We've said this template before; strip it this time
+        cleaned = cleaned.replace(templateMatch[0], "").trim();
+        log(
+          `[DEDUP] Removed repeated template at repeat_count=${repeatCount}`
+        );
+      }
+    }
+
+    // Aggressive discovery question blocking
+    const discoveryPatterns = [
+      /\s*How can we (tailor|help|support)[^?]*\?$/gim,
+      /\s*What would you like[^?]*\?$/gim,
+      /\s*Would you like[^?]*\?$/gim,
+      /\s*How do you think[^?]*\?$/gim,
+      /\s*Can you tell me[^?]*\?$/gim,
+      /\s*I want to be precise.*?Which[^?]*\?$/gim,
+      /\s*Which (one|point|area)[^?]*\?$/gim,
+    ];
+
+    for (const pattern of discoveryPatterns) {
+      if (pattern.test(cleaned)) {
+        cleaned = cleaned.replace(pattern, "").trim();
+      }
+    }
+
+    // Truncate to first sentence when repeat_count >= 3
+    if (repeatCount >= 3) {
+      const sentenceBreak = cleaned.match(/[.!?]/);
+      if (sentenceBreak && sentenceBreak.index !== undefined) {
+        cleaned = cleaned.slice(0, sentenceBreak.index + 1).trim();
+        // Don't add extra text; just keep the first sentence
+        log(`[TRUNCATE] Limited to first sentence at repeat_count=${repeatCount}`);
+      }
+    }
+    // When repeat_count === 2, remove anything after the first complete sentence
+    else if (repeatCount === 2) {
+      const firstEnd = cleaned.search(/[.!?]/);
+      if (firstEnd > 0 && firstEnd < cleaned.length - 5) {
+        cleaned = cleaned.slice(0, firstEnd + 1).trim();
+      }
+    }
+
+    // If cleaning removed everything, return generic fallback
+    if (!cleaned || cleaned.length < 5) {
+      cleaned =
+        "That's what I mentioned: we handle inbound calls, scheduling, and SMS follow-up for your team.";
+    }
+
+    return cleaned;
   }
 
   // ── Tool execution ────────────────────────────────────────────────────────
