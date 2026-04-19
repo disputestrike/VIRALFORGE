@@ -662,12 +662,49 @@ export function createCallEngine(opts: EngineOptions): void {
     if (recentAssistantTexts.length > 5) recentAssistantTexts.shift();
   }
 
+  function isNonSubstantiveDeterministicTurn(text: string): boolean {
+    const normalized = applyResetGuardrails(text.trim(), convState.hard_no_reset)
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!normalized) return true;
+    if (containsResetOpener(normalized)) return true;
+    return (
+      /^(got it[,.]?\s+go ahead|go ahead(?: when you'?re ready)?|i'?m with you\.?\s+say it the way you want me to answer it|i'?m here with you\.?\s+go ahead(?: and i'?ll answer directly)?|right here\.?\s+go ahead|yes[,.]?\s+i'?m with you|thanks so much for calling|no problem\.\s+thanks for calling|totally understand\b.*have a great day|.*\bwhat would you like to know\b|.*\btell me (?:what|the exact (?:part|question|issue))\b)/i.test(
+        normalized
+      ) ||
+      normalized.length < 12
+    );
+  }
+
   function syncAssistantStateAfterDeterministicTurn(text: string): void {
-    const normalized = text.trim();
-    if (!normalized) return;
+    const normalized = applyResetGuardrails(text.trim(), convState.hard_no_reset).trim();
+    if (!normalized || isNonSubstantiveDeterministicTurn(normalized)) return;
     convState = updateConvStateAfterAssistantTurn(convState, normalized);
     const lq = extractLastQuestion(normalized);
     if (lq) lastAssistantQuestion = lq;
+  }
+
+  function stripContinuityLeadIn(text: string): string {
+    let cleaned = text.trim();
+    const patterns = [
+      /^(you'?re right[,.]?\s+i should have[^.?!]*[.?!]\s*)/i,
+      /^(i understand you'?re frustrated[^.?!]*[.?!]\s*)/i,
+      /^(to answer (?:your|the) (?:original )?question[,:]?\s*)/i,
+      /^(let me answer that (?:more )?directly[,:]?\s*)/i,
+      /^(i want to be precise here[,:]?\s*)/i,
+      /^(let me tighten that up[,:]?\s*)/i,
+    ];
+    for (const pattern of patterns) {
+      cleaned = cleaned.replace(pattern, "").trim();
+    }
+    return cleaned;
+  }
+
+  function isContinuityBreakingFollowup(text: string): boolean {
+    return /\b(which one do you want first|which exact point do you want me to answer|what specific (challenge|point)|how can we (tailor|help|support)|how do you think an ai phone agent|how can an ai phone agent|does that answer your question|what would you like to know|what can i help you with today|how can i help you today)\b/i.test(
+      text
+    );
   }
 
   function appendAssistantPlaybackText(text: string): void {
@@ -1740,13 +1777,18 @@ export function createCallEngine(opts: EngineOptions): void {
       return;
     }
 
-    const industryFit = buildGlobalIndustryFitAnswer({
-      transcript,
-      recentAssistantTexts,
-      strictIndustry: strictFacts.industry,
-      primaryIndustryLabel: clientConfig.primaryIndustryLabel,
-      configuredIndustry: industry,
-    });
+    // Only use the global industry-fit shortcut as a last-resort fallback when
+    // the voice LLM is unavailable. In normal operation this canned path is one
+    // of the biggest sources of "it isn't listening" behavior.
+    const industryFit = ENV.voiceLlmConfigured
+      ? null
+      : buildGlobalIndustryFitAnswer({
+          transcript,
+          recentAssistantTexts,
+          strictIndustry: strictFacts.industry,
+          primaryIndustryLabel: clientConfig.primaryIndustryLabel,
+          configuredIndustry: industry,
+        });
     if (industryFit) {
       appendHistory("user", transcript);
       await speak(industryFit, epoch);
@@ -2351,7 +2393,7 @@ export function createCallEngine(opts: EngineOptions): void {
 
     const sendClause = (text: string) => {
       if (!text.trim() || epoch !== generationEpoch || isEnded) return;
-      const cleaned = text
+      let cleaned = text
         .replace(/TOOL:\s*\w+\s*\{[^}]*\}/g, "")
         .replace(/https?:\/\/[^\s]+/gi, "")
         .replace(/www\.[^\s]+/gi, "")
@@ -2360,6 +2402,20 @@ export function createCallEngine(opts: EngineOptions): void {
         .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
         .replace(/\s+/g, " ")
         .trim();
+
+      const continuityLocked =
+        convState.hard_no_reset &&
+        (Boolean(convState.active_topic) || convState.repeat_count > 0 || Boolean(interruptedAtText));
+
+      if (clausesSent === 0 && continuityLocked) {
+        cleaned = stripContinuityLeadIn(cleaned);
+        if (!cleaned) {
+          logVoiceControllerEvent(callId, "guardrail", {
+            bucket: "continuity_leadin_blocked",
+          });
+          return;
+        }
+      }
 
       const firstClauseLeadIn =
         /^(i want to be precise here|let me answer that more directly|let me tighten that up|got it[,.]?\s+go ahead whenever you'?re ready|got it[,.]?\s+go ahead)$/i;
@@ -2371,6 +2427,19 @@ export function createCallEngine(opts: EngineOptions): void {
       ) {
         logVoiceControllerEvent(callId, "guardrail", {
           bucket: "premature_followup_clause_blocked",
+          clause: cleaned.slice(0, 80),
+        });
+        return;
+      }
+
+      if (
+        clausesSent === 0 &&
+        continuityLocked &&
+        looksLikeQuestion(userTranscript) &&
+        isContinuityBreakingFollowup(cleaned)
+      ) {
+        logVoiceControllerEvent(callId, "guardrail", {
+          bucket: "continuity_followup_blocked",
           clause: cleaned.slice(0, 80),
         });
         return;
@@ -2575,7 +2644,8 @@ export function createCallEngine(opts: EngineOptions): void {
       cleanResponse = truncateAndDeduplicateResponse(
         cleanResponse,
         convState.repeat_count,
-        lastThreeResponses
+        lastThreeResponses,
+        convState.last_answer_summary
       );
       logVoiceControllerEvent(callId, "guardrail", {
         bucket: "repeat_truncation",
@@ -2685,7 +2755,8 @@ export function createCallEngine(opts: EngineOptions): void {
   function truncateAndDeduplicateResponse(
     fullResponse: string,
     repeatCount: number,
-    lastResponses: string[]
+    lastResponses: string[],
+    lastAnswerSummary?: string | null
   ): string {
     let cleaned = fullResponse.trim();
 
@@ -2741,6 +2812,7 @@ export function createCallEngine(opts: EngineOptions): void {
     // If cleaning removed everything, return generic fallback
     if (!cleaned || cleaned.length < 5) {
       cleaned =
+        lastAnswerSummary?.trim() ||
         "That's what I mentioned: we handle inbound calls, scheduling, and SMS follow-up for your team.";
     }
 

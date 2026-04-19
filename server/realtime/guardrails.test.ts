@@ -73,7 +73,7 @@ describe("Small Talk Micro-Policy", () => {
     const stClass = classifySmallTalk("how are you?");
     const response = getSmallTalkResponse(stClass, 1);
     expect(response).toMatch(/great|well|good|doing/i);
-    expect(response).toMatch(/help|what can i|what'?s? on/i);
+    expect(response).toMatch(/go ahead|what would you like to know|what'?s? on/i);
     // Must NOT contain negative self-description
     expect(response).not.toMatch(/i'?m? not (positive|good|well|okay|happy)/i);
     expect(response).not.toMatch(/you'?re? right/i);
@@ -101,7 +101,7 @@ describe("Small Talk Micro-Policy", () => {
     const stClass = classifySmallTalk("how are you doing?");
     // Turn MAX_SMALL_TALK_TURNS + 1 must be a pivot response
     const pivotResponse = getSmallTalkResponse(stClass, MAX_SMALL_TALK_TURNS + 1);
-    expect(pivotResponse).toMatch(/bring us back|help you with|what'?s? going on|focus on|main thing/i);
+    expect(pivotResponse).toMatch(/bring us back|tell me|focus on|main thing/i);
   });
 
   it('does NOT classify normal business questions as small talk', () => {
@@ -287,6 +287,8 @@ describe("Conversation Context Detection", () => {
       "we're losing leads because we don't answer fast enough",
       "we need to qualify more leads",
       "tell me what you can do for solar companies",
+      "how can you help higher education?",
+      "can you help the military?",
     ];
     for (const text of businessInputs) {
       expect(detectConversationContext(text)).toBe("business_context");
@@ -342,7 +344,7 @@ describe("Full-Response Guardrails", () => {
 
     expect(result.wasModified).toBe(true);
     expect(result.violations).toContain("negative_self_agreement");
-    expect(result.text).toMatch(/great|doing well|all good|here to help/i);
+    expect(result.text).toMatch(/great|doing well|all good|go ahead/i);
     expect(result.text).not.toMatch(/not positive/i);
   });
 

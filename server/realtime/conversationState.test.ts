@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createConversationState,
   isMeaningfulCanonicalQuestion,
+  updateConvStateAfterAssistantTurn,
   updateConvStateAfterUserTurn,
 } from "./conversationState";
 
@@ -42,5 +43,20 @@ describe("conversationState", () => {
     expect(isMeaningfulCanonicalQuestion("education")).toBe(true);
     expect(isMeaningfulCanonicalQuestion("military")).toBe(true);
     expect(isMeaningfulCanonicalQuestion("much")).toBe(false);
+  });
+
+  it("marks a topic answered after a substantive direct answer with no follow-up question", () => {
+    const state = updateConvStateAfterUserTurn(
+      createConversationState(),
+      "How can you help higher education?",
+      "STAY",
+      "how can you help higher education"
+    );
+    const next = updateConvStateAfterAssistantTurn(
+      state,
+      "ApexAI can handle admissions calls, financial aid questions, and student support without sounding robotic."
+    );
+    expect(next.topic_status).toBe("answered");
+    expect(next.last_answer_summary).toContain("admissions calls");
   });
 });

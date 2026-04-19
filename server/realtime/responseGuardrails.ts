@@ -106,6 +106,14 @@ export type ConversationContext =
 /** Detect the context from user transcript to know if a pitch is allowed. */
 export function detectConversationContext(userTranscript: string): ConversationContext {
   const t = userTranscript.toLowerCase().trim();
+  const isCapabilityAsk =
+    /\b(how can you help|how do you help|can you help|do you help|what can you do for|what do you do for|tell me what you can do|tell me how you help)\b/i.test(
+      t
+    );
+  const hasDomainSignal =
+    /\b(solar|hvac|roofing|insurance|real estate|plumbing|dental|medical|legal|healthcare|higher education|education|university|college|school|admissions|financial aid|military|government|public sector|defense|hotel|hospitality|restaurant|nonprofit)\b/i.test(
+      t
+    );
 
   // Small talk — use our existing classifier
   const stClass = classifySmallTalk(userTranscript);
@@ -114,6 +122,8 @@ export function detectConversationContext(userTranscript: string): ConversationC
   // Meta questions about the agent
   if (
     /\b(who are you|what are you|tell me about yourself|what can you do|what do you do|are you real|are you ai|are you a bot|how do you work|what'?s? apexai)\b/i.test(t) &&
+    !hasDomainSignal &&
+    !isCapabilityAsk &&
     !/\b(solar|hvac|roofing|insurance|real estate|plumbing|dental|medical|legal|company|business|calls?|appointments?|booking|sms|crm|inbound|outbound)\b/i.test(t)
   ) {
     return "meta_question";
@@ -125,7 +135,13 @@ export function detectConversationContext(userTranscript: string): ConversationC
   }
 
   // Business context signals — only here are pitches allowed
-  if (/\b(miss(ing|ed)? calls?|los(e|ing|t) leads?|our phone|business|sales|revenue|appointment|book|schedule|qualify|lead|customer|client|staff|team|handle calls?|inbound|outbound|volume|conversion|answer fast|answer quick|not answer|don't answer|don't respond|respond fast|response time|solar|hvac|roofing|insurance|real estate|plumbing|dental|medical|legal|what can you do|what do you do)\b/i.test(t)) {
+  if (
+    isCapabilityAsk ||
+    hasDomainSignal ||
+    /\b(miss(ing|ed)? calls?|los(e|ing|t) leads?|our phone|business|sales|revenue|appointment|book|schedule|qualify|lead|customer|client|staff|team|handle calls?|inbound|outbound|volume|conversion|answer fast|answer quick|not answer|don't answer|don't respond|respond fast|response time|solar|hvac|roofing|insurance|real estate|plumbing|dental|medical|legal|what can you do|what do you do)\b/i.test(
+      t
+    )
+  ) {
     return "business_context";
   }
 
@@ -188,7 +204,7 @@ export function checkClause(
     if (pattern.test(text)) {
       return {
         action: "replace",
-        text: "I'm doing great — what can I help you with today?",
+        text: "I'm doing great. Go ahead.",
         reason: "negative_self_agreement",
       };
     }
@@ -213,7 +229,7 @@ export function checkClause(
     if (pattern.test(text)) {
       return {
         action: "replace",
-        text: `I'm ${agent}, and I'm here to help. What can I do for you?`,
+        text: `I'm ${agent}, and I'm here to help with the business. Go ahead.`,
         reason: "robotic_phrase",
       };
     }
@@ -224,7 +240,7 @@ export function checkClause(
     if (pattern.test(text)) {
       return {
         action: "replace",
-        text: `I'm ${agent}, an AI assistant. What can I help you with today?`,
+        text: `I'm ${agent}, the AI assistant on this line. Go ahead.`,
         reason: "identity_instability",
       };
     }
@@ -316,7 +332,7 @@ export function applyFullResponseGuardrails(
     for (const pattern of NEGATIVE_SELF_AGREEMENT_PATTERNS) {
       if (pattern.test(text)) {
         violations.push("negative_self_agreement");
-        text = "I'm doing great — what can I help you with today?";
+        text = "I'm doing great. Go ahead.";
         wasModified = true;
         break;
       }
@@ -340,7 +356,7 @@ export function applyFullResponseGuardrails(
       wasModified = true;
       // If stripping left us with nothing, use a safe fallback
       if (!text) {
-        text = "What can I help you with today?";
+        text = "Tell me the exact part you want me to cover.";
       }
     }
   }
@@ -350,7 +366,7 @@ export function applyFullResponseGuardrails(
     for (const pattern of ROBOTIC_PHRASE_PATTERNS) {
       if (pattern.test(text)) {
         violations.push("robotic_phrase");
-        text = `I'm ${agent}, and I'm here to help. What can I do for you?`;
+        text = `I'm ${agent}, and I'm here to help with the business. Go ahead.`;
         wasModified = true;
         break;
       }
@@ -362,7 +378,7 @@ export function applyFullResponseGuardrails(
     for (const pattern of IDENTITY_INSTABILITY_PATTERNS) {
       if (pattern.test(text)) {
         violations.push("identity_instability");
-        text = `I'm ${agent}, an AI assistant. What can I help you with today?`;
+        text = `I'm ${agent}, the AI assistant on this line. Go ahead.`;
         wasModified = true;
         break;
       }
@@ -388,7 +404,7 @@ export function applyFullResponseGuardrails(
       text = filtered.join(" ").trim();
       wasModified = true;
       if (!text) {
-        text = "I hear you. What would you like to know?";
+        text = "I hear you. Go ahead.";
       }
     }
   }
@@ -450,9 +466,9 @@ function levenshteinDistance(a: string, b: string): number {
 /** Safe loop-break response */
 export function getLoopBreakResponse(loopCount: number): string {
   const LOOP_BREAKS = [
-    "I might be misunderstanding you — let me ask: what can I help you with today?",
-    "Let me step back — what's the main thing I can help you with right now?",
-    "I think we got a little off track. What can I actually help you with?",
+    "I might be misunderstanding you — tell me the exact point you want covered.",
+    "Let me step back — tell me the main thing you want answered right now.",
+    "I think we got a little off track. Tell me the exact question to answer.",
   ];
   return LOOP_BREAKS[loopCount % LOOP_BREAKS.length]!;
 }
@@ -461,9 +477,9 @@ export function getLoopBreakResponse(loopCount: number): string {
 
 export function getProfessionalLoopBreakResponse(loopCount: number): string {
   const LOOP_BREAKS = [
-    "Let me answer that more directly. Tell me the exact part you want me to cover.",
-    "I want to be precise here. Which exact point do you want me to answer?",
-    "Let me tighten that up. What is the one thing you want me to explain clearly?",
+    "Let me answer that more directly.",
+    "Let me keep this precise and answer the core point.",
+    "Let me tighten that up and stay on the exact question.",
   ];
   return LOOP_BREAKS[loopCount % LOOP_BREAKS.length]!;
 }
@@ -512,11 +528,11 @@ export function getDriftRedirectResponse(
     case "religion":
       return `That's outside what I can help with. I'm here to focus on ${businessGoal}. What can I do for you?`;
     case "personal_life":
-      return `I keep the focus on ${businessGoal}. What can I help you with today?`;
+      return `I keep the focus on ${businessGoal}. Tell me the exact business question.`;
     case "test_abuse":
-      return `I'm ${agent}, and I stay focused on helping you with ${businessGoal}. What can I do for you?`;
+      return `I'm ${agent}, and I stay focused on helping you with ${businessGoal}. Tell me the exact point you want answered.`;
     case "profanity_bait":
-      return `I'm here to help if you want to focus on ${businessGoal}. What can I help you with today?`;
+      return `I'm here to help if you want to focus on ${businessGoal}. Tell me the exact question.`;
     default:
       return `Let me bring us back to what I can help with. What's going on with ${businessGoal}?`;
   }

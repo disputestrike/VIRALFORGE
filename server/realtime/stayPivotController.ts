@@ -65,6 +65,26 @@ const NEW_TOPIC_KEYWORDS = [
   "refund",
 ];
 
+const EXPLICIT_TOPIC_PIVOT_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
+  { label: "military", pattern: /\bmilitary\b/i },
+  { label: "higher education", pattern: /\bhigher educat(?:ion|e)?\b/i },
+  { label: "education", pattern: /\beducation\b/i },
+  { label: "university", pattern: /\buniversity|college|school|admissions|financial aid\b/i },
+  { label: "solar", pattern: /\bsolar\b/i },
+  { label: "hvac", pattern: /\bhvac\b/i },
+  { label: "roofing", pattern: /\broofing\b/i },
+  { label: "insurance", pattern: /\binsurance\b/i },
+  { label: "real estate", pattern: /\breal estate\b/i },
+  { label: "plumbing", pattern: /\bplumbing\b/i },
+  { label: "dental", pattern: /\bdental\b/i },
+  { label: "medical", pattern: /\bmedical|healthcare|hospital\b/i },
+  { label: "legal", pattern: /\blegal|law firm|attorney\b/i },
+  { label: "government", pattern: /\bgovernment|public sector|defense\b/i },
+  { label: "hospitality", pattern: /\bhospitality|hotel|restaurant\b/i },
+  { label: "pricing", pattern: /\bpricing|cost|price\b/i },
+  { label: "crm integration", pattern: /\bcrm|hubspot|salesforce|integration\b/i },
+];
+
 // ── Acknowledgment/confirmation words ────────────────────────────────────────
 
 const CONFIRMATIONS = new Set([
@@ -114,6 +134,19 @@ export function canonicalizeUtterance(text: string, _state: ConversationState): 
 export function detectFrustration(text: string): boolean {
   const t = text.toLowerCase();
   return FRUSTRATION_TRIGGERS.some((trigger) => t.includes(trigger));
+}
+
+function detectExplicitTopicPivot(
+  canonical: string,
+  state: ConversationState
+): boolean {
+  const current = `${state.active_topic ?? ""} ${state.canonical_user_question ?? ""}`.toLowerCase();
+  const matches = EXPLICIT_TOPIC_PIVOT_PATTERNS.filter(({ pattern }) =>
+    pattern.test(canonical)
+  );
+  if (matches.length === 0) return false;
+  if (!current.trim()) return true;
+  return matches.some(({ label }) => !current.includes(label));
 }
 
 /**
@@ -174,6 +207,13 @@ export function decideStayOrPivot(
     if (state.active_topic || state.frustration_score + 2 >= 4) {
       return "REPAIR";
     }
+  }
+
+  // 1b. Explicit domain/topic pivot beats the short-fragment STAY bias.
+  // This is what lets quick shifts like "military?" or "higher education?"
+  // actually pivot instead of getting trapped under the prior topic.
+  if (detectExplicitTopicPivot(canonical, state)) {
+    return "PIVOT";
   }
 
   // 2. Acknowledgment / very short confirmation

@@ -205,11 +205,21 @@ export function updateConvStateAfterAssistantTurn(
   const trimmed = responseText.trim();
   if (!trimmed) return state;
   const summary = trimmed.slice(0, 200);
+  const wordCount = trimmed
+    .replace(/[^a-z0-9\s&/-]/gi, " ")
+    .split(/\s+/)
+    .filter(Boolean).length;
+  const marksTopicAnswered =
+    Boolean(state.active_topic) &&
+    wordCount >= 5 &&
+    !trimmed.includes("?");
   return {
     ...state,
     last_ai_response: summary,
     last_answer_summary: summary,
     last_turn_time: Date.now(),
+    topic_status: marksTopicAnswered ? "answered" : state.topic_status,
+    was_interrupted: false,
   };
 }
 
@@ -220,6 +230,9 @@ function deriveTopicFromCanonical(canonical: string): string {
   if (/revenue|money|earn|income|profit|sales/i.test(c)) return "revenue impact";
   if (/price|cost|pricing|fee|charge|subscription/i.test(c)) return "pricing";
   if (/how.*work|what.*do|what.*is/i.test(c)) return "how it works";
+  if (/higher education|education|school|college|university|admissions|financial aid/i.test(c))
+    return "higher education fit";
+  if (/military|government|public sector|defense/i.test(c)) return "military and government fit";
   if (/solar/i.test(c)) return "solar company benefits";
   if (/inbound|outbound|call.*(handling|answer)|answer.*call/i.test(c)) return "call handling";
   if (/sms|text message|follow.?up/i.test(c)) return "SMS follow-up";

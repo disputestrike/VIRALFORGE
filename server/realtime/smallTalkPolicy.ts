@@ -100,9 +100,9 @@ export function isPureSmallTalk(text: string): boolean {
 // Never let the LLM generate these — they are hardcoded and safe.
 
 const HOW_ARE_YOU_RESPONSES = [
-  "I'm doing great, thanks for asking. What can I help you with today?",
-  "Doing well, thanks. What can I help you with today?",
-  "All good on my end. What can I do for you today?",
+  "I'm doing great, thanks for asking. Go ahead.",
+  "Doing well, thanks. What would you like to know?",
+  "All good on my end. Go ahead.",
 ];
 
 const HELLO_CHECK_RESPONSES = [
@@ -112,20 +112,20 @@ const HELLO_CHECK_RESPONSES = [
 ];
 
 const NEGATIVE_LABEL_RESPONSES = [
-  "I promise I'm doing just fine. What can I help you with?",
-  "I'm actually doing great! What can I help you with today?",
-  "All good here — fully focused on you. What's going on?",
+  "I promise I'm doing just fine. Go ahead.",
+  "I'm actually doing great. Go ahead.",
+  "All good here — fully focused on you. Tell me the exact part you want covered.",
 ];
 
 const WHERE_FROM_RESPONSES = [
-  "I'm an AI assistant, so I support callers wherever the business needs me. What can I help you with today?",
-  "I'm an AI assistant working on this line. What can I do for you?",
+  "I'm an AI assistant, so I support callers wherever the business needs me. Go ahead.",
+  "I'm an AI assistant working on this line. Tell me what you want to know.",
 ];
 
 const LIGHT_TEASE_RESPONSES = [
-  "Thank you — what can I help you with?",
-  "Appreciate that. What can I help you with today?",
-  "Glad to hear that. What can I do for you?",
+  "Thank you — go ahead.",
+  "Appreciate that. Go ahead.",
+  "Glad to hear that. Tell me what you want to know.",
 ];
 
 const META_CAPABILITY_RESPONSES = [
@@ -135,14 +135,14 @@ const META_CAPABILITY_RESPONSES = [
 ];
 
 const WEATHER_RESPONSES = [
-  "Doing great, thanks! What can I help you with today?",
-  "All good! What's on your mind?",
+  "Doing great, thanks. Go ahead.",
+  "All good. What's on your mind?",
 ];
 
 const PIVOT_RESPONSES = [
-  "Let me make sure I'm helping with the right thing. What's going on with your business or your calls?",
-  "Let me bring us back to what I can actually help with. What's the main thing you're dealing with right now?",
-  "I'm here to help you with something real — what can I do for your business today?",
+  "Let me make sure I'm helping with the right thing. Tell me what's going on with your business or your calls.",
+  "Let me bring us back to what I can actually help with. Tell me the main thing you're dealing with.",
+  "I'm here to help with something real for the business. Tell me the exact issue.",
 ];
 
 /** Get a canonical response for a small-talk class, rotating through the pool. */
@@ -154,13 +154,13 @@ export function getSmallTalkResponse(
 ): string {
   const agent = (agentDisplayName ?? "").trim() || "Alex";
   const areYouAiResponses = [
-    `Yes — I'm ${agent}, an AI assistant. I'm here to help with your calls and business. What can I do for you?`,
-    `I am — I'm ${agent}, an AI assistant on this line. What are you looking to figure out today?`,
-    `Yes, I'm an AI assistant named ${agent}. What can I help you with today?`,
+    `Yes — I'm ${agent}, an AI assistant. I'm here to help with your calls and business. Go ahead.`,
+    `I am — I'm ${agent}, an AI assistant on this line. Tell me what you want to figure out.`,
+    `Yes, I'm an AI assistant named ${agent}. Go ahead.`,
   ];
   const nameResponses = [
-    `I'm ${agent} — an AI assistant here to help. What can I do for you today?`,
-    `My name is ${agent}. How can I help you?`,
+    `I'm ${agent} — an AI assistant here to help. Go ahead.`,
+    `My name is ${agent}. Tell me what you want to know.`,
   ];
   // If we've hit the small-talk limit, force a business pivot
   if (
