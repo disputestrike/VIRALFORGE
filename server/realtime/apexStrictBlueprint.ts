@@ -269,7 +269,7 @@ export const COPY_BLOCKS = {
   /** Graceful exit when caller is frustrated or repeatedly rejecting. */
   frustration_exit:
     "Totally understand — I won't take up more of your time. Have a great day.",
-  chaos: "Got it. Go ahead whenever you're ready.",
+  chaos: "I'm with you. Say it the way you want me to answer it.",
   /** After “why aren’t you talking” — bridge then LLM continues the real thread. */
   silence_complaint_bridge:
     "Hey — I'm right here with you. Let me pick back up on what we were talking about.",
@@ -348,8 +348,8 @@ export function detectChaosFragments(text: string): boolean {
   const t = text.trim();
   if (t.length === 0) return false;
   if (/^(yes|yeah|yep|yup|no|nope|correct|right|exactly|sure|okay|ok)[.!?\s]*$/i.test(t)) return false;
-  if (t.length < 6) return true;
-  if (/^(uh+|um+|er+|well|so|like)[,.]?\s*$/i.test(t)) return true;
+  if (/^(and|but|so|well|much|more|house|education|military|solar)[.!?\s]*$/i.test(t)) return false;
+  if (/^(uh+|um+|er+|well|so|like|wait|hold on|hang on|one second|one sec|just a sec|let me think|hmm+|mm+)[,.]?\s*$/i.test(t)) return true;
   return false;
 }
 

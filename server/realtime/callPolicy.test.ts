@@ -19,6 +19,7 @@ describe("callPolicy", () => {
 
   it("detects end call", () => {
     expect(detectEndCallIntent("no thanks")).toBe(true);
+    expect(detectEndCallIntent("No. Have a good day.")).toBe(true);
     expect(detectEndCallIntent("I want to buy")).toBe(false);
   });
 

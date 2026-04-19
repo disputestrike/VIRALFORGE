@@ -60,6 +60,21 @@ export interface ConversationState {
   turn_number: number;
 }
 
+const NON_SUBSTANTIVE_CANONICALS = new Set([
+  "and",
+  "but",
+  "so",
+  "well",
+  "much",
+  "more",
+  "house",
+  "help",
+  "can",
+  "you",
+  "how",
+  "what",
+]);
+
 export function createConversationState(): ConversationState {
   return {
     active_topic: null,
@@ -82,6 +97,25 @@ export function createConversationState(): ConversationState {
   };
 }
 
+export function isMeaningfulCanonicalQuestion(canonical: string): boolean {
+  const normalized = canonical.toLowerCase().trim();
+  if (!normalized) return false;
+  if (
+    /^(can you tell me how|can you tell me|tell me how|how can you help|how do you help|how can you|how do you|can you help|what can you do|what do you do)$/i.test(
+      normalized
+    )
+  ) {
+    return false;
+  }
+  const words = normalized
+    .replace(/[^a-z0-9\s&/-]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((word) => !NON_SUBSTANTIVE_CANONICALS.has(word));
+  if (words.length >= 2) return true;
+  return words.length === 1 && words[0]!.length >= 5;
+}
+
 /**
  * Update state after the caller speaks and we have a STAY/PIVOT/REPAIR/CLOSE decision.
  * Call this BEFORE passing the state to the LLM.
@@ -94,6 +128,8 @@ export function updateConvStateAfterUserTurn(
 ): ConversationState {
   const now = Date.now();
   const next: ConversationState = { ...state, last_turn_time: now, turn_number: state.turn_number + 1 };
+  const hasMeaningfulCanonical = isMeaningfulCanonicalQuestion(canonical);
+  const establishedTopicThisTurn = hasMeaningfulCanonical && !state.canonical_user_question;
 
   // Lock hard_no_reset after the first substantive user turn
   if (!state.hard_no_reset && userText.trim().length > 3) {
@@ -101,20 +137,25 @@ export function updateConvStateAfterUserTurn(
   }
 
   // Update canonical question if not yet set or pivoting to a new topic
-  if (!state.canonical_user_question || decision === "PIVOT") {
+  if (hasMeaningfulCanonical && (!state.canonical_user_question || decision === "PIVOT")) {
     next.canonical_user_question = canonical;
   }
 
   // Derive a topic label if we don't have one or we're pivoting
-  if (!next.active_topic || decision === "PIVOT") {
+  if (hasMeaningfulCanonical && (!next.active_topic || decision === "PIVOT")) {
     next.active_topic = deriveTopicFromCanonical(canonical);
   }
 
   switch (decision) {
     case "STAY":
-      next.repeat_count = state.repeat_count + 1;
-      next.repeat_timestamps = [...state.repeat_timestamps, now];
-      next.topic_status = "open";
+      if (state.canonical_user_question) {
+        next.repeat_count = state.repeat_count + 1;
+        next.repeat_timestamps = [...state.repeat_timestamps, now];
+      } else if (establishedTopicThisTurn) {
+        next.repeat_count = 0;
+        next.repeat_timestamps = [];
+      }
+      next.topic_status = next.active_topic ? "open" : state.topic_status;
       // Mild frustration accumulation on repeated questions
       if (next.repeat_count >= 2) {
         next.frustration_score = Math.min(10, state.frustration_score + 0.5);
@@ -123,15 +164,20 @@ export function updateConvStateAfterUserTurn(
 
     case "REPAIR":
       next.frustration_score = Math.min(10, state.frustration_score + 2);
-      next.repeat_count = state.repeat_count + 1;
-      next.topic_status = "open";
+      if (state.canonical_user_question) {
+        next.repeat_count = state.repeat_count + 1;
+        next.repeat_timestamps = [...state.repeat_timestamps, now];
+      }
+      next.topic_status = next.active_topic ? "open" : state.topic_status;
       break;
 
     case "PIVOT":
-      next.canonical_user_question = canonical;
+      if (hasMeaningfulCanonical) {
+        next.canonical_user_question = canonical;
+      }
       next.repeat_count = 0;
       next.repeat_timestamps = [];
-      next.topic_status = "open";
+      next.topic_status = next.active_topic ? "open" : state.topic_status;
       next.frustration_score = Math.max(0, state.frustration_score - 1);
       break;
 

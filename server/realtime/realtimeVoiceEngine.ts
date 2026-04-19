@@ -17,6 +17,7 @@ import {
   updateCallState,
   markQuestionAnswered,
   canOfferBooking,
+  detectEndCallIntent,
   inferUtteranceIntent,
   detectLiveTransferIntent,
 } from "./callPolicy";
@@ -104,7 +105,11 @@ import {
   type ApexControllerState,
   type BlueprintIntent,
 } from "./apexStrictBlueprint";
-import { postProcessAssistantResponse } from "./answerDirectGuard";
+import {
+  answeredDirectly,
+  looksLikeQuestion,
+  postProcessAssistantResponse,
+} from "./answerDirectGuard";
 import { computeInterruptAck } from "./interruptAck";
 import { logVoiceControllerEvent } from "./voiceControllerLog";
 import { extractLastQuestion } from "./repeatGuard";
@@ -657,6 +662,14 @@ export function createCallEngine(opts: EngineOptions): void {
     if (recentAssistantTexts.length > 5) recentAssistantTexts.shift();
   }
 
+  function syncAssistantStateAfterDeterministicTurn(text: string): void {
+    const normalized = text.trim();
+    if (!normalized) return;
+    convState = updateConvStateAfterAssistantTurn(convState, normalized);
+    const lq = extractLastQuestion(normalized);
+    if (lq) lastAssistantQuestion = lq;
+  }
+
   function appendAssistantPlaybackText(text: string): void {
     const cleaned = text.trim();
     if (!cleaned) return;
@@ -782,15 +795,9 @@ export function createCallEngine(opts: EngineOptions): void {
       /\b(you'?re not listening|youre not listening|that'?s not what i asked|thats not what i asked|listen to me|not listening to me|you missed the question|tell me exactly)\b/.test(t);
     if (!heardNothing && !listeningComplaint) return null;
     if (listeningComplaint) {
-      if (strictFacts.industry === "solar" || /\bsolar\b/.test(industry) || /\bsolar\b/.test(t)) {
-        return "You're right. Let me answer it cleanly. For solar companies, ApexAI can answer inbound calls, follow up with leads fast, qualify homeowners, book appointments, and send text reminders without sounding robotic.";
-      }
-      return "You're right. Let me answer it cleanly and stay on your exact question.";
+      return "You're right. Let me answer your exact question directly.";
     }
-    if (strictFacts.industry === "solar" || /\bsolar\b/.test(industry)) {
-      return "I am with you now, and yes, ApexAI can help solar companies. We can handle inbound calls, outbound lead follow-up, appointment booking, and SMS reminders. Which part do you want to hear first?";
-    }
-    return "I am with you now. Go ahead, and I will answer directly.";
+    return "I'm here with you. Go ahead and I'll answer directly.";
   }
 
   function buildTransientBridgeText(userTranscript: string): string | null {
@@ -1689,6 +1696,7 @@ export function createCallEngine(opts: EngineOptions): void {
 
     // 1a. Update conversation context
     currentConversationContext = detectConversationContext(transcript);
+    const stClass = classifySmallTalk(transcript);
 
     // 1b. Topic drift check (off-limits territory)
     const driftResult = detectTopicDrift(transcript);
@@ -1700,15 +1708,33 @@ export function createCallEngine(opts: EngineOptions): void {
       );
       appendHistory("user", transcript);
       await speak(driftResponse, epoch);
+      syncAssistantStateAfterDeterministicTurn(driftResponse);
       logVoiceControllerEvent(callId, "guardrail", { bucket: "topic_drift", driftClass: driftResult.driftClass });
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
       return;
+    }
+
+    const shouldTrackConversationState =
+      !(stClass !== "none" && currentConversationContext === "small_talk" && !convState.active_topic);
+    let spDecision: "STAY" | "PIVOT" | "REPAIR" | "CLOSE" | null = null;
+    if (shouldTrackConversationState) {
+      const isFirstCallerTurn = convState.turn_number === 0;
+      spDecision = decideStayOrPivot(transcript, convState, isFirstCallerTurn);
+      const canonicalQ = canonicalizeUtterance(transcript, convState);
+      convState = updateConvStateAfterUserTurn(convState, transcript, spDecision, canonicalQ);
+      traceEvent(callId, "conv_state", {
+        decision: spDecision,
+        repeat_count: convState.repeat_count,
+        frustration_score: convState.frustration_score,
+        active_topic: convState.active_topic ?? "(none)",
+      });
     }
 
     const audioRepair = buildAudioRepairAnswer(transcript);
     if (audioRepair) {
       appendHistory("user", transcript);
       await speak(audioRepair, epoch);
+      syncAssistantStateAfterDeterministicTurn(audioRepair);
       logVoiceControllerEvent(callId, "guardrail", { bucket: "audio_repair_answer" });
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
       return;
@@ -1724,6 +1750,7 @@ export function createCallEngine(opts: EngineOptions): void {
     if (industryFit) {
       appendHistory("user", transcript);
       await speak(industryFit, epoch);
+      syncAssistantStateAfterDeterministicTurn(industryFit);
       apexState = markBlueprintAnswered(apexState, industryFit);
       policyState = markQuestionAnswered(policyState);
       syncPolicySnapshot(transcript, { intent: "question", mode: "answer" });
@@ -1732,12 +1759,12 @@ export function createCallEngine(opts: EngineOptions): void {
     }
 
     // 1c. Small-talk micro-policy (hardcoded — LLM never sees these turns)
-    const stClass = classifySmallTalk(transcript);
     if (stClass !== "none") {
       smallTalkTurnCount++;
       const stResponse = getSmallTalkResponse(stClass, smallTalkTurnCount, businessName, spokenAgent());
       appendHistory("user", transcript);
       await speak(stResponse, epoch);
+      syncAssistantStateAfterDeterministicTurn(stResponse);
       logVoiceControllerEvent(callId, "guardrail", { bucket: "small_talk_hardcode", stClass, turn: smallTalkTurnCount });
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
       return; // ← LLM is NEVER called for small talk
@@ -1797,6 +1824,7 @@ export function createCallEngine(opts: EngineOptions): void {
         apexState = markBlueprintAnswered(apexState, bpRoute.route.text);
       }
       await speak(bpRoute.route.text, epoch);
+      syncAssistantStateAfterDeterministicTurn(bpRoute.route.text);
       if (bpRoute.route.markAnswered) {
         policyState = markQuestionAnswered(policyState);
       }
@@ -1969,29 +1997,19 @@ export function createCallEngine(opts: EngineOptions): void {
     });
 
     // ── CONVERSATION STATE CONTROLLER ─────────────────────────────────────
-    const spDecision = decideStayOrPivot(transcript, convState, !callerHasSpokenOnce);
-    const canonicalQ = canonicalizeUtterance(transcript, convState);
-    convState = updateConvStateAfterUserTurn(convState, transcript, spDecision, canonicalQ);
-    const convStateBlock = buildConversationStateBlock(convState, spDecision);
+    const convStateBlock = spDecision ? buildConversationStateBlock(convState, spDecision) : "";
     const activeStrictBlock = convStateBlock
       ? `${convStateBlock}\n\n${plan.strictBlock}`
       : plan.strictBlock;
-    traceEvent(callId, "conv_state", {
-      decision: spDecision,
-      repeat_count: convState.repeat_count,
-      frustration_score: convState.frustration_score,
-      active_topic: convState.active_topic ?? "(none)",
-    });
     // ── END CONVERSATION STATE CONTROLLER ─────────────────────────────────
 
     // ── TERMINATION INTENT DETECTION (CRITICAL FIX B) ─────────────────────
-    // If user explicitly asks to end call AND they've been frustrated, RESPECT IT
-    const terminationPhrases = [
+    // Respect any clear shutdown signal immediately — especially polite farewells.
+    const hardTerminationPhrases = [
       "end the call",
       "end call",
       "stop the call",
       "hang up",
-      "goodbye",
       "end this",
       "terminate",
       "close the call",
@@ -1999,11 +2017,12 @@ export function createCallEngine(opts: EngineOptions): void {
     ];
 
     const lowerTranscript = transcript.toLowerCase().trim();
-    const isTerminationRequest = terminationPhrases.some((phrase) => 
+    const isHardTerminationRequest = hardTerminationPhrases.some((phrase) => 
       lowerTranscript.includes(phrase)
     );
+    const isTerminationRequest = isHardTerminationRequest || detectEndCallIntent(transcript);
 
-    if (isTerminationRequest && convState.repeat_count >= 3) {
+    if (isTerminationRequest) {
       logVoiceControllerEvent(callId, "guardrail", {
         bucket: "user_termination_request",
         repeat_count: convState.repeat_count,
@@ -2012,9 +2031,14 @@ export function createCallEngine(opts: EngineOptions): void {
       log(`[CALL-CONTROL] User requested termination at repeat_count=${convState.repeat_count}`);
       
       // Say goodbye and end the call
-      await speak("Thank you for your time. Goodbye.", epoch);
+      const goodbyeLine = "No problem. Thanks for calling. Have a great day.";
+      await speak(goodbyeLine, epoch);
+      syncAssistantStateAfterDeterministicTurn(goodbyeLine);
       setTimeout(() => {
-        void finalizeHard({ reason: "user_termination_request", outcome: "not_interested" });
+        void finalizeHard({
+          reason: isHardTerminationRequest ? "user_termination_request" : "user_farewell",
+          outcome: "not_interested",
+        });
       }, 1000);
       traceTurnTiming(callId, { totalMs: Date.now() - turnStartedAt });
       return;
@@ -2337,6 +2361,21 @@ export function createCallEngine(opts: EngineOptions): void {
         .replace(/\s+/g, " ")
         .trim();
 
+      const firstClauseLeadIn =
+        /^(i want to be precise here|let me answer that more directly|let me tighten that up|got it[,.]?\s+go ahead whenever you'?re ready|got it[,.]?\s+go ahead)$/i;
+
+      if (
+        clausesSent === 0 &&
+        looksLikeQuestion(userTranscript) &&
+        (firstClauseLeadIn.test(cleaned) || (cleaned.includes("?") && !answeredDirectly(userTranscript, cleaned)))
+      ) {
+        logVoiceControllerEvent(callId, "guardrail", {
+          bucket: "premature_followup_clause_blocked",
+          clause: cleaned.slice(0, 80),
+        });
+        return;
+      }
+
       // ── GUARDRAIL: Reset opener prevention (hard_no_reset rule) ────────────
       if (convState.hard_no_reset && containsResetOpener(cleaned)) {
         logVoiceControllerEvent(callId, "guardrail", {
@@ -2566,6 +2605,28 @@ export function createCallEngine(opts: EngineOptions): void {
     }
     // Track recent responses for loop detection
     rememberAssistantResponse(cleanResponse);
+
+    if (clausesSent === 0 && cleanResponse) {
+      const guardedLine = speakableLine(cleanResponse);
+      if (guardedLine) {
+        if (transientBridgeActive) {
+          stopSpeaking();
+          transientBridgeActive = false;
+        }
+        recordLatencyEvent(activeSessionId ?? callId, "tts_start", {
+          clauseCount: 1,
+          callId,
+        });
+        awaitingFirstAudioForTurn = true;
+        cartesiaContextId = "";
+        cartesiaSend(guardedLine, false);
+        clausesSent = 1;
+        traceEvent(callId, "tts_first_clause_streaming", {
+          clause: guardedLine.slice(0, 60),
+          mode: "guarded_full_fallback",
+        });
+      }
+    }
     // ── END GUARDRAIL LAYER 3 ─────────────────────────────────────────────
 
     // Note: we do NOT re-send clauses here — they were already sent during streaming above.

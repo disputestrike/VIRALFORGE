@@ -29,10 +29,14 @@ const FRUSTRATION_TRIGGERS = [
   "slow down",
   "be patient",
   "too much",
+  "too much stuff",
   "giving me so much",
+  "go one at a time",
+  "one at a time",
   "patient with me",
   "hold on",
   "wait wait",
+  "stop repeating yourself",
   "that's not what i",
   "thats not what i",
 ];
@@ -84,7 +88,7 @@ const STOP_WORDS = new Set([
  * Normalize broken/fragmented speech into a canonical question string.
  * Handles partial utterances, filler words, and common transcription artifacts.
  */
-export function canonicalizeUtterance(text: string, state: ConversationState): string {
+export function canonicalizeUtterance(text: string, _state: ConversationState): string {
   let c = text.toLowerCase().trim();
 
   // Repair common broken-speech patterns from the transcript
@@ -100,11 +104,6 @@ export function canonicalizeUtterance(text: string, state: ConversationState): s
     .replace(/\bum+\b|\buh+\b|\bmm+\b/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
-
-  // If the canonical is a fragment and we have an active topic, extend it
-  if (c.split(/\s+/).length < 4 && state.active_topic) {
-    c = `${c} ${state.active_topic}`.trim();
-  }
 
   return c;
 }

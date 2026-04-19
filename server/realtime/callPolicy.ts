@@ -89,12 +89,14 @@ export function inferUtteranceIntent(transcript: string): string {
 
 export function detectEndCallIntent(transcript: string): boolean {
   const t = transcript.toLowerCase().trim();
+  const normalized = t.replace(/[.!?]+$/g, "").replace(/\s+/g, " ");
   const endPhrases = [
     "no thanks", "no thank you", "not interested", "i'm done",
     "that's all", "stop calling", "remove me", "don't call",
-    "goodbye", "bye", "i have to go", "i'm busy",
+    "goodbye", "bye", "have a good day", "have a nice day", "have a day",
+    "i have to go", "i'm busy",
   ];
-  if (endPhrases.some(p => t === p || t.startsWith(p) || t.endsWith(p))) return true;
+  if (endPhrases.some(p => normalized === p || normalized.startsWith(p) || normalized.endsWith(p))) return true;
   // Frustration escalation — repeated "go away" / "stop" / "no" signals should end the call
   if (detectFrustrationEscalation(transcript)) return true;
   return false;

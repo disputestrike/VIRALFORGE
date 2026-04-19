@@ -107,6 +107,11 @@ describe("detectChaosFragments", () => {
     expect(detectChaosFragments("yeah")).toBe(false);
     expect(detectChaosFragments("ok")).toBe(false);
   });
+
+  it("does not treat short substantive fragments as chaos", () => {
+    expect(detectChaosFragments("much")).toBe(false);
+    expect(detectChaosFragments("education")).toBe(false);
+  });
 });
 
 describe("classifyIntent", () => {

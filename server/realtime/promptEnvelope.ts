@@ -40,7 +40,7 @@ export function inferBlueprintPhase(opts: {
       : "discovery";
   }
   if (mode === "answer" && (classified.intent === "ask_what_it_is" || classified.intent === "question")) {
-    return "discovery";
+    return "value_delivery";
   }
   return "value_delivery";
 }

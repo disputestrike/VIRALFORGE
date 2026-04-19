@@ -19,6 +19,14 @@ describe("buildIndustryFitAnswer", () => {
     expect(result?.toLowerCase()).not.toContain("solar companies");
   });
 
+  it("supports how-do-you-help phrasing", () => {
+    const result = buildIndustryFitAnswer({
+      transcript: "how do you help solar companies?",
+      recentAssistantTexts: [],
+    });
+    expect(result?.toLowerCase()).toContain("solar");
+  });
+
   it("uses fallback configured industry when transcript does not include one", () => {
     const result = buildIndustryFitAnswer({
       transcript: "what can you do",
@@ -28,14 +36,14 @@ describe("buildIndustryFitAnswer", () => {
     expect(result?.toLowerCase()).toContain("plumbing");
   });
 
-  it("returns shortened forward-moving answer on repeat", () => {
+  it("returns null on repeat so the live controller can restate precisely", () => {
     const result = buildIndustryFitAnswer({
       transcript: "help legal businesses",
       recentAssistantTexts: [
         "ApexAI can support legal businesses with inbound calls, outbound follow-up, appointment setting, and SMS workflows.",
       ],
     });
-    expect(result?.toLowerCase()).toContain("which one do you want first");
+    expect(result).toBeNull();
   });
 
   it("supports singular phrasing", () => {
@@ -44,5 +52,14 @@ describe("buildIndustryFitAnswer", () => {
       recentAssistantTexts: [],
     });
     expect(result?.toLowerCase()).toContain("roofing");
+  });
+
+  it("ignores generic product-copy fallback labels", () => {
+    const result = buildIndustryFitAnswer({
+      transcript: "what can you do",
+      recentAssistantTexts: [],
+      configuredIndustry: "AI phone agent platform for inbound, outbound, booking, and SMS automation",
+    });
+    expect(result).toBeNull();
   });
 });

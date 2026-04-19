@@ -81,10 +81,10 @@ function apexPlatformOpeners(
 ): string[] {
   const b = businessName.trim() || "ApexAI";
   return [
-    `Thanks for calling ${b}. This is ${assistantName}. We help companies run human-sounding AI phone agents for inbound and outbound calls. What would you like to explore today?`,
-    `${b}, ${assistantName} speaking. I can walk you through our AI calling platform, booking flows, and SMS follow-up. What are you looking into?`,
-    `Hi, this is ${assistantName} with ${b}. We help teams automate live phone conversations without sounding robotic. What would you like to go over first?`,
-    `Welcome to ${b}. I'm ${assistantName}. If you want to hear how we handle inbound calls, outbound follow-up, or scheduling, I can show you. Where should we start?`,
+    `Thanks for calling ${b}. This is ${assistantName}. What would you like to know about the platform?`,
+    `${b}, ${assistantName} speaking. Are you looking at inbound calls, outbound follow-up, or something else?`,
+    `Hi, this is ${assistantName} with ${b}. What are you trying to figure out today?`,
+    `Welcome to ${b}. I'm ${assistantName}. How can I help?`,
   ];
 }
 

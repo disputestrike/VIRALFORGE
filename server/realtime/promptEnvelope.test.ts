@@ -41,6 +41,16 @@ describe("inferBlueprintPhase", () => {
       })
     ).toBe("support");
   });
+
+  it("uses value delivery for answer turns instead of discovery", () => {
+    expect(
+      inferBlueprintPhase({
+        mode: "answer",
+        classified: classified("question"),
+        facts: emptyStrictFacts(),
+      })
+    ).toBe("value_delivery");
+  });
 });
 
 describe("buildStrictControllerBlock", () => {
