@@ -25,6 +25,7 @@ import {
   BookOpen,
   GitBranch,
   Plug,
+  Orbit,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "./ui/button";
@@ -49,6 +50,7 @@ const navItems = [
   { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/templates", label: "Templates", icon: FileText },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/omnipulse", label: "OmniPulse OS", icon: Orbit },
   { href: "/onboarding", label: "Setup", icon: Sparkles },
   { href: "/knowledge-base", label: "Knowledge Base", icon: BookOpen },
   { href: "/workflows", label: "Workflows", icon: GitBranch },

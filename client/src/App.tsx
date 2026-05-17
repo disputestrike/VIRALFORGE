@@ -28,6 +28,7 @@ import Pricing from "./pages/Pricing";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Security from "./pages/Security";
+import OmniPulseOS from "./pages/OmniPulseOS";
 
 import Platform from "@/pages/Platform";
 import Solutions from "@/pages/Solutions";
@@ -71,6 +72,7 @@ function Router() {
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
       <Route path="/security" component={Security} />
+      <Route path="/omnipulse-preview" component={OmniPulseOS} />
 
       {/* Legacy alias — single public marketing surface lives at / */}
       <Route path="/app">
@@ -104,6 +106,9 @@ function Router() {
       </Route>
       <Route path="/analytics">
         <AppLayout><Analytics /></AppLayout>
+      </Route>
+      <Route path="/omnipulse">
+        <AppLayout><OmniPulseOS /></AppLayout>
       </Route>
       <Route path="/testimonials">
         <AppLayout><Testimonials /></AppLayout>
