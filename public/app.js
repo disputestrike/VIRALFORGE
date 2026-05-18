@@ -6,6 +6,10 @@ const state = {
   authConfig: null,
   chat: [],
   me: null,
+  busy: "",
+  notice: "",
+  lastRefreshed: "",
+  lastJob: null,
 };
 
 const platformNames = ["YouTube", "TikTok", "Instagram", "X", "LinkedIn", "Pinterest", "Reddit", "Telegram"];
@@ -34,6 +38,18 @@ function navigate(path) {
   render();
 }
 
+function scrollToHash() {
+  if (!location.hash) return;
+  setTimeout(() => {
+    document.querySelector(location.hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 50);
+}
+
+function setNotice(message, busy = "") {
+  state.notice = message;
+  state.busy = busy;
+}
+
 function linkHandler(event) {
   const link = event.target.closest("a[data-link]");
   if (!link) return;
@@ -52,6 +68,19 @@ function escapeHtml(value = "") {
 
 function titleCase(value = "") {
   return String(value).replaceAll("_", " ").replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function noticeBanner() {
+  if (!state.notice && !state.busy) return "";
+  return `
+    <div class="action-banner ${state.busy ? "working" : ""}">
+      <div>
+        <strong>${state.busy ? "Working" : "Update"}</strong>
+        <span>${escapeHtml(state.notice || state.busy)}</span>
+      </div>
+      ${state.lastJob ? `<span class="pill">Job ${escapeHtml(state.lastJob.id || "queued")}</span>` : ""}
+    </div>
+  `;
 }
 
 function publicNav() {
@@ -454,9 +483,19 @@ function userApp() {
             <p style="color:var(--muted);max-width:760px;line-height:1.7;">ViralForge ranks opportunities, then turns the strongest ideas into videos, assets, review items, and scheduled channel packages.</p>
           </div>
           <div class="nav-actions">
-            <button class="btn btn-secondary" id="autopilot">Run viral scan</button>
-            <button class="btn btn-primary" id="start-run" data-topic="${escapeHtml(topTrend?.topic || "")}" data-pillar="${escapeHtml(topTrend?.pillar || "")}">Generate top idea</button>
+            <button class="btn btn-secondary" id="refresh">Refresh</button>
+            <button class="btn btn-secondary" id="autopilot" ${state.busy ? "disabled" : ""}>${state.busy === "scan" ? "Running scan..." : "Run viral scan"}</button>
+            <button class="btn btn-primary" id="start-run" data-topic="${escapeHtml(topTrend?.topic || "")}" data-pillar="${escapeHtml(topTrend?.pillar || "")}" ${state.busy ? "disabled" : ""}>${state.busy === "generate" ? "Generating..." : "Generate top idea"}</button>
           </div>
+        </div>
+
+        ${noticeBanner()}
+
+        <div class="live-strip">
+          <div><strong>Live workspace</strong><span>Connected to the ViralForge server APIs.</span></div>
+          <div><strong>${escapeHtml(state.lastRefreshed || "Not synced yet")}</strong><span>last refresh</span></div>
+          <div><strong>${counts.runs || 0}</strong><span>persisted runs</span></div>
+          <div><strong>${counts.assets || 0}</strong><span>stored assets</span></div>
         </div>
 
         ${evidenceSummary()}
@@ -464,7 +503,7 @@ function userApp() {
         <section id="radar" style="border-top:0;padding-top:24px;">
           <div class="section-head">
             <div><div class="eyebrow">Viral Radar</div><h2>Ranked opportunities.</h2></div>
-            <p>The system decides what to build from trend strength, pillar fit, novelty, risk, cost, and past performance.</p>
+            <p>These cards are loaded from the server. Click Generate this to queue a real production run.</p>
           </div>
           ${trendRadar()}
         </section>
@@ -599,9 +638,10 @@ function adminConsole() {
           </div>
           <div class="nav-actions">
             <button class="btn btn-secondary" id="refresh">Refresh</button>
-            <button class="btn btn-primary" id="autopilot">Run cycle</button>
+            <button class="btn btn-primary" id="autopilot" ${state.busy ? "disabled" : ""}>${state.busy === "scan" ? "Running..." : "Run cycle"}</button>
           </div>
         </div>
+        ${noticeBanner()}
         <div class="proof-row">
           <div class="proof"><strong>${counts.runs || 0}</strong><span>runs persisted</span></div>
           <div class="proof"><strong>${counts.assets || 0}</strong><span>assets stored</span></div>
@@ -649,23 +689,54 @@ async function getMe() {
 async function refresh() {
   state.status = await api("/api/status");
   state.evidence = await api("/api/evidence");
+  state.lastRefreshed = new Date().toLocaleTimeString();
 }
 
 async function startRun(input = {}) {
-  await api("/api/runs/start", {
-    method: "POST",
-    body: JSON.stringify({
-      topic: input.topic || "",
-      pillar: input.pillar || "",
-      objective: input.objective || "Create a faceless video with assets, review checks, and channel packages",
-      risk: input.risk || "standard",
-      budgetUsd: 120,
-    }),
-  });
-  setTimeout(async () => {
-    await refresh();
+  try {
+    setNotice("Queued a production run. The server is generating assets and packages now.", "generate");
     render();
-  }, 2500);
+    const job = await api("/api/runs/start", {
+      method: "POST",
+      body: JSON.stringify({
+        topic: input.topic || "",
+        pillar: input.pillar || "",
+        objective: input.objective || "Create a faceless video with assets, review checks, and channel packages",
+        risk: input.risk || "standard",
+        budgetUsd: 120,
+      }),
+    });
+    state.lastJob = job.job;
+    setNotice("Run queued. Refreshing evidence as soon as the worker writes results.", "generate");
+    render();
+    setTimeout(async () => {
+      await refresh();
+      setNotice("New production evidence loaded from the server.");
+      state.busy = "";
+      render();
+    }, 3500);
+  } catch (error) {
+    state.busy = "";
+    setNotice(`Run failed: ${error.message}`);
+    render();
+  }
+}
+
+async function runViralScan() {
+  try {
+    setNotice("Running the autonomous trend-to-video cycle now.", "scan");
+    render();
+    const result = await api("/api/autopilot/tick", { method: "POST", body: "{}" });
+    state.lastJob = { id: result.run?.id || "autopilot" };
+    await refresh();
+    setNotice(`Autonomous cycle finished: ${result.run?.status || "completed"}.`);
+    state.busy = "";
+    render();
+  } catch (error) {
+    state.busy = "";
+    setNotice(`Viral scan failed: ${error.message}`);
+    render();
+  }
 }
 
 async function requireAuth(path) {
@@ -678,8 +749,15 @@ async function requireAuth(path) {
 }
 
 async function wire() {
-  document.querySelector("#refresh")?.addEventListener("click", async () => { await refresh(); render(); });
-  document.querySelector("#autopilot")?.addEventListener("click", async () => { await api("/api/autopilot/tick", { method: "POST", body: "{}" }); await refresh(); render(); });
+  document.querySelector("#refresh")?.addEventListener("click", async () => {
+    setNotice("Refreshing live workspace data from the server.", "refresh");
+    render();
+    await refresh();
+    state.busy = "";
+    setNotice("Workspace data refreshed.");
+    render();
+  });
+  document.querySelector("#autopilot")?.addEventListener("click", runViralScan);
   document.querySelector("#start-run")?.addEventListener("click", event => {
     startRun({ topic: event.currentTarget.dataset.topic, pillar: event.currentTarget.dataset.pillar });
   });
@@ -741,6 +819,7 @@ async function render() {
       root.innerHTML = marketingPage();
     }
     wire();
+    scrollToHash();
   } catch (error) {
     if (error.status === 401) {
       state.me = { authenticated: false };

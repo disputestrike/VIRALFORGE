@@ -41,6 +41,11 @@ textarea {
   font: inherit;
 }
 
+button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
 .shell {
   min-height: 100vh;
   background:
@@ -621,6 +626,63 @@ section {
   font-weight: 800;
 }
 
+.action-banner,
+.live-strip {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+  box-shadow: 0 12px 35px rgba(16, 17, 31, 0.04);
+}
+
+.action-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+}
+
+.action-banner.working {
+  border-color: rgba(203, 25, 175, 0.28);
+  background: linear-gradient(90deg, rgba(243, 181, 243, 0.25), white);
+}
+
+.action-banner strong,
+.action-banner span {
+  display: block;
+}
+
+.action-banner span {
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.live-strip {
+  display: grid;
+  grid-template-columns: 1.3fr 0.9fr 0.7fr 0.7fr;
+  gap: 1px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.live-strip div {
+  padding: 14px;
+  background: #fcfbff;
+}
+
+.live-strip strong,
+.live-strip span {
+  display: block;
+}
+
+.live-strip span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .trend-list {
   display: grid;
   gap: 12px;
@@ -721,6 +783,7 @@ section {
   .pricing-grid,
   .logo-row,
   .footer-grid,
+  .live-strip,
   .proof-row,
   .result-grid {
     grid-template-columns: 1fr 1fr;
@@ -744,6 +807,7 @@ section {
   .pricing-grid,
   .logo-row,
   .footer-grid,
+  .live-strip,
   .proof-row,
   .result-grid,
   .preview-bottom {
