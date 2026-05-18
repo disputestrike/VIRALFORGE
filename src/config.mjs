@@ -114,11 +114,11 @@ export function connectorStatus() {
     Telegram: config.platforms.telegram.botToken && config.platforms.telegram.chatId
       ? "ready_for_live_publish"
       : "missing_bot_credentials",
-    TikTok: config.platforms.tiktok.accessToken ? "credential_present_needs_app_review_check" : "missing_oauth_credentials",
-    Instagram: config.platforms.meta.accessToken && config.platforms.meta.instagramUserId ? "credential_present_needs_app_review_check" : "missing_meta_credentials",
-    X: config.platforms.x.bearerToken ? "credential_present_plan_required" : "missing_x_credentials",
-    LinkedIn: config.platforms.linkedin.accessToken && config.platforms.linkedin.authorUrn ? "credential_present" : "missing_linkedin_credentials",
-    Pinterest: config.platforms.pinterest.accessToken && config.platforms.pinterest.boardId ? "credential_present" : "missing_pinterest_credentials",
-    Reddit: config.platforms.reddit.clientId && config.platforms.reddit.refreshToken ? "credential_present" : "missing_reddit_credentials",
+    TikTok: config.platforms.tiktok.accessToken ? "ready_for_live_attempt_needs_app_review_check" : "missing_oauth_credentials",
+    Instagram: config.platforms.meta.accessToken && config.platforms.meta.instagramUserId ? "ready_for_live_attempt_needs_meta_review" : "missing_meta_credentials",
+    X: config.platforms.x.accessToken || config.platforms.x.bearerToken ? "ready_for_live_attempt_plan_required" : "missing_x_credentials",
+    LinkedIn: config.platforms.linkedin.accessToken && config.platforms.linkedin.authorUrn ? "ready_for_live_attempt" : "missing_linkedin_credentials",
+    Pinterest: config.platforms.pinterest.accessToken && config.platforms.pinterest.boardId ? "ready_for_live_attempt" : "missing_pinterest_credentials",
+    Reddit: config.platforms.reddit.clientId && config.platforms.reddit.refreshToken ? "ready_for_live_attempt" : "missing_reddit_credentials",
   };
 }

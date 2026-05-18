@@ -42,12 +42,12 @@
 |---|---|---|
 | YouTube | export package record | refresh token + resumable upload |
 | Telegram | export package record | bot `sendVideo` |
-| TikTok | readiness status | gated for app review/direct post implementation |
-| Instagram | readiness status | gated for Meta review/content publishing |
-| X | readiness status | gated for paid API/account credentials |
-| LinkedIn | readiness status | gated for OAuth author URN |
-| Pinterest | readiness status | gated for board/account token |
-| Reddit | readiness status | gated for OAuth/subreddit rules |
+| TikTok | export package record | Content Posting API URL-pull init with `is_aigc` |
+| Instagram | export package record | Meta media container + publish |
+| X | export package record | `POST /2/tweets` text/link post |
+| LinkedIn | export package record | LinkedIn REST post |
+| Pinterest | export package record | Pin creation with video URL |
+| Reddit | export package record | OAuth submit link post |
 
 ## Railway Services
 

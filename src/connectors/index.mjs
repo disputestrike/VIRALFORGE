@@ -77,6 +77,161 @@ async function publishTelegram({ videoPath, title, description }) {
   };
 }
 
+async function publishInstagram({ videoUrl, title, description }) {
+  const params = new URLSearchParams({
+    media_type: "REELS",
+    video_url: videoUrl,
+    caption: `${title}\n\n${description}`,
+    access_token: config.platforms.meta.accessToken,
+  });
+  const create = await fetch(`https://graph.facebook.com/v19.0/${config.platforms.meta.instagramUserId}/media`, {
+    method: "POST",
+    body: params,
+  });
+  if (!create.ok) throw new Error(`Instagram container create failed: ${await create.text()}`);
+  const container = await create.json();
+  const publishParams = new URLSearchParams({
+    creation_id: container.id,
+    access_token: config.platforms.meta.accessToken,
+  });
+  const publish = await fetch(`https://graph.facebook.com/v19.0/${config.platforms.meta.instagramUserId}/media_publish`, {
+    method: "POST",
+    body: publishParams,
+  });
+  if (!publish.ok) throw new Error(`Instagram publish failed: ${await publish.text()}`);
+  const data = await publish.json();
+  return { platform_post_id: data.id, url: "", raw: data };
+}
+
+async function publishTikTok({ videoUrl, title }) {
+  const response = await fetch("https://open.tiktokapis.com/v2/post/publish/video/init/", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${config.platforms.tiktok.accessToken}`,
+    },
+    body: JSON.stringify({
+      post_info: {
+        title: title.slice(0, 150),
+        privacy_level: process.env.TIKTOK_PRIVACY_LEVEL || "SELF_ONLY",
+        disable_duet: false,
+        disable_comment: false,
+        disable_stitch: false,
+        video_cover_timestamp_ms: 1000,
+        brand_content_toggle: false,
+        brand_organic_toggle: false,
+        is_aigc: true,
+      },
+      source_info: {
+        source: "PULL_FROM_URL",
+        video_url: videoUrl,
+      },
+    }),
+  });
+  if (!response.ok) throw new Error(`TikTok publish init failed: ${await response.text()}`);
+  const data = await response.json();
+  return { platform_post_id: data.data?.publish_id || "", url: "", raw: data };
+}
+
+
+async function publishX({ title, description, videoUrl }) {
+  const token = config.platforms.x.accessToken || config.platforms.x.bearerToken;
+  const response = await fetch("https://api.x.com/2/tweets", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ text: `${title}\n\n${description}\n${videoUrl || ""}`.slice(0, 280) }),
+  });
+  if (!response.ok) throw new Error(`X post failed: ${await response.text()}`);
+  const data = await response.json();
+  return { platform_post_id: data.data?.id, url: data.data?.id ? `https://x.com/i/web/status/${data.data.id}` : "", raw: data };
+}
+
+async function publishLinkedIn({ title, description, videoUrl }) {
+  const response = await fetch("https://api.linkedin.com/rest/posts", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${config.platforms.linkedin.accessToken}`,
+      "LinkedIn-Version": process.env.LINKEDIN_VERSION || "202405",
+      "X-Restli-Protocol-Version": "2.0.0",
+    },
+    body: JSON.stringify({
+      author: config.platforms.linkedin.authorUrn,
+      commentary: `${title}\n\n${description}\n${videoUrl || ""}`,
+      visibility: "PUBLIC",
+      distribution: { feedDistribution: "MAIN_FEED", targetEntities: [], thirdPartyDistributionChannels: [] },
+      lifecycleState: "PUBLISHED",
+      isReshareDisabledByAuthor: false,
+    }),
+  });
+  if (!response.ok) throw new Error(`LinkedIn post failed: ${await response.text()}`);
+  const data = await response.json().catch(() => ({}));
+  const id = response.headers.get("x-restli-id") || data.id || "";
+  return { platform_post_id: id, url: "", raw: data };
+}
+
+async function publishPinterest({ title, description, videoUrl }) {
+  const response = await fetch("https://api.pinterest.com/v5/pins", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${config.platforms.pinterest.accessToken}`,
+    },
+    body: JSON.stringify({
+      board_id: config.platforms.pinterest.boardId,
+      title: title.slice(0, 100),
+      description,
+      media_source: { source_type: "video_url", url: videoUrl },
+    }),
+  });
+  if (!response.ok) throw new Error(`Pinterest pin failed: ${await response.text()}`);
+  const data = await response.json();
+  return { platform_post_id: data.id, url: data.link || "", raw: data };
+}
+
+async function refreshRedditAccessToken() {
+  const auth = Buffer.from(`${config.platforms.reddit.clientId}:${config.platforms.reddit.clientSecret}`).toString("base64");
+  const response = await fetch("https://www.reddit.com/api/v1/access_token", {
+    method: "POST",
+    headers: {
+      authorization: `Basic ${auth}`,
+      "content-type": "application/x-www-form-urlencoded",
+      "user-agent": "ViralForge/0.1",
+    },
+    body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: config.platforms.reddit.refreshToken }),
+  });
+  if (!response.ok) throw new Error(`Reddit token refresh failed: ${await response.text()}`);
+  const data = await response.json();
+  return data.access_token;
+}
+
+async function publishReddit({ title, description, videoUrl }) {
+  const accessToken = await refreshRedditAccessToken();
+  const subreddit = process.env.REDDIT_SUBREDDIT || "test";
+  const response = await fetch("https://oauth.reddit.com/api/submit", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/x-www-form-urlencoded",
+      "user-agent": "ViralForge/0.1",
+    },
+    body: new URLSearchParams({
+      sr: subreddit,
+      kind: "link",
+      title: title.slice(0, 300),
+      url: videoUrl || config.app.publicUrl,
+      text: description,
+      api_type: "json",
+    }),
+  });
+  if (!response.ok) throw new Error(`Reddit submit failed: ${await response.text()}`);
+  const data = await response.json();
+  return { platform_post_id: data.json?.data?.id || "", url: data.json?.data?.url || "", raw: data };
+}
+
 export async function distribute({ repo, run, content, videoAsset }) {
   const statuses = connectorStatus();
   const platforms = run.input.platforms || ["YouTube", "TikTok", "Instagram", "X", "LinkedIn", "Pinterest", "Reddit", "Telegram"];
@@ -84,6 +239,7 @@ export async function distribute({ repo, run, content, videoAsset }) {
   const title = content.brief?.title || run.input.topic || "ViralForge content";
   const description = content.brief?.hook || "Generated by ViralForge.";
   const localVideoPath = videoAsset.uri.startsWith("s3://") || videoAsset.uri.startsWith("http") ? null : videoAsset.uri;
+  const publicVideoUrl = videoAsset.uri.startsWith("http") ? videoAsset.uri : "";
 
   for (const platform of platforms) {
     const status = statuses[platform] || "connector_not_configured";
@@ -111,6 +267,24 @@ export async function distribute({ repo, run, content, videoAsset }) {
           url: result.url,
           metadata: { connectorStatus: status, result },
         }));
+      } else if (liveAllowed && platform === "TikTok" && status.startsWith("ready") && publicVideoUrl) {
+        const result = await publishTikTok({ videoUrl: publicVideoUrl, title });
+        posts.push(await repo.addPost({ run_id: run.id, content_id: content.id, platform, status: "published", platform_post_id: result.platform_post_id, url: result.url, metadata: { connectorStatus: status, result } }));
+      } else if (liveAllowed && platform === "Instagram" && status.startsWith("ready") && publicVideoUrl) {
+        const result = await publishInstagram({ videoUrl: publicVideoUrl, title, description });
+        posts.push(await repo.addPost({ run_id: run.id, content_id: content.id, platform, status: "published", platform_post_id: result.platform_post_id, url: result.url, metadata: { connectorStatus: status, result } }));
+      } else if (liveAllowed && platform === "X" && status.startsWith("ready")) {
+        const result = await publishX({ title, description, videoUrl: publicVideoUrl });
+        posts.push(await repo.addPost({ run_id: run.id, content_id: content.id, platform, status: "published", platform_post_id: result.platform_post_id, url: result.url, metadata: { connectorStatus: status, result } }));
+      } else if (liveAllowed && platform === "LinkedIn" && status.startsWith("ready")) {
+        const result = await publishLinkedIn({ title, description, videoUrl: publicVideoUrl });
+        posts.push(await repo.addPost({ run_id: run.id, content_id: content.id, platform, status: "published", platform_post_id: result.platform_post_id, url: result.url, metadata: { connectorStatus: status, result } }));
+      } else if (liveAllowed && platform === "Pinterest" && status.startsWith("ready") && publicVideoUrl) {
+        const result = await publishPinterest({ title, description, videoUrl: publicVideoUrl });
+        posts.push(await repo.addPost({ run_id: run.id, content_id: content.id, platform, status: "published", platform_post_id: result.platform_post_id, url: result.url, metadata: { connectorStatus: status, result } }));
+      } else if (liveAllowed && platform === "Reddit" && status.startsWith("ready")) {
+        const result = await publishReddit({ title, description, videoUrl: publicVideoUrl });
+        posts.push(await repo.addPost({ run_id: run.id, content_id: content.id, platform, status: "published", platform_post_id: result.platform_post_id, url: result.url, metadata: { connectorStatus: status, result } }));
       } else {
         posts.push(await repo.addPost({
           run_id: run.id,
