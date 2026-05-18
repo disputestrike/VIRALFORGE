@@ -84,9 +84,10 @@ function timingSafeEqualText(a, b) {
   return crypto.timingSafeEqual(left, right);
 }
 
-function createSessionCookie() {
+function createSessionCookie({ email = config.auth.adminEmail, role = "owner" } = {}) {
   const payload = Buffer.from(JSON.stringify({
-    role: "admin",
+    role,
+    email,
     issuedAt: Date.now(),
   })).toString("base64url");
   const value = `${payload}.${sign(payload)}`;
@@ -106,7 +107,7 @@ function getSession(req) {
   if (!signature || !timingSafeEqualText(signature, sign(payload))) return null;
   try {
     const session = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-    return session?.role === "admin" ? session : null;
+    return ["admin", "owner", "operator"].includes(session?.role) ? session : null;
   } catch {
     return null;
   }
@@ -129,7 +130,18 @@ async function handleApi(req, res, url) {
     const session = getSession(req);
     sendJson(res, {
       authenticated: Boolean(session),
-      user: session ? { role: session.role } : null,
+      user: session ? { role: session.role, email: session.email } : null,
+      signupEnabled: config.auth.allowSignup,
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/auth/config" && req.method === "GET") {
+    sendJson(res, {
+      signupEnabled: config.auth.allowSignup,
+      localTestCredentials: config.auth.exposeLocalCredentials
+        ? { email: config.auth.adminEmail, password: config.auth.adminPassword }
+        : null,
     });
     return true;
   }
@@ -140,11 +152,29 @@ async function handleApi(req, res, url) {
       sendJson(res, { ok: false, error: "Operator auth is not configured. Set VIRALFORGE_ADMIN_PASSWORD and SESSION_SECRET." }, 503);
       return true;
     }
-    if (!timingSafeEqualText(body.password || "", config.auth.adminPassword)) {
+    const emailOk = !config.auth.adminEmail || String(body.email || "").toLowerCase() === config.auth.adminEmail.toLowerCase();
+    const passwordOk = timingSafeEqualText(body.password || "", config.auth.adminPassword);
+    if (!emailOk || !passwordOk) {
       sendJson(res, { ok: false, error: "Invalid operator password" }, 401);
       return true;
     }
-    sendJson(res, { ok: true, user: { role: "admin" } }, 200, { "set-cookie": createSessionCookie() });
+    sendJson(res, { ok: true, user: { role: "owner", email: config.auth.adminEmail } }, 200, { "set-cookie": createSessionCookie({ email: config.auth.adminEmail }) });
+    return true;
+  }
+
+  if (url.pathname === "/api/auth/signup" && req.method === "POST") {
+    const body = await readJson(req);
+    if (!config.auth.allowSignup) {
+      sendJson(res, { ok: false, error: "Signup is not enabled on this deployment yet." }, 403);
+      return true;
+    }
+    const email = String(body.email || "").trim().toLowerCase();
+    const password = String(body.password || "");
+    if (!email.includes("@") || password.length < 8) {
+      sendJson(res, { ok: false, error: "Enter a valid email and a password with at least 8 characters." }, 400);
+      return true;
+    }
+    sendJson(res, { ok: true, user: { role: "owner", email } }, 200, { "set-cookie": createSessionCookie({ email }) });
     return true;
   }
 

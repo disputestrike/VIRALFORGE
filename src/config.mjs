@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const isRailway = Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID);
+const isLocalRuntime = !isRailway && (process.env.NODE_ENV || "development") !== "production";
+const localOnlyEmail = isRailway ? "" : "founder@viralforge.ai";
 const localOnlyPassword = isRailway ? "" : "viralforge-local";
 const localOnlySessionSecret = isRailway ? "" : "viralforge-local-session-secret";
 
@@ -30,9 +32,12 @@ export const config = {
     rootDir,
   },
   auth: {
+    adminEmail: process.env.VIRALFORGE_ADMIN_EMAIL || process.env.ADMIN_EMAIL || localOnlyEmail,
     adminPassword: process.env.VIRALFORGE_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || localOnlyPassword,
     sessionSecret: process.env.SESSION_SECRET || localOnlySessionSecret,
     cookieName: "vf_session",
+    allowSignup: bool("ALLOW_SIGNUP", isLocalRuntime),
+    exposeLocalCredentials: isLocalRuntime,
   },
   db: {
     url: process.env.DATABASE_URL || "",

@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="860" viewBox="0 0 1180 860" role="img" aria-labelledby="title desc">
+  <title id="title">ViralForge product dashboard preview</title>
+  <desc id="desc">A polished dashboard preview showing viral opportunities, generated assets, review queue, and scheduled channel packages.</desc>
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9B0AE8"/>
+      <stop offset=".48" stop-color="#BC12BD"/>
+      <stop offset="1" stop-color="#ED3782"/>
+    </linearGradient>
+    <linearGradient id="soft" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FEFBFE"/>
+      <stop offset="1" stop-color="#F8E7FB"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="28" stdDeviation="32" flood-color="#3E134F" flood-opacity=".18"/>
+    </filter>
+  </defs>
+  <rect width="1180" height="860" rx="48" fill="url(#soft)"/>
+  <path d="M0 112 L1180 0 L1180 274 L0 366 Z" fill="url(#brand)" opacity=".12"/>
+  <path d="M872 92 L1120 286 L982 482 L730 276 Z" fill="url(#brand)" opacity=".16"/>
+  <g filter="url(#shadow)">
+    <rect x="84" y="84" width="1012" height="692" rx="34" fill="#fff"/>
+    <rect x="84" y="84" width="1012" height="76" rx="34" fill="#111020"/>
+    <circle cx="132" cy="122" r="10" fill="#ED3782"/>
+    <circle cx="164" cy="122" r="10" fill="#F3B5F3"/>
+    <circle cx="196" cy="122" r="10" fill="#9B0AE8"/>
+    <rect x="238" y="108" width="202" height="28" rx="14" fill="#fff" opacity=".13"/>
+    <rect x="860" y="106" width="176" height="32" rx="16" fill="url(#brand)"/>
+    <text x="890" y="127" fill="#fff" font-family="Arial, sans-serif" font-size="13" font-weight="700">Run viral scan</text>
+    <rect x="118" y="196" width="314" height="246" rx="22" fill="#FBF7FF" stroke="#E8E5F1"/>
+    <text x="146" y="232" fill="#8F0784" font-family="Arial, sans-serif" font-size="13" font-weight="800" letter-spacing="2">VIRAL RADAR</text>
+    <text x="146" y="272" fill="#10111F" font-family="Arial, sans-serif" font-size="27" font-weight="800">What is taking off?</text>
+    <g transform="translate(146 306)">
+      <rect width="246" height="48" rx="12" fill="#fff" stroke="#E8E5F1"/>
+      <rect x="14" y="14" width="20" height="20" rx="6" fill="url(#brand)"/>
+      <text x="46" y="30" fill="#10111F" font-family="Arial, sans-serif" font-size="14" font-weight="700">AI video mistakes</text>
+      <text x="204" y="30" fill="#8F0784" font-family="Arial, sans-serif" font-size="14" font-weight="800">91</text>
+    </g>
+    <g transform="translate(146 366)">
+      <rect width="246" height="48" rx="12" fill="#fff" stroke="#E8E5F1"/>
+      <rect x="14" y="14" width="20" height="20" rx="6" fill="#ED3782"/>
+      <text x="46" y="30" fill="#10111F" font-family="Arial, sans-serif" font-size="14" font-weight="700">Kitchen reset loop</text>
+      <text x="204" y="30" fill="#8F0784" font-family="Arial, sans-serif" font-size="14" font-weight="800">86</text>
+    </g>
+    <rect x="464" y="196" width="274" height="246" rx="22" fill="#fff" stroke="#E8E5F1"/>
+    <text x="492" y="232" fill="#8F0784" font-family="Arial, sans-serif" font-size="13" font-weight="800" letter-spacing="2">PRODUCTION</text>
+    <rect x="492" y="260" width="218" height="122" rx="18" fill="url(#brand)"/>
+    <circle cx="562" cy="321" r="38" fill="#fff" opacity=".2"/>
+    <path d="M552 298 L594 321 L552 344 Z" fill="#fff"/>
+    <rect x="492" y="402" width="86" height="16" rx="8" fill="#E8E5F1"/>
+    <rect x="588" y="402" width="122" height="16" rx="8" fill="#F3B5F3"/>
+    <rect x="770" y="196" width="292" height="246" rx="22" fill="#FBF7FF" stroke="#E8E5F1"/>
+    <text x="798" y="232" fill="#8F0784" font-family="Arial, sans-serif" font-size="13" font-weight="800" letter-spacing="2">REVIEW</text>
+    <text x="798" y="272" fill="#10111F" font-family="Arial, sans-serif" font-size="25" font-weight="800">Ready for release</text>
+    <rect x="798" y="306" width="226" height="36" rx="10" fill="#fff" stroke="#E8E5F1"/>
+    <text x="818" y="329" fill="#10111F" font-family="Arial, sans-serif" font-size="13" font-weight="700">Originality cleared</text>
+    <rect x="798" y="354" width="226" height="36" rx="10" fill="#fff" stroke="#E8E5F1"/>
+    <text x="818" y="377" fill="#10111F" font-family="Arial, sans-serif" font-size="13" font-weight="700">Rights cleared</text>
+    <rect x="798" y="402" width="112" height="28" rx="14" fill="#F0FFF8"/>
+    <text x="822" y="421" fill="#087548" font-family="Arial, sans-serif" font-size="12" font-weight="800">Approved</text>
+    <rect x="118" y="474" width="944" height="246" rx="22" fill="#fff" stroke="#E8E5F1"/>
+    <text x="146" y="510" fill="#8F0784" font-family="Arial, sans-serif" font-size="13" font-weight="800" letter-spacing="2">SCHEDULE</text>
+    <g transform="translate(146 542)">
+      <rect width="178" height="126" rx="18" fill="#FBF7FF" stroke="#E8E5F1"/>
+      <text x="22" y="42" fill="#10111F" font-family="Arial, sans-serif" font-size="18" font-weight="800">YouTube</text>
+      <text x="22" y="76" fill="#62677B" font-family="Arial, sans-serif" font-size="13">Short package</text>
+      <rect x="22" y="92" width="82" height="22" rx="11" fill="#F3B5F3"/>
+    </g>
+    <g transform="translate(346 542)">
+      <rect width="178" height="126" rx="18" fill="#FBF7FF" stroke="#E8E5F1"/>
+      <text x="22" y="42" fill="#10111F" font-family="Arial, sans-serif" font-size="18" font-weight="800">TikTok</text>
+      <text x="22" y="76" fill="#62677B" font-family="Arial, sans-serif" font-size="13">Direct post</text>
+      <rect x="22" y="92" width="82" height="22" rx="11" fill="#F3B5F3"/>
+    </g>
+    <g transform="translate(546 542)">
+      <rect width="178" height="126" rx="18" fill="#FBF7FF" stroke="#E8E5F1"/>
+      <text x="22" y="42" fill="#10111F" font-family="Arial, sans-serif" font-size="18" font-weight="800">Instagram</text>
+      <text x="22" y="76" fill="#62677B" font-family="Arial, sans-serif" font-size="13">Reel package</text>
+      <rect x="22" y="92" width="82" height="22" rx="11" fill="#F3B5F3"/>
+    </g>
+    <g transform="translate(746 542)">
+      <rect width="178" height="126" rx="18" fill="#FBF7FF" stroke="#E8E5F1"/>
+      <text x="22" y="42" fill="#10111F" font-family="Arial, sans-serif" font-size="18" font-weight="800">Pinterest</text>
+      <text x="22" y="76" fill="#62677B" font-family="Arial, sans-serif" font-size="13">Pin package</text>
+      <rect x="22" y="92" width="82" height="22" rx="11" fill="#F3B5F3"/>
+    </g>
+  </g>
+</svg>

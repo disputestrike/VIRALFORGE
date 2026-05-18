@@ -3,11 +3,17 @@ const root = document.querySelector("#app");
 const state = {
   status: null,
   evidence: null,
+  authConfig: null,
   chat: [],
   me: null,
 };
 
 const platformNames = ["YouTube", "TikTok", "Instagram", "X", "LinkedIn", "Pinterest", "Reddit", "Telegram"];
+const pricingPlans = [
+  ["Starter", "$149", "For one faceless brand testing daily production.", "25 videos/month", "2 connected channels", "Review queue", "Export packages"],
+  ["Growth", "$499", "For operators scaling multiple channels.", "150 videos/month", "8 connected channels", "Autopilot", "Performance learning"],
+  ["Network", "$1,500", "For serious media networks.", "Unlimited runs", "50+ channels", "Priority workers", "Sponsorship and data workflows"],
+];
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -58,19 +64,53 @@ function publicNav() {
         </a>
         <div class="nav-links">
           <a href="#product">Product</a>
-          <a href="#channels">Channels</a>
-          <a href="#monetize">Monetize</a>
+          <a href="#pricing">Pricing</a>
+          <a href="#proof">Proof</a>
         </div>
         <div class="nav-actions">
           <a class="btn btn-secondary" href="/app" data-link>Sign in</a>
-          <a class="btn btn-primary" href="/app" data-link>Open workspace</a>
+          <a class="btn btn-primary" href="/signup" data-link>Start free trial</a>
         </div>
       </div>
     </nav>
   `;
 }
 
-function appNav(active = "workspace") {
+function footer() {
+  return `
+    <footer class="footer">
+      <div class="container footer-grid">
+        <div>
+          <a class="brand" href="/" data-link>
+            <span class="mark">VF</span>
+            <span>ViralForge<small>Media Network</small></span>
+          </a>
+          <p>AI content operations for faceless media brands, built around discovery, production, review, scheduling, and learning.</p>
+        </div>
+        <div>
+          <strong>Product</strong>
+          <a href="#product">How it works</a>
+          <a href="#pricing">Pricing</a>
+          <a href="/app" data-link>Sign in</a>
+        </div>
+        <div>
+          <strong>Operations</strong>
+          <a href="/app#radar" data-link>Viral Radar</a>
+          <a href="/app#review" data-link>Review queue</a>
+          <a href="/admin" data-link>Admin</a>
+        </div>
+        <div>
+          <strong>Business</strong>
+          <a href="#monetize">Monetization</a>
+          <a href="#channels">Channels</a>
+          <a href="/signup" data-link>Start trial</a>
+        </div>
+      </div>
+    </footer>
+  `;
+}
+
+function appNav(active = "radar") {
   return `
     <aside class="sidebar">
       <a class="brand" href="/app" data-link>
@@ -78,16 +118,34 @@ function appNav(active = "workspace") {
         <span>ViralForge<small>Workspace</small></span>
       </a>
       <div class="side-links">
-        <a class="side-link ${active === "workspace" ? "active" : ""}" href="/app" data-link>Create</a>
+        <a class="side-link ${active === "radar" ? "active" : ""}" href="/app#radar" data-link>Viral Radar</a>
+        <a class="side-link" href="/app#production" data-link>Production</a>
         <a class="side-link" href="/app#review" data-link>Review</a>
         <a class="side-link" href="/app#assets" data-link>Assets</a>
         <a class="side-link" href="/app#schedule" data-link>Schedule</a>
-        <a class="side-link" href="/app#quality" data-link>Quality</a>
+        <a class="side-link" href="/app#evidence" data-link>Evidence</a>
         <a class="side-link ${active === "admin" ? "active" : ""}" href="/admin" data-link>Admin</a>
         <a class="side-link" href="/" data-link>Marketing Site</a>
       </div>
       <button class="btn btn-secondary" id="logout" style="width:100%;margin-top:26px;">Sign out</button>
     </aside>
+  `;
+}
+
+async function getAuthConfig() {
+  if (!state.authConfig) state.authConfig = await api("/api/auth/config");
+  return state.authConfig;
+}
+
+function credentialHelp() {
+  const creds = state.authConfig?.localTestCredentials;
+  if (!creds) return "";
+  return `
+    <div class="alert" style="margin-top:18px;">
+      Local test account<br />
+      Email: <strong>${escapeHtml(creds.email)}</strong><br />
+      Password: <strong>${escapeHtml(creds.password)}</strong>
+    </div>
   `;
 }
 
@@ -97,14 +155,45 @@ function loginPage(targetPath) {
       ${publicNav()}
       <main class="login-wrap">
         <form class="form-card" id="login-form" data-target="${escapeHtml(targetPath)}">
-          <div class="eyebrow">Private Workspace</div>
-          <h1>Sign in to ViralForge.</h1>
-          <p>Public visitors only see the marketing site. Content creation, review, assets, schedule, and quality controls stay private.</p>
+          <div class="eyebrow">Sign In</div>
+          <h1>Welcome back.</h1>
+          <p>Use the founder account below locally, or your Railway workspace credentials in production.</p>
+          <div class="field">
+            <label>Email</label>
+            <input name="email" type="email" autocomplete="username" placeholder="founder@viralforge.ai" required />
+          </div>
           <div class="field">
             <label>Password</label>
-            <input name="password" type="password" autocomplete="current-password" placeholder="Operator password" required />
+            <input name="password" type="password" autocomplete="current-password" placeholder="Password" required />
           </div>
           <button class="btn btn-primary" style="width:100%;margin-top:14px;">Sign in</button>
+          <a class="btn btn-secondary" style="width:100%;margin-top:10px;" href="/signup" data-link>Create trial workspace</a>
+          ${credentialHelp()}
+        </form>
+      </main>
+    </div>
+  `;
+}
+
+function signupPage() {
+  return `
+    <div class="shell">
+      ${publicNav()}
+      <main class="login-wrap">
+        <form class="form-card" id="signup-form">
+          <div class="eyebrow">Start Trial</div>
+          <h1>Create your workspace.</h1>
+          <p>Local sign-up is enabled for testing. In production this becomes the PayPal-backed SaaS onboarding path.</p>
+          <div class="field">
+            <label>Email</label>
+            <input name="email" type="email" autocomplete="username" placeholder="you@company.com" required />
+          </div>
+          <div class="field">
+            <label>Password</label>
+            <input name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" required />
+          </div>
+          <button class="btn btn-primary" style="width:100%;margin-top:14px;">Create workspace</button>
+          <a class="btn btn-secondary" style="width:100%;margin-top:10px;" href="/app" data-link>I already have an account</a>
         </form>
       </main>
     </div>
@@ -115,42 +204,27 @@ function marketingPage() {
   return `
     <div class="shell">
       ${publicNav()}
-      <main class="container hero">
+      <main class="container hero hero-product">
         <section>
-          <div class="eyebrow">AI-powered media network</div>
-          <h1>Build content brands that keep moving.</h1>
+          <div class="eyebrow">AI media command center</div>
+          <h1>Find what is taking off. Turn it into video first.</h1>
           <p>
-            ViralForge helps teams turn high-potential ideas into faceless videos,
-            channel-ready assets, review queues, and scheduled posts from one private workspace.
+            ViralForge watches trend signals, ranks what has momentum, generates faceless videos,
+            prepares channel packages, and learns which formats deserve more volume.
           </p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="/app" data-link>Open workspace</a>
-            <a class="btn btn-secondary" href="#product">Explore product</a>
+            <a class="btn btn-primary" href="/signup" data-link>Start free trial</a>
+            <a class="btn btn-secondary" href="/app" data-link>Sign in</a>
           </div>
           <div class="proof-row">
-            <div class="proof"><strong>24/7</strong><span>content operations</span></div>
-            <div class="proof"><strong>8</strong><span>platform paths</span></div>
-            <div class="proof"><strong>7</strong><span>content formats</span></div>
-            <div class="proof"><strong>1</strong><span>workspace</span></div>
+            <div class="proof"><strong>Trend-first</strong><span>no guessing what to post</span></div>
+            <div class="proof"><strong>Videos</strong><span>MP4 assets and packages</span></div>
+            <div class="proof"><strong>Review</strong><span>quality gates before release</span></div>
+            <div class="proof"><strong>Learning</strong><span>winners feed the next cycle</span></div>
           </div>
         </section>
-        <aside class="preview-card">
-          <div class="preview-top">
-            <div>
-              <strong>Inside the workspace</strong>
-              <div style="color: var(--muted); font-size:13px; margin-top:4px;">Create, review, schedule, and improve every content run.</div>
-            </div>
-            <span class="badge">Private</span>
-          </div>
-          <div class="steps">
-            ${["Choose or discover an idea", "Generate a content run", "Review video assets", "Approve quality", "Schedule channels", "Track winners"].map((step, index) => `
-              <div class="step">
-                <span class="num">${index + 1}</span>
-                <strong>${step}</strong>
-                <span class="status">Ready</span>
-              </div>
-            `).join("")}
-          </div>
+        <aside class="hero-media">
+          <img src="/assets/viralforge-dashboard.svg" alt="ViralForge dashboard preview" />
         </aside>
       </main>
 
@@ -159,19 +233,17 @@ function marketingPage() {
           <div class="section-head">
             <div>
               <div class="eyebrow">Product</div>
-              <h2>A private control room for content operators.</h2>
+              <h2>Built for people running content networks, not one-off posts.</h2>
             </div>
-            <p>Generate videos, approve outputs, organize assets, schedule channels, and ask the assistant what needs attention.</p>
+            <p>After sign-in, the first screen shows what the system thinks is worth making next.</p>
           </div>
           <div class="grid-4">
             ${[
-              ["Create", "Start a content run from a topic, objective, or trend signal."],
-              ["Review", "See what was produced, what needs approval, and what is ready."],
-              ["Schedule", "Prepare each platform package without exposing internal operations."],
-              ["Improve", "Use results to choose sharper topics, hooks, formats, and channels."]
-            ].map(([title, copy]) => `
-              <article class="tile"><span class="tile-icon">OK</span><h3>${title}</h3><p>${copy}</p></article>
-            `).join("")}
+              ["Viral Radar", "Ranked topic opportunities by score, pillar, region, and production fit."],
+              ["Production", "Generate script, image, voice, video, captions, metadata, and platform packages."],
+              ["Review", "Hold risky content, approve safe content, and keep a release trail."],
+              ["Learning", "Use outcomes to make stronger follow-ups instead of repeating dead formats."]
+            ].map(([title, copy]) => `<article class="tile"><span class="tile-icon">${title.slice(0, 2).toUpperCase()}</span><h3>${title}</h3><p>${copy}</p></article>`).join("")}
           </div>
         </div>
       </section>
@@ -181,32 +253,70 @@ function marketingPage() {
           <div class="section-head">
             <div>
               <div class="eyebrow">Channels</div>
-              <h2>Made for faceless brands at scale.</h2>
+              <h2>One run, many release packages.</h2>
             </div>
-            <p>Shorts, Reels, TikToks, pins, posts, polls, and longer cuts can all be managed from one workspace.</p>
+            <p>Each platform gets its own caption, format, metadata, schedule status, and approval path.</p>
           </div>
-          <div class="grid-4">
-            ${platformNames.map(platform => `
-              <article class="tile"><span class="tile-icon">UP</span><h3>${platform}</h3><p>Prepare native captions, hooks, metadata, and review controls for this channel.</p></article>
+          <div class="logo-row">
+            ${platformNames.map(platform => `<span>${platform}</span>`).join("")}
+          </div>
+        </div>
+      </section>
+
+      <section id="pricing">
+        <div class="container">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Pricing</div>
+              <h2>Priced like a media operating system.</h2>
+            </div>
+            <p>Pay for production capacity, channels, automation, and learning. PayPal subscriptions are planned for SaaS billing.</p>
+          </div>
+          <div class="pricing-grid">
+            ${pricingPlans.map(([name, price, copy, ...features]) => `
+              <article class="price-card ${name === "Growth" ? "featured" : ""}">
+                <h3>${name}</h3>
+                <strong>${price}<small>/mo</small></strong>
+                <p>${copy}</p>
+                <div class="list compact">
+                  ${features.map(feature => `<div class="list-item"><span>${feature}</span></div>`).join("")}
+                </div>
+                <a class="btn ${name === "Growth" ? "btn-primary" : "btn-secondary"}" href="/signup" data-link>Start ${name}</a>
+              </article>
             `).join("")}
           </div>
         </div>
       </section>
 
-      <section id="monetize">
+      <section id="proof">
         <div class="container">
           <div class="section-head">
             <div>
-              <div class="eyebrow">Monetization</div>
-              <h2>Built beyond ad revenue.</h2>
+              <div class="eyebrow">Proof</div>
+              <h2>Not a posting calendar. A production loop.</h2>
             </div>
-            <p>Use content as discovery, then monetize through affiliate links, sponsorships, licensing, lead generation, and data products.</p>
+            <p>The private workspace shows generated runs, produced assets, channel packages, quality checks, and what the system learned.</p>
           </div>
-          <a class="btn btn-primary" href="/app" data-link>Go to workspace</a>
+          <a class="btn btn-primary" href="/app" data-link>Sign in to see evidence</a>
         </div>
       </section>
+      ${footer()}
     </div>
   `;
+}
+
+function trends() {
+  const byTopic = new Map();
+  for (const trend of state.evidence?.trends || []) {
+    const key = String(trend.topic || "").toLowerCase();
+    const current = byTopic.get(key);
+    if (!current || Number(trend.score || 0) > Number(current.score || 0)) byTopic.set(key, trend);
+  }
+  return [...byTopic.values()].sort((a, b) => Number(b.score || 0) - Number(a.score || 0)).slice(0, 8);
+}
+
+function latestOutputs() {
+  return (state.evidence?.runs || []).slice(0, 6);
 }
 
 function userFriendlyStatus(status = "") {
@@ -215,6 +325,7 @@ function userFriendlyStatus(status = "") {
   if (status === "dry_run_ready") return "Ready to review";
   if (status === "completed") return "Completed";
   if (status === "held") return "Needs review";
+  if (status === "failed") return "Needs correction";
   return "Setup needed";
 }
 
@@ -226,22 +337,57 @@ function friendlyDecision(run) {
   return "Processing";
 }
 
-function latestOutputs() {
-  const runs = state.evidence?.runs || [];
-  return runs.slice(0, 5);
+function trendRadar() {
+  const rows = trends();
+  if (!rows.length) {
+    return `<p>No trend scan yet. Run the viral scan and the AI will rank what to make next.</p>`;
+  }
+  return `
+    <div class="trend-list">
+      ${rows.map((trend, index) => `
+        <article class="trend-card ${index === 0 ? "hot" : ""}">
+          <div>
+            <span class="pill">${escapeHtml(titleCase(trend.pillar || "opportunity"))}</span>
+            <h3>${escapeHtml(trend.topic)}</h3>
+            <p>${escapeHtml(trend.region || "global")} opportunity with a ${Math.round(Number(trend.score || 0))}/100 viral score.</p>
+          </div>
+          <div class="trend-action">
+            <strong>${Math.round(Number(trend.score || 0))}</strong>
+            <button class="btn btn-primary trend-run" data-topic="${escapeHtml(trend.topic)}" data-pillar="${escapeHtml(trend.pillar || "curiosity_gap")}">Generate this</button>
+          </div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function reviewList() {
+  const outputs = latestOutputs();
+  if (!outputs.length) return `<p>No videos in review yet. Run the viral scan to create the first package.</p>`;
+  return `
+    <div class="list">
+      ${outputs.map(run => `
+        <div class="list-item">
+          <strong>${escapeHtml(run.input?.topic || run.output?.brief?.title || "Autonomous trend run")}</strong>
+          <span>${escapeHtml(friendlyDecision(run))}</span>
+          <span class="pill">${userFriendlyStatus(run.status)}</span>
+        </div>
+      `).join("")}
+    </div>
+  `;
 }
 
 function assetCards() {
   const assets = state.evidence?.assets || [];
-  if (!assets.length) return `<p>No assets yet. Start a content run to create videos, images, and audio.</p>`;
+  if (!assets.length) return `<p>No assets yet. Generated video, image, and audio assets appear here after the first run.</p>`;
   return `
     <div class="grid-4">
       ${assets.slice(0, 8).map(asset => `
         <article class="tile">
           <span class="tile-icon">${escapeHtml(String(asset.type || "asset").slice(0, 2).toUpperCase())}</span>
           <h3>${escapeHtml(titleCase(asset.type || "Asset"))}</h3>
-          <p>${escapeHtml(asset.metadata?.title || asset.source || "Generated asset")}</p>
-          <span class="pill">${escapeHtml(asset.status || asset.source || "ready")}</span>
+          <p>${escapeHtml(asset.metadata?.title || asset.metadata?.key || "Generated media")}</p>
+          ${asset.uri ? `<a class="pill" href="${escapeHtml(asset.uri)}" target="_blank" rel="noreferrer">Open</a>` : `<span class="pill">Ready</span>`}
         </article>
       `).join("")}
     </div>
@@ -256,12 +402,137 @@ function qualityCards() {
     const status = item?.status || "not_run";
     return `
       <article class="tile">
-        <span class="tile-icon">${status === "pass" ? "OK" : status === "hold" ? "!" : "--"}</span>
+        <span class="tile-icon">${status === "pass" ? "OK" : status === "hold" ? "RV" : "--"}</span>
         <h3>${escapeHtml(titleCase(name))}</h3>
-        <p>${status === "pass" ? "Approved for this stage." : status === "hold" ? "Needs your review before publishing." : "Will run after content is created."}</p>
+        <p>${status === "pass" ? "Cleared for this stage." : status === "hold" ? "Needs your review before publishing." : "Will run after the next generated package."}</p>
       </article>
     `;
   }).join("");
+}
+
+function scheduleCards() {
+  const posts = state.evidence?.posts || [];
+  const byPlatform = new Map(posts.map(post => [post.platform, post]));
+  return platformNames.map(platform => {
+    const post = byPlatform.get(platform);
+    return `
+      <article class="tile">
+        <h3>${platform}</h3>
+        <p>${post ? `Package ${userFriendlyStatus(post.status).toLowerCase()}.` : "No package prepared yet."}</p>
+        <span class="pill">${post ? userFriendlyStatus(post.status) : "Connect channel"}</span>
+      </article>
+    `;
+  }).join("");
+}
+
+function evidenceSummary() {
+  const counts = state.status?.counts || {};
+  const qualityCount = state.evidence?.policyEvents?.length || 0;
+  const completed = (state.evidence?.runs || []).filter(run => run.status === "completed").length;
+  const videoAssets = (state.evidence?.assets || []).filter(asset => asset.type === "video").length;
+  return `
+    <div class="proof-row">
+      <div class="proof"><strong>${completed}</strong><span>completed runs</span></div>
+      <div class="proof"><strong>${videoAssets}</strong><span>video assets</span></div>
+      <div class="proof"><strong>${counts.posts || 0}</strong><span>channel packages</span></div>
+      <div class="proof"><strong>${qualityCount}</strong><span>quality checks</span></div>
+    </div>
+  `;
+}
+
+function userApp() {
+  const counts = state.status?.counts || {};
+  const topTrend = trends()[0];
+  return `
+    <div class="app-shell">
+      ${appNav("radar")}
+      <main class="main">
+        <div class="topbar">
+          <div>
+            <div class="eyebrow">Command Center</div>
+            <h1 style="font-size:52px;margin-top:12px;">What should we publish next?</h1>
+            <p style="color:var(--muted);max-width:760px;line-height:1.7;">ViralForge ranks opportunities, then turns the strongest ideas into videos, assets, review items, and scheduled channel packages.</p>
+          </div>
+          <div class="nav-actions">
+            <button class="btn btn-secondary" id="autopilot">Run viral scan</button>
+            <button class="btn btn-primary" id="start-run" data-topic="${escapeHtml(topTrend?.topic || "")}" data-pillar="${escapeHtml(topTrend?.pillar || "")}">Generate top idea</button>
+          </div>
+        </div>
+
+        ${evidenceSummary()}
+
+        <section id="radar" style="border-top:0;padding-top:24px;">
+          <div class="section-head">
+            <div><div class="eyebrow">Viral Radar</div><h2>Ranked opportunities.</h2></div>
+            <p>The system decides what to build from trend strength, pillar fit, novelty, risk, cost, and past performance.</p>
+          </div>
+          ${trendRadar()}
+        </section>
+
+        <div class="console-grid" id="production" style="margin-top:22px;">
+          <section class="panel">
+            <h2>Manual Override</h2>
+            <p>Use this only when you want to force a specific topic. The default path is Viral Radar.</p>
+            <form id="run-form">
+              <div class="field"><label>Topic</label><textarea name="topic" placeholder="Optional: force a topic">${escapeHtml(topTrend?.topic || "")}</textarea></div>
+              <div class="field"><label>Goal</label><input name="objective" value="Create a faceless video with assets, review checks, and channel packages" /></div>
+              <div class="field"><label>Review level</label><select name="risk"><option value="standard">Standard</option><option value="strict">Strict review</option></select></div>
+              <button class="btn btn-primary" style="width:100%;margin-top:16px;">Generate package</button>
+            </form>
+          </section>
+          <section class="panel" id="review">
+            <h2>Review Queue</h2>
+            ${reviewList()}
+          </section>
+        </div>
+
+        <section id="assets" style="border-top:0;padding-top:24px;">
+          <div class="section-head">
+            <div><div class="eyebrow">Assets</div><h2>Produced media.</h2></div>
+            <p>Generated video, image, audio, captions, and metadata are collected here after each run.</p>
+          </div>
+          ${assetCards()}
+        </section>
+
+        <section id="schedule" style="border-top:0;padding-top:24px;">
+          <div class="section-head">
+            <div><div class="eyebrow">Schedule</div><h2>Channel packages.</h2></div>
+            <p>Publishing waits for connected accounts, approval status, and platform fit.</p>
+          </div>
+          <div class="grid-4">${scheduleCards()}</div>
+        </section>
+
+        <section id="quality" style="border-top:0;padding-top:24px;">
+          <div class="section-head">
+            <div><div class="eyebrow">Quality</div><h2>Release checks.</h2></div>
+            <p>Only the decisions you need before release: originality, rights, claims, safety, fit, and review.</p>
+          </div>
+          <div class="grid-4">${qualityCards()}</div>
+        </section>
+
+        <section id="evidence" style="border-top:0;padding-top:24px;">
+          <div class="section-head">
+            <div><div class="eyebrow">Evidence</div><h2>What has actually been built.</h2></div>
+            <p>Counts come from persisted runs, assets, packages, release checks, and learning signals.</p>
+          </div>
+          ${evidenceSummary()}
+        </section>
+
+        <section style="border-top:0;padding-top:24px;">
+          <div class="section-head">
+            <div><div class="eyebrow">Assistant</div><h2>Ask what needs attention.</h2></div>
+          </div>
+          <div class="panel">
+            <div class="list">${state.chat.map(item => `<div class="list-item"><strong>${escapeHtml(item.role)}</strong><span>${escapeHtml(item.text)}</span></div>`).join("") || "<p>Try: What should we make next?</p>"}</div>
+            <form id="chat-form" class="field" style="display:grid;grid-template-columns:1fr auto;gap:10px;margin-top:16px;">
+              <input name="message" placeholder="Ask ViralForge..." />
+              <button class="btn btn-primary">Send</button>
+            </form>
+          </div>
+        </section>
+      </main>
+    </div>
+  `;
 }
 
 function friendlyGateMessage(item) {
@@ -294,115 +565,20 @@ function activityMessage(log = {}) {
   return "Working on the current content run.";
 }
 
-function scheduleCards() {
-  const posts = state.evidence?.posts || [];
-  const byPlatform = new Map(posts.map(post => [post.platform, post]));
-  return platformNames.map(platform => {
-    const post = byPlatform.get(platform);
-    return `
-      <article class="tile">
-        <h3>${platform}</h3>
-        <p>${post ? `Package ${userFriendlyStatus(post.status).toLowerCase()}.` : "No package prepared yet."}</p>
-        <span class="pill">${post ? userFriendlyStatus(post.status) : userFriendlyStatus(state.status?.connectors?.[platform])}</span>
-      </article>
-    `;
-  }).join("");
-}
-
-function reviewList() {
-  const outputs = latestOutputs();
-  if (!outputs.length) return `<p>No content to review yet. Create the first run and this queue will fill automatically.</p>`;
+function codeEvidence() {
+  const rows = [
+    ["API server", "server.mjs", "Auth, routes, protected APIs"],
+    ["Agents", "src/agents.mjs", "Trend, brief, script, assets, render, policy, publish"],
+    ["Persistence", "src/db.mjs", "Postgres or local proof store"],
+    ["Queue", "src/queue.mjs", "Redis workers or local worker fallback"],
+    ["Renderer", "src/render/renderer.mjs", "FFmpeg MP4 output"],
+    ["Policy", "src/policy.mjs", "Release checks and human review holds"],
+    ["Learning", "src/learning.mjs", "Performance signals for future scoring"],
+    ["Connectors", "src/connectors/index.mjs", "Platform package and live paths"],
+  ];
   return `
-        <div class="list">
-      ${outputs.map(run => `
-        <div class="list-item">
-          <strong>${escapeHtml(run.input?.topic || "Untitled run")}</strong>
-          <span>${escapeHtml(friendlyDecision(run))}</span>
-          <span class="pill">${userFriendlyStatus(run.status)}</span>
-        </div>
-      `).join("")}
-    </div>
-  `;
-}
-
-function userApp() {
-  const counts = state.status?.counts || {};
-  const qualityCount = state.evidence?.policyEvents?.length || 0;
-  const latest = latestOutputs()[0];
-  return `
-    <div class="app-shell">
-      ${appNav("workspace")}
-      <main class="main">
-        <div class="topbar">
-          <div>
-            <div class="eyebrow">Workspace</div>
-            <h1 style="font-size:52px;margin-top:12px;">Create, review, schedule.</h1>
-            <p style="color:var(--muted);max-width:760px;line-height:1.7;">This is the operating layer: content runs, produced assets, review decisions, channel packages, quality status, and the assistant.</p>
-          </div>
-          <button class="btn btn-primary" id="start-run">Quick create</button>
-        </div>
-
-        <div class="proof-row">
-          <div class="proof"><strong>${counts.runs || 0}</strong><span>content runs</span></div>
-          <div class="proof"><strong>${counts.assets || 0}</strong><span>assets produced</span></div>
-          <div class="proof"><strong>${counts.posts || 0}</strong><span>channel packages</span></div>
-          <div class="proof"><strong>${qualityCount}</strong><span>quality checks</span></div>
-        </div>
-
-        <div class="console-grid" style="margin-top:22px;">
-          <section class="panel">
-            <h2>Create</h2>
-            <p>Give ViralForge a topic, or leave it broad and let the system choose from current signals.</p>
-            <form id="run-form">
-              <div class="field"><label>Topic</label><textarea name="topic">A simple home upgrade people do wrong every day</textarea></div>
-              <div class="field"><label>Goal</label><input name="objective" value="Create a faceless short with assets and channel packages" /></div>
-              <div class="field"><label>Review level</label><select name="risk"><option value="standard">Standard</option><option value="strict">Strict review</option></select></div>
-              <button class="btn btn-primary" style="width:100%;margin-top:16px;">Generate content</button>
-            </form>
-          </section>
-          <section class="panel" id="review">
-            <h2>Review Queue</h2>
-            ${reviewList()}
-          </section>
-        </div>
-
-        <section id="assets" style="border-top:0;padding-top:24px;">
-          <div class="section-head">
-            <div><div class="eyebrow">Assets</div><h2>Produced media.</h2></div>
-            <p>${latest ? `Latest topic: ${escapeHtml(latest.input?.topic || "Untitled")}` : "Created videos, images, voice, captions, and metadata appear here."}</p>
-          </div>
-          ${assetCards()}
-        </section>
-
-        <section id="schedule" style="border-top:0;padding-top:24px;">
-          <div class="section-head">
-            <div><div class="eyebrow">Schedule</div><h2>Channel packages.</h2></div>
-            <p>See what is ready for each channel. Accounts can be connected from the private admin area.</p>
-          </div>
-          <div class="grid-4">${scheduleCards()}</div>
-        </section>
-
-        <section id="quality" style="border-top:0;padding-top:24px;">
-          <div class="section-head">
-            <div><div class="eyebrow">Quality</div><h2>Review before release.</h2></div>
-            <p>Only the decisions you need: originality, rights, claims, brand safety, platform fit, and human review.</p>
-          </div>
-          <div class="grid-4">${qualityCards()}</div>
-        </section>
-
-        <section style="border-top:0;padding-top:24px;">
-          <div class="section-head">
-            <div><div class="eyebrow">Assistant</div><h2>Ask what needs attention.</h2></div>
-          </div>
-          <div class="panel">
-            <div class="list">${state.chat.map(item => `<div class="list-item"><strong>${escapeHtml(item.role)}</strong><span>${escapeHtml(item.text)}</span></div>`).join("") || "<p>Try: What should I review next?</p>"}</div>
-            <form id="chat-form" class="field" style="display:grid;grid-template-columns:1fr auto;gap:10px;margin-top:16px;">
-              <input name="message" placeholder="Ask ViralForge..." />
-              <button class="btn btn-primary">Send</button>
-            </form>
-          </div>
-        </section>
-      </main>
+    <div class="grid-4">
+      ${rows.map(([name, file, proof]) => `<article class="tile"><span class="tile-icon">OK</span><h3>${name}</h3><p>${proof}</p><span class="pill">${file}</span></article>`).join("")}
     </div>
   `;
 }
@@ -418,20 +594,26 @@ function adminConsole() {
         <div class="topbar">
           <div>
             <div class="eyebrow">Admin</div>
-            <h1 style="font-size:52px;margin-top:12px;">Private system controls.</h1>
-            <p style="color:var(--muted);max-width:760px;line-height:1.7;">This area is protected. Use it for setup, health checks, corrective action, and release control.</p>
+            <h1 style="font-size:52px;margin-top:12px;">Proof, controls, corrective action.</h1>
+            <p style="color:var(--muted);max-width:760px;line-height:1.7;">This protected page shows what exists in code and what has actually run locally.</p>
           </div>
           <div class="nav-actions">
             <button class="btn btn-secondary" id="refresh">Refresh</button>
             <button class="btn btn-primary" id="autopilot">Run cycle</button>
           </div>
         </div>
-        <div class="grid-4">
-          <article class="tile"><span class="tile-icon">CR</span><h3>Content Runs</h3><p>${counts.runs || 0} created so far.</p></article>
-          <article class="tile"><span class="tile-icon">AS</span><h3>Assets</h3><p>${counts.assets || 0} produced and stored.</p></article>
-          <article class="tile"><span class="tile-icon">PK</span><h3>Packages</h3><p>${counts.posts || 0} channel packages prepared.</p></article>
-          <article class="tile"><span class="tile-icon">QC</span><h3>Quality</h3><p>${evidence?.policyEvents?.length || 0} release checks recorded.</p></article>
+        <div class="proof-row">
+          <div class="proof"><strong>${counts.runs || 0}</strong><span>runs persisted</span></div>
+          <div class="proof"><strong>${counts.assets || 0}</strong><span>assets stored</span></div>
+          <div class="proof"><strong>${counts.posts || 0}</strong><span>packages prepared</span></div>
+          <div class="proof"><strong>${evidence?.learningSignals?.length || 0}</strong><span>learning signals</span></div>
         </div>
+        <section style="border-top:0;padding-top:24px;">
+          <div class="section-head">
+            <div><div class="eyebrow">Code Evidence</div><h2>Backend pieces in this repo.</h2></div>
+          </div>
+          ${codeEvidence()}
+        </section>
         <div class="console-grid" style="margin-top:22px;">
           <section class="panel">
             <h2>Release Controls</h2>
@@ -442,7 +624,7 @@ function adminConsole() {
             </div>
           </section>
           <section class="panel">
-            <h2>Activity</h2>
+            <h2>Recent Activity</h2>
             <div class="list">
               ${(evidence?.jobLogs || []).slice(0, 14).map(log => `
                 <div class="list-item"><strong>${escapeHtml(activityLabel(log))}</strong><span>${escapeHtml(activityMessage(log))}</span><span class="pill">${escapeHtml(log.status)}</span></div>
@@ -469,14 +651,14 @@ async function refresh() {
   state.evidence = await api("/api/evidence");
 }
 
-async function startRun(form) {
-  const data = form ? Object.fromEntries(new FormData(form).entries()) : {};
+async function startRun(input = {}) {
   await api("/api/runs/start", {
     method: "POST",
     body: JSON.stringify({
-      topic: data.topic || "A simple home upgrade people do wrong every day",
-      objective: data.objective || "Create a faceless short with assets and channel packages",
-      risk: data.risk || "standard",
+      topic: input.topic || "",
+      pillar: input.pillar || "",
+      objective: input.objective || "Create a faceless video with assets, review checks, and channel packages",
+      risk: input.risk || "standard",
       budgetUsd: 120,
     }),
   });
@@ -487,6 +669,7 @@ async function startRun(form) {
 }
 
 async function requireAuth(path) {
+  await getAuthConfig();
   const me = await getMe();
   if (me.authenticated) return true;
   root.innerHTML = loginPage(path);
@@ -497,7 +680,12 @@ async function requireAuth(path) {
 async function wire() {
   document.querySelector("#refresh")?.addEventListener("click", async () => { await refresh(); render(); });
   document.querySelector("#autopilot")?.addEventListener("click", async () => { await api("/api/autopilot/tick", { method: "POST", body: "{}" }); await refresh(); render(); });
-  document.querySelector("#start-run")?.addEventListener("click", () => startRun());
+  document.querySelector("#start-run")?.addEventListener("click", event => {
+    startRun({ topic: event.currentTarget.dataset.topic, pillar: event.currentTarget.dataset.pillar });
+  });
+  document.querySelectorAll(".trend-run").forEach(button => {
+    button.addEventListener("click", () => startRun({ topic: button.dataset.topic, pillar: button.dataset.pillar }));
+  });
   document.querySelector("#logout")?.addEventListener("click", async () => {
     await api("/api/auth/logout", { method: "POST", body: "{}" });
     state.me = { authenticated: false };
@@ -509,13 +697,21 @@ async function wire() {
     event.preventDefault();
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form).entries());
-    await api("/api/auth/login", { method: "POST", body: JSON.stringify({ password: data.password }) });
-    state.me = { authenticated: true, user: { role: "admin" } };
+    await api("/api/auth/login", { method: "POST", body: JSON.stringify({ email: data.email, password: data.password }) });
+    state.me = { authenticated: true, user: { role: "owner", email: data.email } };
     navigate(form.dataset.target || "/app");
+  });
+  document.querySelector("#signup-form")?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+    await api("/api/auth/signup", { method: "POST", body: JSON.stringify({ email: data.email, password: data.password }) });
+    state.me = { authenticated: true, user: { role: "owner", email: data.email } };
+    navigate("/app");
   });
   document.querySelector("#run-form")?.addEventListener("submit", event => {
     event.preventDefault();
-    startRun(event.currentTarget);
+    const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+    startRun({ topic: data.topic, objective: data.objective, risk: data.risk });
   });
   document.querySelector("#chat-form")?.addEventListener("submit", async event => {
     event.preventDefault();
@@ -530,7 +726,10 @@ async function wire() {
 async function render() {
   const path = location.pathname;
   try {
-    if (path === "/admin") {
+    if (path === "/signup") {
+      await getAuthConfig();
+      root.innerHTML = signupPage();
+    } else if (path === "/admin") {
       if (!(await requireAuth(path))) return;
       if (!state.status || !state.evidence) await refresh();
       root.innerHTML = adminConsole();
@@ -545,6 +744,7 @@ async function render() {
   } catch (error) {
     if (error.status === 401) {
       state.me = { authenticated: false };
+      await getAuthConfig();
       root.innerHTML = loginPage(path);
       wire();
       return;
