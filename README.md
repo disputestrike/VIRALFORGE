@@ -44,8 +44,12 @@ npm start
 Open:
 
 ```text
-http://localhost:3001
+http://localhost:3001        public marketing site
+http://localhost:3001/app    private operator workspace
+http://localhost:3001/admin  private admin controls
 ```
+
+Local operator password defaults to `viralforge-local`. In Railway, set `VIRALFORGE_ADMIN_PASSWORD` and `SESSION_SECRET`; without those, private routes and internal APIs will not expose operational data.
 
 ## Quality Gates
 
@@ -63,6 +67,7 @@ DATABASE_URL
 REDIS_URL
 PUBLIC_URL
 SESSION_SECRET
+VIRALFORGE_ADMIN_PASSWORD
 ENCRYPTION_KEY
 AUTOPILOT_ENABLED
 ```
@@ -122,6 +127,9 @@ Other connector env vars are surfaced in `/api/connectors`.
 ## API Endpoints
 
 - `GET /health`
+- `GET /api/auth/me`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
 - `GET /api/status`
 - `GET /api/evidence`
 - `GET /api/connectors`

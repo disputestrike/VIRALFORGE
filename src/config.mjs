@@ -2,6 +2,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const isRailway = Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID);
+const localOnlyPassword = isRailway ? "" : "viralforge-local";
+const localOnlySessionSecret = isRailway ? "" : "viralforge-local-session-secret";
 
 function bool(name, fallback = false) {
   const value = process.env[name];
@@ -25,6 +28,11 @@ export const config = {
     publishMode: process.env.PUBLISH_MODE || "dry_run",
     dataDir: process.env.DATA_DIR || path.join(rootDir, ".data"),
     rootDir,
+  },
+  auth: {
+    adminPassword: process.env.VIRALFORGE_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || localOnlyPassword,
+    sessionSecret: process.env.SESSION_SECRET || localOnlySessionSecret,
+    cookieName: "vf_session",
   },
   db: {
     url: process.env.DATABASE_URL || "",

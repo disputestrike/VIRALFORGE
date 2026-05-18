@@ -1,4 +1,5 @@
 import http from "node:http";
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -45,10 +46,11 @@ async function readJson(req) {
   }
 }
 
-function sendJson(res, body, status = 200) {
+function sendJson(res, body, status = 200, headers = {}) {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
+    ...headers,
   });
   res.end(JSON.stringify(body, null, 2));
 }
@@ -60,11 +62,98 @@ async function sendFile(res, filePath) {
   res.end(body);
 }
 
+function parseCookies(req) {
+  const header = req.headers.cookie || "";
+  return Object.fromEntries(header.split(";").map(part => {
+    const index = part.indexOf("=");
+    if (index === -1) return null;
+    const key = part.slice(0, index).trim();
+    const value = part.slice(index + 1).trim();
+    return key ? [key, decodeURIComponent(value)] : null;
+  }).filter(Boolean));
+}
+
+function sign(value) {
+  return crypto.createHmac("sha256", config.auth.sessionSecret).update(value).digest("base64url");
+}
+
+function timingSafeEqualText(a, b) {
+  const left = Buffer.from(String(a));
+  const right = Buffer.from(String(b));
+  if (left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
+}
+
+function createSessionCookie() {
+  const payload = Buffer.from(JSON.stringify({
+    role: "admin",
+    issuedAt: Date.now(),
+  })).toString("base64url");
+  const value = `${payload}.${sign(payload)}`;
+  const secure = config.app.env === "production" ? "; Secure" : "";
+  return `${config.auth.cookieName}=${encodeURIComponent(value)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 24 * 7}${secure}`;
+}
+
+function clearSessionCookie() {
+  return `${config.auth.cookieName}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
+}
+
+function getSession(req) {
+  if (!config.auth.sessionSecret) return null;
+  const value = parseCookies(req)[config.auth.cookieName];
+  if (!value || !value.includes(".")) return null;
+  const [payload, signature] = value.split(".");
+  if (!signature || !timingSafeEqualText(signature, sign(payload))) return null;
+  try {
+    const session = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    return session?.role === "admin" ? session : null;
+  } catch {
+    return null;
+  }
+}
+
+function requireSession(req, res) {
+  const session = getSession(req);
+  if (session) return session;
+  sendJson(res, { ok: false, error: "Authentication required" }, 401);
+  return null;
+}
+
 async function handleApi(req, res, url) {
   if (url.pathname === "/health") {
     sendJson(res, { ok: true, product: "ViralForge", time: new Date().toISOString() });
     return true;
   }
+
+  if (url.pathname === "/api/auth/me" && req.method === "GET") {
+    const session = getSession(req);
+    sendJson(res, {
+      authenticated: Boolean(session),
+      user: session ? { role: session.role } : null,
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/auth/login" && req.method === "POST") {
+    const body = await readJson(req);
+    if (!config.auth.adminPassword || !config.auth.sessionSecret) {
+      sendJson(res, { ok: false, error: "Operator auth is not configured. Set VIRALFORGE_ADMIN_PASSWORD and SESSION_SECRET." }, 503);
+      return true;
+    }
+    if (!timingSafeEqualText(body.password || "", config.auth.adminPassword)) {
+      sendJson(res, { ok: false, error: "Invalid operator password" }, 401);
+      return true;
+    }
+    sendJson(res, { ok: true, user: { role: "admin" } }, 200, { "set-cookie": createSessionCookie() });
+    return true;
+  }
+
+  if (url.pathname === "/api/auth/logout" && req.method === "POST") {
+    sendJson(res, { ok: true }, 200, { "set-cookie": clearSessionCookie() });
+    return true;
+  }
+
+  if (url.pathname.startsWith("/api/") && !requireSession(req, res)) return true;
 
   if (url.pathname === "/api/status") {
     const evidence = await repo.evidence();
