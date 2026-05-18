@@ -152,9 +152,9 @@ export async function assetGen({ repo, storage, run, content, brief, plan }) {
   return [imageAsset, voiceAsset];
 }
 
-export async function renderer({ repo, storage, run, content, brief }) {
+export async function renderer({ repo, storage, run, content, brief, script, assets }) {
   await log(repo, run.id, "Renderer", "started", "Rendering MP4 with FFmpeg template path.");
-  const rendered = await renderTemplateVideo({ storage, runId: run.id, title: brief.title, durationSeconds: 8 });
+  const rendered = await renderTemplateVideo({ storage, runId: run.id, title: brief.title, script, assets, durationSeconds: 10 });
   const asset = await repo.addAsset({
     run_id: run.id,
     content_id: content.id,
@@ -197,7 +197,7 @@ export async function runPipeline({ repo, storage, input = {} }) {
     });
     const plan = await visualPlanner({ repo, run, brief, script });
     const generatedAssets = await assetGen({ repo, storage, run, content, brief, plan });
-    const videoAsset = await renderer({ repo, storage, run, content, brief });
+    const videoAsset = await renderer({ repo, storage, run, content, brief, script, assets: generatedAssets });
     const policy = await runPolicyOS({ repo, run: { ...run, output: { finance: { estimatedCost: Math.round(score / 2) } } }, content, assets: [...generatedAssets, videoAsset] });
     const posts = policy.approved || !policy.gates.some(gate => gate.status === "block")
       ? await distribute({ repo, run, content, videoAsset })

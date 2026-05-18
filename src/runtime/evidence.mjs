@@ -3,8 +3,9 @@ import { connectorStatus, providerStatus } from "../config.mjs";
 export function buildQualityMatrix(evidence) {
   const latestRun = evidence.runs[0] || null;
   const policyEvents = evidence.policyEvents || [];
+  const runsById = new Map((evidence.runs || []).map(run => [run.id, run]));
   const failedPolicies = policyEvents.filter(event => ["fail", "block"].includes(event.status));
-  const heldPolicies = policyEvents.filter(event => event.status === "hold");
+  const heldPolicies = policyEvents.filter(event => event.status === "hold" && runsById.get(event.run_id)?.status === "held");
 
   return [
     {

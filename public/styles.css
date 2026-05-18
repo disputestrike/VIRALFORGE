@@ -608,6 +608,29 @@ section {
   padding: 11px 12px;
 }
 
+.action-item {
+  flex-wrap: wrap;
+}
+
+.history-list .list-item {
+  justify-content: start;
+}
+
+.mini-btn {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: var(--ink);
+  padding: 0 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 950;
+}
+
 .pill {
   border-radius: 999px;
   background: rgba(203, 25, 175, 0.09);
@@ -615,6 +638,50 @@ section {
   padding: 5px 9px;
   font-size: 12px;
   font-weight: 950;
+}
+
+.run-detail {
+  display: grid;
+  grid-template-columns: 1fr 170px;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.run-detail h3 {
+  margin: 14px 0 0;
+  font-size: 28px;
+  line-height: 1.08;
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.detail-side {
+  display: grid;
+  gap: 8px;
+}
+
+.detail-side div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fcfbff;
+  padding: 12px;
+}
+
+.detail-side strong,
+.detail-side span {
+  display: block;
+}
+
+.detail-side span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .alert {
@@ -770,6 +837,7 @@ section {
   .hero,
   .hero-product,
   .console-grid,
+  .run-detail,
   .app-shell {
     grid-template-columns: 1fr;
   }

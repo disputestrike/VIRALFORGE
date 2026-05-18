@@ -3,6 +3,7 @@ const root = document.querySelector("#app");
 const state = {
   status: null,
   evidence: null,
+  workspace: null,
   authConfig: null,
   chat: [],
   me: null,
@@ -10,6 +11,7 @@ const state = {
   notice: "",
   lastRefreshed: "",
   lastJob: null,
+  selectedRunId: "",
 };
 
 const platformNames = ["YouTube", "TikTok", "Instagram", "X", "LinkedIn", "Pinterest", "Reddit", "Telegram"];
@@ -150,6 +152,7 @@ function appNav(active = "radar") {
         <a class="side-link ${active === "radar" ? "active" : ""}" href="/app#radar" data-link>Viral Radar</a>
         <a class="side-link" href="/app#production" data-link>Production</a>
         <a class="side-link" href="/app#review" data-link>Review</a>
+        <a class="side-link" href="/app#history" data-link>History</a>
         <a class="side-link" href="/app#assets" data-link>Assets</a>
         <a class="side-link" href="/app#schedule" data-link>Schedule</a>
         <a class="side-link" href="/app#evidence" data-link>Evidence</a>
@@ -345,7 +348,20 @@ function trends() {
 }
 
 function latestOutputs() {
-  return (state.evidence?.runs || []).slice(0, 6);
+  return (state.workspace?.runs || state.evidence?.runs || []).slice(0, 6);
+}
+
+function allRuns() {
+  return state.workspace?.runs || state.evidence?.runs || [];
+}
+
+function selectedRun() {
+  const runs = allRuns();
+  return runs.find(run => run.id === state.selectedRunId) || runs[0] || null;
+}
+
+function money(value = 0) {
+  return `$${Number(value || 0).toFixed(2)}`;
 }
 
 function userFriendlyStatus(status = "") {
@@ -391,15 +407,18 @@ function trendRadar() {
 }
 
 function reviewList() {
-  const outputs = latestOutputs();
+  const outputs = state.workspace?.reviewQueue?.length ? state.workspace.reviewQueue : latestOutputs();
   if (!outputs.length) return `<p>No videos in review yet. Run the viral scan to create the first package.</p>`;
   return `
     <div class="list">
       ${outputs.map(run => `
-        <div class="list-item">
-          <strong>${escapeHtml(run.input?.topic || run.output?.brief?.title || "Autonomous trend run")}</strong>
+        <div class="list-item action-item">
+          <strong>${escapeHtml(run.topic || run.input?.topic || run.output?.brief?.title || "Autonomous trend run")}</strong>
           <span>${escapeHtml(friendlyDecision(run))}</span>
           <span class="pill">${userFriendlyStatus(run.status)}</span>
+          <button class="mini-btn run-detail" data-run-id="${escapeHtml(run.id)}">View</button>
+          ${run.canApprove ? `<button class="mini-btn approve-run" data-run-id="${escapeHtml(run.id)}">Approve</button>` : ""}
+          ${run.canRetry ? `<button class="mini-btn retry-run" data-run-id="${escapeHtml(run.id)}">Retry</button>` : ""}
         </div>
       `).join("")}
     </div>
@@ -407,7 +426,7 @@ function reviewList() {
 }
 
 function assetCards() {
-  const assets = state.evidence?.assets || [];
+  const assets = state.workspace?.assets || state.evidence?.assets || [];
   if (!assets.length) return `<p>No assets yet. Generated video, image, and audio assets appear here after the first run.</p>`;
   return `
     <div class="grid-4">
@@ -416,7 +435,7 @@ function assetCards() {
           <span class="tile-icon">${escapeHtml(String(asset.type || "asset").slice(0, 2).toUpperCase())}</span>
           <h3>${escapeHtml(titleCase(asset.type || "Asset"))}</h3>
           <p>${escapeHtml(asset.metadata?.title || asset.metadata?.key || "Generated media")}</p>
-          ${asset.uri ? `<a class="pill" href="${escapeHtml(asset.uri)}" target="_blank" rel="noreferrer">Open</a>` : `<span class="pill">Ready</span>`}
+          ${asset.mediaUrl || asset.uri ? `<a class="pill" href="${escapeHtml(asset.mediaUrl || asset.uri)}" target="_blank" rel="noreferrer">Open</a>` : `<span class="pill">Ready</span>`}
         </article>
       `).join("")}
     </div>
@@ -440,7 +459,7 @@ function qualityCards() {
 }
 
 function scheduleCards() {
-  const posts = state.evidence?.posts || [];
+  const posts = state.workspace?.posts || state.evidence?.posts || [];
   const byPlatform = new Map(posts.map(post => [post.platform, post]));
   return platformNames.map(platform => {
     const post = byPlatform.get(platform);
@@ -457,14 +476,71 @@ function scheduleCards() {
 function evidenceSummary() {
   const counts = state.status?.counts || {};
   const qualityCount = state.evidence?.policyEvents?.length || 0;
-  const completed = (state.evidence?.runs || []).filter(run => run.status === "completed").length;
-  const videoAssets = (state.evidence?.assets || []).filter(asset => asset.type === "video").length;
+  const completed = allRuns().filter(run => run.status === "completed").length;
+  const videoAssets = (state.workspace?.assets || state.evidence?.assets || []).filter(asset => asset.type === "video").length;
   return `
     <div class="proof-row">
       <div class="proof"><strong>${completed}</strong><span>completed runs</span></div>
       <div class="proof"><strong>${videoAssets}</strong><span>video assets</span></div>
       <div class="proof"><strong>${counts.posts || 0}</strong><span>channel packages</span></div>
       <div class="proof"><strong>${qualityCount}</strong><span>quality checks</span></div>
+    </div>
+  `;
+}
+
+function revenuePanel() {
+  const revenue = state.workspace?.revenue || { actual: 0, learningEstimate: 0, mode: "dry_run_no_actual_platform_revenue" };
+  return `
+    <div class="proof-row revenue-row">
+      <div class="proof"><strong>${money(revenue.actual)}</strong><span>actual platform revenue</span></div>
+      <div class="proof"><strong>${money(revenue.learningEstimate)}</strong><span>learning estimate</span></div>
+      <div class="proof"><strong>${revenue.mode === "live_platform_metrics" ? "Live" : "Dry run"}</strong><span>revenue mode</span></div>
+      <div class="proof"><strong>${state.workspace?.analytics?.length || 0}</strong><span>metric records</span></div>
+    </div>
+  `;
+}
+
+function runHistory() {
+  const runs = allRuns();
+  if (!runs.length) return `<p>No production history yet. Run Viral Radar to create the first record.</p>`;
+  return `
+    <div class="list history-list">
+      ${runs.slice(0, 10).map(run => `
+        <div class="list-item action-item">
+          <strong>${escapeHtml(run.topic || run.input?.topic || "Autonomous run")}</strong>
+          <span>${escapeHtml(titleCase(run.pillar || run.output?.brief?.pillar || "content"))}</span>
+          <span class="pill">${escapeHtml(userFriendlyStatus(run.status))}</span>
+          ${run.videoUrl ? `<a class="mini-btn" href="${escapeHtml(run.videoUrl)}" target="_blank" rel="noreferrer">Open video</a>` : ""}
+          <button class="mini-btn run-detail" data-run-id="${escapeHtml(run.id)}">Details</button>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function runDetailPanel() {
+  const run = selectedRun();
+  if (!run) return `<p>No run selected yet.</p>`;
+  const posts = run.posts || [];
+  const metrics = run.metrics || [];
+  return `
+    <div class="run-detail">
+      <div class="detail-main">
+        <div class="eyebrow">${escapeHtml(titleCase(run.pillar || "content"))}</div>
+        <h3>${escapeHtml(run.topic || "Autonomous run")}</h3>
+        <p>${escapeHtml(run.brief?.hook || run.decision || "Production details will appear after the run completes.")}</p>
+        <div class="detail-actions">
+          ${run.videoUrl ? `<a class="btn btn-primary" href="${escapeHtml(run.videoUrl)}" target="_blank" rel="noreferrer">Open produced video</a>` : ""}
+          ${run.canApprove ? `<button class="btn btn-secondary approve-run" data-run-id="${escapeHtml(run.id)}">Approve release</button>` : ""}
+          ${run.canRetry ? `<button class="btn btn-secondary retry-run" data-run-id="${escapeHtml(run.id)}">Run correction</button>` : ""}
+        </div>
+      </div>
+      <div class="detail-side">
+        <div><strong>${escapeHtml(userFriendlyStatus(run.status))}</strong><span>status</span></div>
+        <div><strong>${Math.round(Number(run.score || 0))}</strong><span>score</span></div>
+        <div><strong>${posts.length}</strong><span>packages</span></div>
+        <div><strong>${metrics.length}</strong><span>metrics</span></div>
+      </div>
     </div>
   `;
 }
@@ -499,6 +575,7 @@ function userApp() {
         </div>
 
         ${evidenceSummary()}
+        ${revenuePanel()}
 
         <section id="radar" style="border-top:0;padding-top:24px;">
           <div class="section-head">
@@ -524,6 +601,17 @@ function userApp() {
             ${reviewList()}
           </section>
         </div>
+
+        <section id="history" style="border-top:0;padding-top:24px;">
+          <div class="section-head">
+            <div><div class="eyebrow">History</div><h2>Everything the system has built.</h2></div>
+            <p>Every generated package stays here with its video, status, review decision, channel packages, and metrics.</p>
+          </div>
+          <div class="console-grid">
+            <section class="panel">${runHistory()}</section>
+            <section class="panel">${runDetailPanel()}</section>
+          </div>
+        </section>
 
         <section id="assets" style="border-top:0;padding-top:24px;">
           <div class="section-head">
@@ -687,8 +775,9 @@ async function getMe() {
 }
 
 async function refresh() {
-  state.status = await api("/api/status");
-  state.evidence = await api("/api/evidence");
+  state.workspace = await api("/api/workspace");
+  state.status = state.workspace.status;
+  state.evidence = state.workspace;
   state.lastRefreshed = new Date().toLocaleTimeString();
 }
 
@@ -707,14 +796,13 @@ async function startRun(input = {}) {
       }),
     });
     state.lastJob = job.job;
-    setNotice("Run queued. Refreshing evidence as soon as the worker writes results.", "generate");
+    await refresh();
+    if (job.job?.runId || job.job?.status) state.selectedRunId = job.job.runId || job.job.id;
+    setNotice(job.job?.status
+      ? `Production finished locally with status: ${job.job.status}.`
+      : "Run queued. Refresh again after the Railway worker finishes.");
+    state.busy = "";
     render();
-    setTimeout(async () => {
-      await refresh();
-      setNotice("New production evidence loaded from the server.");
-      state.busy = "";
-      render();
-    }, 3500);
   } catch (error) {
     state.busy = "";
     setNotice(`Run failed: ${error.message}`);
@@ -728,6 +816,7 @@ async function runViralScan() {
     render();
     const result = await api("/api/autopilot/tick", { method: "POST", body: "{}" });
     state.lastJob = { id: result.run?.id || "autopilot" };
+    if (result.run?.id) state.selectedRunId = result.run.id;
     await refresh();
     setNotice(`Autonomous cycle finished: ${result.run?.status || "completed"}.`);
     state.busy = "";
@@ -763,6 +852,37 @@ async function wire() {
   });
   document.querySelectorAll(".trend-run").forEach(button => {
     button.addEventListener("click", () => startRun({ topic: button.dataset.topic, pillar: button.dataset.pillar }));
+  });
+  document.querySelectorAll(".run-detail").forEach(button => {
+    button.addEventListener("click", () => {
+      state.selectedRunId = button.dataset.runId;
+      render();
+      document.querySelector("#history")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+  document.querySelectorAll(".approve-run").forEach(button => {
+    button.addEventListener("click", async () => {
+      setNotice("Approving the held run and writing the review audit event.", "review");
+      render();
+      await api(`/api/runs/${button.dataset.runId}/approve`, { method: "POST", body: "{}" });
+      await refresh();
+      state.selectedRunId = button.dataset.runId;
+      state.busy = "";
+      setNotice("Run approved. It is now ready for connected channel release.");
+      render();
+    });
+  });
+  document.querySelectorAll(".retry-run").forEach(button => {
+    button.addEventListener("click", async () => {
+      setNotice("Running the corrective action cycle for this package.", "generate");
+      render();
+      const result = await api(`/api/runs/${button.dataset.runId}/retry`, { method: "POST", body: "{}" });
+      await refresh();
+      state.selectedRunId = result.job?.runId || result.job?.id || button.dataset.runId;
+      state.busy = "";
+      setNotice("Corrective run finished or queued. Latest evidence is loaded.");
+      render();
+    });
   });
   document.querySelector("#logout")?.addEventListener("click", async () => {
     await api("/api/auth/logout", { method: "POST", body: "{}" });

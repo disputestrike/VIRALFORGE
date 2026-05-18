@@ -99,6 +99,97 @@ function clearSessionCookie() {
   return `${config.auth.cookieName}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
 }
 
+function isLocalMediaUri(uri = "") {
+  return uri && !uri.startsWith("http://") && !uri.startsWith("https://") && !uri.startsWith("s3://");
+}
+
+function mediaUrlForAsset(asset) {
+  if (!asset?.uri) return "";
+  return isLocalMediaUri(asset.uri) ? `/media/${asset.id}` : asset.uri;
+}
+
+function buildWorkspacePayload(evidence) {
+  const postsByRun = new Map();
+  for (const post of evidence.posts || []) {
+    const list = postsByRun.get(post.run_id) || [];
+    list.push(post);
+    postsByRun.set(post.run_id, list);
+  }
+
+  const assetsByRun = new Map();
+  for (const asset of evidence.assets || []) {
+    const list = assetsByRun.get(asset.run_id) || [];
+    list.push({ ...asset, mediaUrl: mediaUrlForAsset(asset) });
+    assetsByRun.set(asset.run_id, list);
+  }
+
+  const metricsByRun = new Map();
+  for (const metric of evidence.analytics || []) {
+    const list = metricsByRun.get(metric.run_id) || [];
+    list.push(metric);
+    metricsByRun.set(metric.run_id, list);
+  }
+
+  const runs = (evidence.runs || []).map(run => {
+    const assets = assetsByRun.get(run.id) || [];
+    const posts = postsByRun.get(run.id) || [];
+    const metrics = metricsByRun.get(run.id) || [];
+    const video = assets.find(asset => asset.type === "video");
+    const image = assets.find(asset => asset.type === "image");
+    const audio = assets.find(asset => asset.type === "audio");
+    const estimatedRevenue = metrics.reduce((sum, metric) => sum + Number(metric.revenue || 0), 0);
+    const actualRevenue = metrics
+      .filter(metric => metric.metadata?.source !== "local_recursive_learning_evaluation")
+      .reduce((sum, metric) => sum + Number(metric.revenue || 0), 0);
+    return {
+      id: run.id,
+      status: run.status,
+      decision: run.decision,
+      score: Number(run.score || 0),
+      topic: run.input?.topic || run.output?.brief?.title || "Autonomous run",
+      pillar: run.output?.brief?.pillar || run.input?.pillar || "curiosity_gap",
+      createdAt: run.created_at,
+      updatedAt: run.updated_at,
+      brief: run.output?.brief || null,
+      script: run.output?.script || null,
+      videoUrl: mediaUrlForAsset(video),
+      imageUrl: mediaUrlForAsset(image),
+      audioUrl: mediaUrlForAsset(audio),
+      assets,
+      posts,
+      metrics,
+      estimatedRevenue: Number(estimatedRevenue.toFixed(2)),
+      actualRevenue: Number(actualRevenue.toFixed(2)),
+      canApprove: run.status === "held",
+      canRetry: ["held", "failed"].includes(run.status),
+    };
+  });
+
+  const estimatedRevenue = runs.reduce((sum, run) => sum + run.estimatedRevenue, 0);
+  const actualRevenue = runs.reduce((sum, run) => sum + run.actualRevenue, 0);
+  return {
+    product: "ViralForge",
+    generatedAt: new Date().toISOString(),
+    status: buildSystemStatus(evidence),
+    counts: evidence.counts,
+    trends: evidence.trends || [],
+    runs,
+    reviewQueue: runs.filter(run => ["held", "failed"].includes(run.status)),
+    assets: (evidence.assets || []).map(asset => ({ ...asset, mediaUrl: mediaUrlForAsset(asset) })),
+    posts: evidence.posts || [],
+    analytics: evidence.analytics || [],
+    contents: evidence.contents || [],
+    policyEvents: evidence.policyEvents || [],
+    jobLogs: evidence.jobLogs || [],
+    learningSignals: evidence.learningSignals || [],
+    revenue: {
+      actual: Number(actualRevenue.toFixed(2)),
+      learningEstimate: Number(estimatedRevenue.toFixed(2)),
+      mode: providerStatus().publishMode === "live" ? "live_platform_metrics" : "dry_run_no_actual_platform_revenue",
+    },
+  };
+}
+
 function getSession(req) {
   if (!config.auth.sessionSecret) return null;
   const value = parseCookies(req)[config.auth.cookieName];
@@ -191,6 +282,11 @@ async function handleApi(req, res, url) {
     return true;
   }
 
+  if (url.pathname === "/api/workspace" && req.method === "GET") {
+    sendJson(res, buildWorkspacePayload(await repo.evidence()));
+    return true;
+  }
+
   if (url.pathname === "/api/evidence") {
     sendJson(res, await repo.evidence());
     return true;
@@ -206,10 +302,69 @@ async function handleApi(req, res, url) {
     return true;
   }
 
+  const runDetailMatch = url.pathname.match(/^\/api\/runs\/([^/]+)$/);
+  if (runDetailMatch && req.method === "GET") {
+    const workspace = buildWorkspacePayload(await repo.evidence());
+    const run = workspace.runs.find(item => item.id === runDetailMatch[1]);
+    sendJson(res, run ? { ok: true, run } : { ok: false, error: "Run not found" }, run ? 200 : 404);
+    return true;
+  }
+
   if (url.pathname === "/api/runs/start" && req.method === "POST") {
     const body = await readJson(req);
     const job = await queue.enqueue(body);
     sendJson(res, { ok: true, job, queueMode: queue.mode });
+    return true;
+  }
+
+  const approveMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/approve$/);
+  if (approveMatch && req.method === "POST") {
+    const run = await repo.getRun(approveMatch[1]);
+    if (!run) {
+      sendJson(res, { ok: false, error: "Run not found" }, 404);
+      return true;
+    }
+    const content = (await repo.evidence()).contents.find(item => item.run_id === run.id);
+    await repo.addPolicyEvent({
+      run_id: run.id,
+      content_id: content?.id || null,
+      gate: "human_exception",
+      status: "pass",
+      severity: "info",
+      message: "Operator approved this held run for release preparation.",
+      metadata: { approvedAt: new Date().toISOString(), approvedBy: getSession(req)?.email || "operator" },
+    });
+    await repo.addPolicyEvent({
+      run_id: run.id,
+      content_id: content?.id || null,
+      gate: "fact_risk",
+      status: "pass",
+      severity: "info",
+      message: "Operator reviewed and cleared factual-risk hold for this run.",
+      metadata: { approvedAt: new Date().toISOString(), approvedBy: getSession(req)?.email || "operator" },
+    });
+    const updated = await repo.updateRun(run.id, {
+      status: "completed",
+      decision: "Approved by operator; ready for connected channel release",
+      output: { ...run.output, operatorApproval: { approvedAt: new Date().toISOString() } },
+    });
+    sendJson(res, { ok: true, run: updated });
+    return true;
+  }
+
+  const retryMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/retry$/);
+  if (retryMatch && req.method === "POST") {
+    const run = await repo.getRun(retryMatch[1]);
+    if (!run) {
+      sendJson(res, { ok: false, error: "Run not found" }, 404);
+      return true;
+    }
+    const job = await queue.enqueue({
+      ...run.input,
+      objective: `Corrective retry for ${run.id}: ${run.input?.objective || "regenerate package"}`,
+      requestedAt: new Date().toISOString(),
+    });
+    sendJson(res, { ok: true, job, sourceRunId: run.id });
     return true;
   }
 
@@ -237,9 +392,24 @@ async function handleApi(req, res, url) {
   return false;
 }
 
+async function handleMedia(req, res, url) {
+  const match = url.pathname.match(/^\/media\/([^/]+)$/);
+  if (!match) return false;
+  if (!requireSession(req, res)) return true;
+  const evidence = await repo.evidence();
+  const asset = evidence.assets.find(item => item.id === match[1]);
+  if (!asset || !isLocalMediaUri(asset.uri)) {
+    sendJson(res, { ok: false, error: "Local media asset not found" }, 404);
+    return true;
+  }
+  await sendFile(res, asset.uri);
+  return true;
+}
+
 async function handle(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
   if (await handleApi(req, res, url)) return;
+  if (await handleMedia(req, res, url)) return;
 
   const requested = url.pathname === "/" ? "/index.html" : url.pathname;
   const safePath = path.normalize(requested).replace(/^(\.\.[/\\])+/, "");

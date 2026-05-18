@@ -8,9 +8,8 @@ export function createRunQueue({ repo, storage }) {
     return {
       mode: "in_process",
       async enqueue(input) {
-        const promise = runPipeline({ repo, storage, input });
-        promise.catch(error => console.error("[ViralForge local queue]", error));
-        return { id: `local_${Date.now()}`, mode: "in_process" };
+        const run = await runPipeline({ repo, storage, input });
+        return { id: run.id, runId: run.id, mode: "in_process_completed", status: run.status };
       },
       async startWorker() {
         return { mode: "in_process", started: true };
