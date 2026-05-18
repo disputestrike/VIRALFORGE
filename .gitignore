@@ -1,5 +1,7 @@
 node_modules/
 dist/
+.data/
+evidence/*.json
 .env
 .env.*
 *.log

@@ -5,6 +5,17 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test"
+    "worker": "node worker.mjs",
+    "migrate": "node scripts/migrate.mjs",
+    "quality": "node scripts/quality-gate.mjs",
+    "test": "node --test",
+    "verify": "npm test && npm run quality"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.937.0",
+    "bullmq": "^5.65.1",
+    "ffmpeg-static": "^5.2.0",
+    "ioredis": "^5.8.2",
+    "pg": "^8.16.3"
   }
 }

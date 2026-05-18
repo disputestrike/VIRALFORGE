@@ -1,387 +1,244 @@
 const root = document.querySelector("#app");
 
-const icons = {
-  spark: "✦",
-  engine: "◎",
-  shield: "✓",
-  film: "▣",
-  chart: "▥",
+const state = {
+  status: null,
+  evidence: null,
+  runs: [],
+  chat: [],
 };
 
-const defaultPlatforms = ["YouTube", "TikTok", "Instagram", "X", "LinkedIn", "Pinterest", "Reddit", "Telegram"];
-
-function navigate(path) {
-  window.history.pushState({}, "", path);
-  render();
-}
-
-function session() {
-  try {
-    return JSON.parse(localStorage.getItem("viralforge_session") || "null");
-  } catch {
-    return null;
-  }
-}
-
-function setSession(value) {
-  localStorage.setItem("viralforge_session", JSON.stringify(value));
-}
-
-function clearSession() {
-  localStorage.removeItem("viralforge_session");
-}
-
-function brand() {
-  return `
-    <a class="brand" href="/" data-link>
-      <span class="mark">${icons.spark}</span>
-      <span>ViralForge<small>Media OS</small></span>
-    </a>
-  `;
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: { "content-type": "application/json", ...(options.headers || {}) },
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
 }
 
 function nav() {
   return `
     <nav class="nav">
       <div class="nav-inner">
-        ${brand()}
+        <a class="brand" href="/">
+          <span class="mark">VF</span>
+          <span>ViralForge<small>Autonomous Media OS</small></span>
+        </a>
         <div class="nav-links">
-          <a href="/#engine" data-link>Engine</a>
-          <a href="/#network" data-link>Network</a>
-          <a href="/#saas" data-link>SaaS</a>
+          <a href="#dashboard">Dashboard</a>
+          <a href="#quality">Quality Gates</a>
+          <a href="#agent">ForgeOps Agent</a>
         </div>
         <div class="nav-actions">
-          <a class="btn btn-secondary" href="/login" data-link>Sign in</a>
-          <a class="btn btn-primary" href="/app" data-link>Open app</a>
+          <button class="btn btn-secondary" id="refresh">Refresh</button>
+          <button class="btn btn-primary" id="autopilot">Run Autopilot Tick</button>
         </div>
       </div>
     </nav>
   `;
 }
 
-function landing() {
-  const flow = ["Discover demand", "Generate brief", "Write script", "Plan visuals", "QA and compliance", "Package channels", "Measure outcomes"];
-  const tiles = [
-    ["◎", "One Engine", "Trend discovery, scriptwriting, visual planning, QA, packaging, and learning run as one controlled production system."],
-    ["✓", "PolicyOS", "Rights, factual risk, platform rules, brand fit, cost, and quota checks are enforced before distribution."],
-    ["▣", "Documentary Engine", "Long-form chapters, narration, source plans, shot lists, and render packages are created as one cohesive production."],
-    ["▥", "SignalLoop", "Views, comments, cost, completion, and conversion data feed the next run so the network gets sharper."],
-  ];
+function card(title, value, note = "") {
+  return `<div class="tile"><h3>${title}</h3><strong style="font-size:32px">${value}</strong><p>${note}</p></div>`;
+}
 
+function landing() {
+  const s = state.status;
+  const evidence = state.evidence;
+  const counts = s?.counts || {};
   return `
     <div class="shell">
       ${nav()}
-      <main class="container hero">
+      <main class="container hero" id="dashboard">
         <section>
-          <div class="eyebrow">${icons.spark} Standalone AI media OS</div>
-          <h1>ViralForge <span class="gradient-text">builds the network.</span></h1>
+          <div class="eyebrow">Railway-ready autonomous AI content factory</div>
+          <h1>ViralForge <span class="gradient-text">builds, checks, posts, learns.</span></h1>
           <p>
-            A clean product for turning one idea into channel-ready content, documentary plans,
-            compliance evidence, and learning loops across the whole media network.
+            TrendScout finds demand. BriefForge and Scriptor create content. AssetGen and Renderer produce real media.
+            PolicyOS gates risk. PulsePost exports or publishes. SignalLoop recursively learns from results.
           </p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="/login" data-link>Sign in to ViralForge</a>
-            <a class="btn btn-secondary" href="/app" data-link>Open local app preview</a>
+            <button class="btn btn-primary" id="start-run">Start Full Pipeline Run</button>
+            <button class="btn btn-secondary" id="show-keys">Show Missing Keys</button>
           </div>
           <div class="proof-row">
-            <div class="proof"><strong>1</strong><span>operating engine</span></div>
-            <div class="proof"><strong>8</strong><span>launch channels</span></div>
-            <div class="proof"><strong>12</strong><span>QA gates</span></div>
-            <div class="proof"><strong>60m</strong><span>documentary path</span></div>
+            ${card("Runs", counts.runs || 0, "Persisted production runs")}
+            ${card("Assets", counts.assets || 0, "Images, audio, MP4 renders")}
+            ${card("Posts", counts.posts || 0, "Export/live publish records")}
+            ${card("Learning", counts.learningSignals || 0, "Recursive learning signals")}
           </div>
         </section>
-
         <aside class="preview-card">
           <div class="preview-top">
             <div>
-              <strong>Network Launch Run</strong>
-              <div style="color: var(--muted); font-size: 13px; margin-top: 4px;">Website, app, engine, QA, SaaS path</div>
+              <strong>System Readiness</strong>
+              <div style="color: var(--muted); font-size:13px; margin-top:4px;">Only API keys are expected to be missing locally.</div>
             </div>
-            <span class="badge">Standalone</span>
+            <span class="badge">${s?.providers?.publishMode || "loading"}</span>
           </div>
           <div class="steps">
-            ${flow.map((step, index) => `
+            ${Object.entries(s?.providers || {}).map(([key, value], index) => `
               <div class="step">
                 <span class="num">${index + 1}</span>
-                <strong>${step}</strong>
-                <span class="status">Ready</span>
+                <strong>${key}</strong>
+                <span class="status">${value}</span>
               </div>
             `).join("")}
-          </div>
-          <div class="preview-bottom">
-            <div class="metric"><strong>0</strong><span>legacy routes</span></div>
-            <div class="metric"><strong>100%</strong><span>ViralForge surface</span></div>
-            <div class="metric"><strong>PayPal</strong><span>billing path</span></div>
           </div>
         </aside>
       </main>
 
-      <section id="engine">
+      <section id="quality">
         <div class="container">
           <div class="section-head">
             <div>
-              <div class="eyebrow">The product</div>
-              <h2>Website first. Login second. Engine console third.</h2>
+              <div class="eyebrow">Six Sigma QAQC</div>
+              <h2>Quality gates and compliance tracker.</h2>
             </div>
-            <p>This is the product boundary: a public ViralForge website, a ViralForge login, and a ViralForge app console.</p>
+            <p>Every run creates policy events, job logs, assets, post packages, and learning signals. Failures get corrective actions.</p>
           </div>
           <div class="grid-4">
-            ${tiles.map(([icon, title, text]) => `
+            ${(s?.qualityMatrix || []).map(gate => `
               <article class="tile">
-                <span class="tile-icon">${icon}</span>
-                <h3>${title}</h3>
-                <p>${text}</p>
+                <span class="tile-icon">${gate.status.toUpperCase()}</span>
+                <h3>${gate.gate}</h3>
+                <p><strong>Evidence:</strong> ${gate.evidence}</p>
+                <p><strong>Corrective:</strong> ${gate.correctiveAction}</p>
               </article>
             `).join("")}
           </div>
+          <div class="panel" style="margin-top:18px;">
+            <h3>Compliance Crosswalk</h3>
+            <div class="list">
+              ${(s?.complianceTracker || []).map(item => `
+                <div class="list-item">
+                  <strong>${item.gate}</strong>
+                  <span>${item.evidence}</span>
+                  <span class="pill">${item.status}</span>
+                </div>
+              `).join("")}
+            </div>
+          </div>
         </div>
       </section>
 
-      <section id="network" class="dark">
+      <section>
         <div class="container">
           <div class="section-head">
             <div>
-              <div class="eyebrow">Distribution</div>
-              <h2>Built for a full media network.</h2>
+              <div class="eyebrow">Pipeline Evidence</div>
+              <h2>Latest runs, posts, assets, and learning.</h2>
             </div>
-            <p>External posting is connector-gated until credentials, platform review, and policy approval are complete.</p>
           </div>
-          <div class="grid-4">
-            ${defaultPlatforms.map(platform => `
-              <article class="tile">
-                <span class="tile-icon">↗</span>
-                <h3>${platform}</h3>
-                <p>Package-ready connector path with quota, policy, caption, and asset checks.</p>
-              </article>
-            `).join("")}
+          <div class="console-grid">
+            <div class="panel">
+              <h3>Recent Runs</h3>
+              <div class="list">
+                ${(evidence?.runs || []).slice(0, 8).map(run => `
+                  <div class="list-item">
+                    <div>
+                      <strong>${run.input?.topic || "Untitled"}</strong>
+                      <p style="margin:4px 0 0">${run.decision || "processing"}</p>
+                    </div>
+                    <span class="pill">${run.status}</span>
+                  </div>
+                `).join("") || "<p>No runs yet. Start one.</p>"}
+              </div>
+            </div>
+            <div class="panel">
+              <h3>Recent Job Logs</h3>
+              <div class="list">
+                ${(evidence?.jobLogs || []).slice(0, 12).map(log => `
+                  <div class="list-item">
+                    <strong>${log.agent}</strong>
+                    <span>${log.message}</span>
+                    <span class="pill">${log.status}</span>
+                  </div>
+                `).join("") || "<p>No logs yet.</p>"}
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      <section id="saas">
+      <section id="agent" class="dark">
         <div class="container">
           <div class="section-head">
             <div>
-              <div class="eyebrow">SaaS path</div>
-              <h2>PayPal-ready and tenant-ready by design.</h2>
+              <div class="eyebrow">ForgeOps Agent</div>
+              <h2>Chat with the operating system.</h2>
             </div>
-            <p>ViralForge starts as our internal media machine, then becomes a subscription product with tenants, usage ledgers, credits, roles, and billing gates.</p>
+            <p>Ask what is missing, start a run, diagnose failures, or inspect recursive learning.</p>
           </div>
-          <a class="btn btn-primary" href="/login" data-link>Sign in and test the app</a>
-        </div>
-      </section>
-    </div>
-  `;
-}
-
-function login() {
-  const current = session();
-  return `
-    <main class="login-wrap">
-      <form class="form-card" id="login-form">
-        ${brand()}
-        <h1>Sign in to <span class="gradient-text">ViralForge.</span></h1>
-        <p style="color: var(--muted); line-height: 1.7;">
-          This local demo creates a browser session so you can test the ViralForge app now.
-          Production auth will use real identity, roles, tenant isolation, and billing status.
-        </p>
-        <div class="field">
-          <label for="email">Email</label>
-          <input id="email" name="email" type="email" value="${current?.email || "founder@viralforge.local"}" required />
-        </div>
-        <div class="field">
-          <label for="role">Role</label>
-          <select id="role" name="role">
-            <option>Founder</option>
-            <option>Producer</option>
-            <option>Compliance Lead</option>
-            <option>Growth Operator</option>
-          </select>
-        </div>
-        <button class="btn btn-primary" style="width: 100%; margin-top: 22px;" type="submit">Continue to ViralForge</button>
-        <a class="btn btn-secondary" style="width: 100%; margin-top: 10px;" href="/" data-link>Back to website</a>
-      </form>
-    </main>
-  `;
-}
-
-function appShell() {
-  const user = session();
-  return `
-    <div class="app-shell">
-      <aside class="sidebar">
-        ${brand()}
-        <div class="side-links">
-          <a class="side-link active" href="/app" data-link>Engine Console</a>
-          <a class="side-link" href="/" data-link>Website</a>
-          <a class="side-link" href="/login" data-link>Login</a>
-        </div>
-        <div class="alert" style="margin-top: 26px;">
-          ${user ? `Signed in locally as ${user.email}.` : "Local preview mode. Sign in route is available at /login."}
-        </div>
-      </aside>
-      <main class="main">
-        <div class="topbar">
-          <div>
-            <div class="eyebrow">ViralForge app</div>
-            <h1 style="font-size: clamp(38px, 5vw, 64px); margin-top: 12px;">Engine Console</h1>
-          </div>
-          <div class="nav-actions">
-            <button class="btn btn-secondary" id="logout">Reset session</button>
-            <a class="btn btn-primary" href="/" data-link>View website</a>
-          </div>
-        </div>
-        <div class="console-grid">
-          <section class="panel" style="padding: 18px; border-top: 0;">
-            <h2>Run the engine</h2>
-            <p>Enter a topic and ViralForge will produce the governed launch package.</p>
-            <form id="run-form">
-              <div class="field">
-                <label>Topic</label>
-                <textarea name="topic">Launch a global AI documentary and shorts network</textarea>
-              </div>
-              <div class="field">
-                <label>Objective</label>
-                <input name="objective" value="Build audience, trust, monetizable distribution, and SaaS readiness" />
-              </div>
-              <div class="field">
-                <label>Length minutes</label>
-                <input name="lengthMinutes" type="number" min="1" max="60" value="30" />
-              </div>
-              <div class="field">
-                <label>Budget USD</label>
-                <input name="budgetUsd" type="number" min="0" value="120" />
-              </div>
-              <div class="field">
-                <label>Risk mode</label>
-                <select name="risk">
-                  <option value="standard">Standard</option>
-                  <option value="strict">Strict review</option>
-                  <option value="aggressive">Aggressive growth</option>
-                </select>
-              </div>
-              <button class="btn btn-primary" type="submit" style="width: 100%; margin-top: 18px;">Run ViralForge Engine</button>
+          <div class="panel" style="background:white;color:var(--ink);">
+            <div id="chat-log" class="list">
+              ${state.chat.map(item => `<div class="list-item"><strong>${item.role}</strong><span>${item.text}</span></div>`).join("") || "<p>Try: What API keys are missing?</p>"}
+            </div>
+            <form id="chat-form" class="field" style="display:grid;grid-template-columns:1fr auto;gap:10px;margin-top:16px;">
+              <input name="message" placeholder="Ask ForgeOps..." />
+              <button class="btn btn-primary">Send</button>
             </form>
-          </section>
-          <section class="panel" style="padding: 18px; border-top: 0;">
-            <div id="result"></div>
-          </section>
+          </div>
         </div>
-      </main>
+      </section>
     </div>
   `;
 }
 
-function renderResult(run) {
-  return `
-    <div class="section-head" style="display: block; margin-bottom: 18px;">
-      <div class="eyebrow">Decision</div>
-      <h2 style="font-size: 34px; margin-top: 10px;">${run.decision}</h2>
-      <p>${run.brief.promise}</p>
-    </div>
-    <div class="result-grid">
-      <div class="tile"><h3>$${run.finance.estimatedCost}</h3><p>Estimated run cost</p></div>
-      <div class="tile"><h3>${run.packages.length}</h3><p>Platform packages</p></div>
-      <div class="tile"><h3>${run.qa.filter(gate => gate.status === "pass").length}/${run.qa.length}</h3><p>QA gates passed</p></div>
-    </div>
-    <div class="panel" style="margin-top: 14px;">
-      <h3>Modules</h3>
-      <div class="list">
-        ${run.modules.map(module => `
-          <div class="list-item">
-            <strong>${module.name}</strong>
-            <span class="pill">${module.status} · ${module.score}</span>
-          </div>
-        `).join("")}
-      </div>
-    </div>
-    <div class="panel" style="margin-top: 14px;">
-      <h3>Platform packages</h3>
-      <div class="list">
-        ${run.packages.map(pkg => `
-          <div class="list-item">
-            <strong>${pkg.platform}</strong>
-            <span class="pill">${pkg.assets.length} assets</span>
-          </div>
-        `).join("")}
-      </div>
-    </div>
-    <div class="panel" style="margin-top: 14px;">
-      <h3>PolicyOS</h3>
-      <p>Mode: <strong>${run.policy.mode}</strong></p>
-      <div class="list">
-        ${run.policy.events.map(event => `<div class="list-item"><span>${event}</span><span class="pill">logged</span></div>`).join("")}
-      </div>
-    </div>
-  `;
+async function refresh() {
+  state.status = await api("/api/status");
+  state.evidence = await api("/api/evidence");
+  render();
 }
 
-async function runEngine(form) {
-  const data = Object.fromEntries(new FormData(form).entries());
-  data.lengthMinutes = Number(data.lengthMinutes);
-  data.budgetUsd = Number(data.budgetUsd);
-  data.platforms = defaultPlatforms;
-
-  const response = await fetch("/api/run", {
+async function startRun() {
+  await api("/api/runs/start", {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      topic: "Why AI content factories are about to replace 100 person media teams",
+      objective: "Create a governed viral short and platform export package.",
+      budgetUsd: 120,
+      risk: "standard",
+    }),
   });
-  return response.json();
+  setTimeout(refresh, 2000);
 }
 
-async function wire() {
-  document.querySelectorAll("[data-link]").forEach(link => {
-    link.addEventListener("click", event => {
-      const href = link.getAttribute("href");
-      if (!href || href.startsWith("#") || href.startsWith("http")) return;
-      event.preventDefault();
-      navigate(href);
-    });
+async function autopilotTick() {
+  await api("/api/autopilot/tick", { method: "POST", body: "{}" });
+  await refresh();
+}
+
+async function sendChat(form) {
+  const data = Object.fromEntries(new FormData(form).entries());
+  state.chat.push({ role: "You", text: data.message });
+  const reply = await api("/api/chat", { method: "POST", body: JSON.stringify({ message: data.message }) });
+  state.chat.push({ role: "ForgeOps", text: reply.reply });
+  render();
+}
+
+function wire() {
+  document.querySelector("#refresh")?.addEventListener("click", refresh);
+  document.querySelector("#start-run")?.addEventListener("click", startRun);
+  document.querySelector("#autopilot")?.addEventListener("click", autopilotTick);
+  document.querySelector("#show-keys")?.addEventListener("click", async () => {
+    const reply = await api("/api/chat", { method: "POST", body: JSON.stringify({ message: "what api keys are missing" }) });
+    state.chat.push({ role: "ForgeOps", text: reply.reply });
+    render();
+    location.hash = "#agent";
   });
-
-  const loginForm = document.querySelector("#login-form");
-  if (loginForm) {
-    loginForm.addEventListener("submit", event => {
-      event.preventDefault();
-      const data = Object.fromEntries(new FormData(loginForm).entries());
-      setSession({ email: data.email, role: data.role, signedInAt: new Date().toISOString() });
-      navigate("/app");
-    });
-  }
-
-  const logout = document.querySelector("#logout");
-  if (logout) {
-    logout.addEventListener("click", () => {
-      clearSession();
-      navigate("/login");
-    });
-  }
-
-  const runForm = document.querySelector("#run-form");
-  const result = document.querySelector("#result");
-  if (runForm && result) {
-    const firstRun = await runEngine(runForm);
-    result.innerHTML = renderResult(firstRun);
-    runForm.addEventListener("submit", async event => {
-      event.preventDefault();
-      result.innerHTML = `<div class="panel"><h3>Running...</h3><p>ViralForge is building the governed package.</p></div>`;
-      result.innerHTML = renderResult(await runEngine(runForm));
-    });
-  }
+  document.querySelector("#chat-form")?.addEventListener("submit", event => {
+    event.preventDefault();
+    sendChat(event.currentTarget);
+  });
 }
 
 function render() {
-  const path = window.location.pathname;
-  if (path === "/login") {
-    root.innerHTML = login();
-  } else if (path === "/app" || path === "/console") {
-    root.innerHTML = appShell();
-  } else {
-    root.innerHTML = landing();
-  }
+  root.innerHTML = landing();
   wire();
 }
 
-window.addEventListener("popstate", render);
 render();
+refresh().catch(error => {
+  root.innerHTML = `<main class="login-wrap"><div class="form-card"><h1>ViralForge</h1><p>${error.message}</p></div></main>`;
+});
