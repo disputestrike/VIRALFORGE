@@ -1,0 +1,2 @@
+# phase0-db-schema-files
+# command: Get-ChildItem -Recurse -File -Include schema.ts,schema.sql,*.migration.ts,*.migration.sql,migrate.ts -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch "\\node_modules\\" } | Sort-Object FullName | Select-Object FullName

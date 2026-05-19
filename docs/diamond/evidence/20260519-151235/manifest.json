@@ -1,0 +1,26 @@
+{
+  "generatedAt": "2026-05-19T20:00:00.000Z",
+  "evidenceDir": "docs/diamond/evidence/20260519-151235",
+  "baselineTag": "mvp-baseline-20260519-151235",
+  "keyEvidence": {
+    "gitStatus": "mvp-git-status-short.txt",
+    "buildBaseline": "mvp-build-baseline.txt",
+    "backendBundleBaseline": "mvp-esbuild-backend-baseline.txt",
+    "typecheckBaseline": "mvp-check-baseline.txt",
+    "testBaseline": "mvp-test-baseline.txt",
+    "releaseGate": "phase0-release-gate.txt",
+    "integrationReadiness": "phase0-verify-integrations.txt",
+    "postRedisFixCheck": "after-email-worker-redis-check.txt",
+    "postRedisFixTest": "after-email-worker-redis-test.txt",
+    "postStartupExitCheck": "after-startup-exit-check.txt",
+    "finalTest": "final-test.txt",
+    "finalBuild": "final-build.txt"
+  },
+  "interpretation": {
+    "typecheck": "pass",
+    "tests": "pass",
+    "build": "pass",
+    "releaseGateReport": "approved",
+    "productionCertification": "not certified until Railway env, live DB migrations, Redis, providers, and working-product verification pass"
+  }
+}

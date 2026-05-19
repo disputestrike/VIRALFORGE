@@ -10,7 +10,9 @@ import { Redis } from "ioredis";
 import { Resend } from "resend";
 import { ENV } from "../env";
 
-const redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
+const redis = process.env.REDIS_URL
+  ? new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: null })
+  : null;
 
 const resend = new Resend(ENV.resendApiKey || "");
 
@@ -132,78 +134,79 @@ function generateFollowUpEmail(
 /**
  * Email Worker - processes email jobs from queue
  */
-export const emailWorker = new Worker(
-  "email",
-  async (job) => {
-    const { email, type, leadName, scheduledTime, calendarLink, customSubject, customHtml } = job.data;
+export const emailWorker = redis
+  ? new Worker(
+      "email",
+      async (job) => {
+        const { email, type, leadName, scheduledTime, calendarLink, customSubject, customHtml } = job.data;
 
-    console.log(`[Email Worker] Processing job ${job.id}: ${type} to ${email}`);
+        console.log(`[Email Worker] Processing job ${job.id}: ${type} to ${email}`);
 
-    try {
-      let emailContent: { subject: string; html: string };
+        try {
+          let emailContent: { subject: string; html: string };
 
-      if (type === "sequence" && customSubject && customHtml) {
-        emailContent = { subject: customSubject, html: customHtml };
-      } else if (type === "appointment_confirmation") {
-        emailContent = generateAppointmentConfirmationEmail(
-          leadName || "there",
-          scheduledTime || new Date().toISOString(),
-          calendarLink
-        );
-      } else if (type === "appointment_reminder") {
-        emailContent = generateAppointmentReminderEmail(
-          leadName || "there",
-          scheduledTime || new Date().toISOString()
-        );
-      } else if (type === "follow_up") {
-        emailContent = generateFollowUpEmail(leadName || "there");
-      } else {
-        emailContent = {
-          subject: "Message from ApexAI",
-          html: `<p>Hi ${leadName || "there"},</p><p>Thank you for your interest!</p>`,
-        };
+          if (type === "sequence" && customSubject && customHtml) {
+            emailContent = { subject: customSubject, html: customHtml };
+          } else if (type === "appointment_confirmation") {
+            emailContent = generateAppointmentConfirmationEmail(
+              leadName || "there",
+              scheduledTime || new Date().toISOString(),
+              calendarLink
+            );
+          } else if (type === "appointment_reminder") {
+            emailContent = generateAppointmentReminderEmail(
+              leadName || "there",
+              scheduledTime || new Date().toISOString()
+            );
+          } else if (type === "follow_up") {
+            emailContent = generateFollowUpEmail(leadName || "there");
+          } else {
+            emailContent = {
+              subject: "Message from ApexAI",
+              html: `<p>Hi ${leadName || "there"},</p><p>Thank you for your interest!</p>`,
+            };
+          }
+
+          const result = await resend.emails.send({
+            from: ENV.resendFromHeader,
+            to: email,
+            subject: emailContent.subject,
+            html: emailContent.html,
+          });
+
+          const emailId = (result as any)?.id || `email_${Date.now()}`;
+          console.log(`[Email Worker] Sent email ${emailId} to ${email}`);
+
+          return {
+            success: true,
+            emailId,
+            to: email,
+            type,
+          };
+        } catch (error) {
+          console.error(`[Email Worker] Error processing job ${job.id}:`, error);
+          throw error;
+        }
+      },
+      {
+        connection: redis as any,
+        concurrency: 10, // Process 10 emails in parallel
       }
-
-      // Send email via Resend
-      const result = await resend.emails.send({
-        from: ENV.resendFromHeader,
-        to: email,
-        subject: emailContent.subject,
-        html: emailContent.html,
-      });
-
-      const emailId = (result as any)?.id || `email_${Date.now()}`;
-      console.log(`[Email Worker] Sent email ${emailId} to ${email}`);
-
-      return {
-        success: true,
-        emailId,
-        to: email,
-        type,
-      };
-    } catch (error) {
-      console.error(`[Email Worker] Error processing job ${job.id}:`, error);
-      throw error;
-    }
-  },
-  {
-    connection: redis as any,
-    concurrency: 10, // Process 10 emails in parallel
-  }
-);
+    )
+  : null;
 
 /**
  * Event handlers for email worker
  */
-emailWorker.on("completed", (job) => {
+emailWorker?.on("completed", (job) => {
   console.log(`[Email Worker] Job ${job.id} completed successfully`);
 });
 
-emailWorker.on("failed", (job, err) => {
+emailWorker?.on("failed", (job, err) => {
   console.error(`[Email Worker] Job ${job?.id} failed:`, err.message);
 });
 
-emailWorker.on("error", (err) => {
+emailWorker?.on("error", (err) => {
   console.error(`[Email Worker] Worker error:`, err);
 });
 

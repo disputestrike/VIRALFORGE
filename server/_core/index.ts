@@ -1913,4 +1913,7 @@ CREATE TABLE IF NOT EXISTS \`activity_logs\` (
   }
 }
 
-startServer().catch(console.error);
+startServer().catch((error) => {
+  console.error("[Server] Fatal startup error:", error);
+  process.exit(1);
+});

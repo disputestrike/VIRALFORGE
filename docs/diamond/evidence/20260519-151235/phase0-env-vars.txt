@@ -1,0 +1,3 @@
+# phase0-env-vars
+# command: rg "process\.env\.|import\.meta\.env\." . --glob "*.ts" --glob "*.tsx" --glob "*.js" --glob "*.jsx" -o | ForEach-Object { if ($_ -match "(process\.env\.|import\.meta\.env\.)([A-Z_0-9]+)") { $Matches[2] } } | Sort-Object -Unique
+EXIT=0
