@@ -1,0 +1,13 @@
+[Auth] Google OAuth 2.0 initialized
+[ApexAI] Starting with feature flags:
+  Database:   missing (set DATABASE_URL)
+  Redis/Queue: ⚠️  In-memory fallback (set REDIS_URL)
+  Google Auth: ❌ disabled (set GOOGLE_CLIENT_ID)
+  Voice/SMS:   ⚠️  disabled (set SIGNALWIRE_PROJECT_ID)
+  Email:       ⚠️  disabled (set RESEND_API_KEY)
+  STT:         ⚠️  disabled (set DEEPGRAM_API_KEY)
+  TTS:         ⚠️  disabled (set CARTESIA_API_KEY or ELEVENLABS_API_KEY)
+  AI/LLM:      ⚠️  disabled — set CEREBRAS_API_KEY
+
+[Server] Initializing job queue and workers...
+Server running on http://0.0.0.0:4173/

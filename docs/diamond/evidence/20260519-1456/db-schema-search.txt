@@ -1,0 +1,50 @@
+$ rg -n mysqlTable\( drizzle/schema.ts server/schema.ts
+exit=0
+
+drizzle/schema.ts:15:export const users = mysqlTable("users", {
+drizzle/schema.ts:59:export const leads = mysqlTable("leads", {
+drizzle/schema.ts:96:export const templates = mysqlTable("templates", {
+drizzle/schema.ts:113:export const campaigns = mysqlTable("campaigns", {
+drizzle/schema.ts:144:export const campaignContacts = mysqlTable("campaign_contacts", {
+drizzle/schema.ts:164:export const messages = mysqlTable("messages", {
+drizzle/schema.ts:190:export const callRecordings = mysqlTable("call_recordings", {
+drizzle/schema.ts:211:export const analyticsSnapshots = mysqlTable("analytics_snapshots", {
+drizzle/schema.ts:236:export const testimonials = mysqlTable("testimonials", {
+drizzle/schema.ts:258:export const onboardings = mysqlTable("onboardings", {
+drizzle/schema.ts:279:export const activityLogs = mysqlTable("activity_logs", {
+drizzle/schema.ts:296:export const systemConfig = mysqlTable("system_config", {
+drizzle/schema.ts:306:export const userIndustryPacks = mysqlTable("user_industry_packs", {
+drizzle/schema.ts:321:export const userPhoneNumbers = mysqlTable("user_phone_numbers", {
+drizzle/schema.ts:337:export const agencyClients = mysqlTable("agency_clients", {
+drizzle/schema.ts:367:export const knowledgeBases = mysqlTable("knowledge_bases", {
+drizzle/schema.ts:384:export const knowledgeBaseSources = mysqlTable("knowledge_base_sources", {
+drizzle/schema.ts:410:export const knowledgeBaseChunks = mysqlTable("knowledge_base_chunks", {
+drizzle/schema.ts:425:export const zapierWebhooks = mysqlTable("zapier_webhooks", {
+drizzle/schema.ts:439:export const leadScoringRules = mysqlTable("lead_scoring_rules", {
+drizzle/schema.ts:453:export const blockedPhoneNumbers = mysqlTable("blocked_phone_numbers", {
+drizzle/schema.ts:465:export const escalationRules = mysqlTable("escalation_rules", {
+drizzle/schema.ts:481:export const crmConnections = mysqlTable("crm_connections", {
+drizzle/schema.ts:499:export const workflows = mysqlTable("workflows", {
+drizzle/schema.ts:513:export const customerMemories = mysqlTable("customer_memories", {
+drizzle/schema.ts:526:export const supportTickets = mysqlTable("support_tickets", {
+drizzle/schema.ts:541:export const emailSequences = mysqlTable("email_sequences", {
+drizzle/schema.ts:556:export const mobileDevices = mysqlTable("mobile_devices", {
+drizzle/schema.ts:573:export const socialConnections = mysqlTable("social_connections", {
+drizzle/schema.ts:588:export const webchatWidgets = mysqlTable("webchat_widgets", {
+drizzle/schema.ts:606:export const rcsRegistrations = mysqlTable("rcs_registrations", {
+drizzle/schema.ts:621:export const voiceMetricEvents = mysqlTable("voice_metric_events", {
+drizzle/schema.ts:635:export const promptVariants = mysqlTable("prompt_variants", {
+drizzle/schema.ts:652:export const abTestResults = mysqlTable("ab_test_results", {
+drizzle/schema.ts:669:export const callQualityScores = mysqlTable("call_quality_scores", {
+server/schema.ts:26:export const customers = mysqlTable(
+server/schema.ts:75:export const leads = mysqlTable(
+server/schema.ts:130:export const voiceSessions = mysqlTable(
+server/schema.ts:189:export const appointmentBookings = mysqlTable(
+server/schema.ts:239:export const leadSourceConnections = mysqlTable(
+server/schema.ts:278:export const jobQueue = mysqlTable(
+server/schema.ts:326:export const invoices = mysqlTable(
+server/schema.ts:359:export const billingTransactions = mysqlTable(
+server/schema.ts:393:export const auditLog = mysqlTable(
+server/schema.ts:428:export const webhookEvents = mysqlTable(
+
+

@@ -1,0 +1,280 @@
+$ rg -n process\.env\.[A-Z0-9_]+|import\.meta\.env\.[A-Z0-9_]+ server client/src scripts -g *.ts -g *.tsx -g *.mjs
+exit=0
+
+server\db.ts:51:  if (!_db && process.env.DATABASE_URL) {
+server\db.ts:53:      _db = drizzle(process.env.DATABASE_URL);
+server\db.ts:848:    uri: process.env.DATABASE_URL,
+server\db.ts:877:    uri: process.env.DATABASE_URL,
+server\db.ts:897:    uri: process.env.DATABASE_URL,
+server\db.ts:1100:    uri: process.env.DATABASE_URL,
+server\db.ts:1122:    uri: process.env.DATABASE_URL,
+client/src\main.tsx:11:const analyticsEndpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT as string | undefined;
+client/src\main.tsx:12:const analyticsSiteId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID as string | undefined;
+client/src\pages\Appointments.tsx:31:const GCAL_URL = import.meta.env.VITE_GCAL_BOOKING_URL || "";
+server\routers.ts:759:        voice: !!(process.env.SIGNALWIRE_PROJECT_ID && process.env.SIGNALWIRE_TOKEN),
+server\routers.ts:760:        sms: !!(process.env.SIGNALWIRE_PROJECT_ID && process.env.SIGNALWIRE_TOKEN),
+server\routers.ts:761:        email: !!(process.env.RESEND_API_KEY),
+server\routers.ts:762:        stt: !!(process.env.DEEPGRAM_API_KEY),
+server\routers.ts:763:        tts: !!(process.env.CARTESIA_API_KEY ?? "").trim(),
+server\routers.ts:765:        gcal: !!(process.env.VITE_GCAL_BOOKING_URL),
+server\routers.ts:1125:          !process.env.SIGNALWIRE_PROJECT_ID ||
+server\routers.ts:1126:          !process.env.SIGNALWIRE_TOKEN ||
+server\routers.ts:1127:          !process.env.SIGNALWIRE_SPACE_URL
+server\routers.ts:1138:          process.env.SIGNALWIRE_PROJECT_ID!,
+server\routers.ts:1139:          process.env.SIGNALWIRE_TOKEN!,
+server\routers.ts:1140:          { signalwireSpaceUrl: process.env.SIGNALWIRE_SPACE_URL! }
+server\routers.ts:1821:      const cartesiaKey = process.env.CARTESIA_API_KEY;
+server\routers.ts:2109:        process.env.SIGNALWIRE_PROJECT_ID!,
+server\routers.ts:2110:        process.env.SIGNALWIRE_TOKEN!,
+server\routers.ts:2111:        { signalwireSpaceUrl: process.env.SIGNALWIRE_SPACE_URL! }
+server\routers.ts:2363:      const expectedKey = process.env.GHL_WEBHOOK_SECRET;
+client/src\components\Map.tsx:89:const API_KEY = import.meta.env.VITE_FRONTEND_FORGE_API_KEY;
+client/src\components\Map.tsx:91:  import.meta.env.VITE_FRONTEND_FORGE_API_URL ||
+client/src\components\ManusDialog.tsx:115:          <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
+client/src\components\IndustryDemos.tsx:14:  const base = import.meta.env.BASE_URL || "/";
+server\routers\webhooksRouter.ts:30:      const webhookSecret = process.env.WEBHOOK_SECRET;
+client/src\pages\LandingPage.tsx:43:  const base = import.meta.env.BASE_URL || "/";
+server\_core\workers\emailWorker.ts:13:const redis = process.env.REDIS_URL
+server\_core\workers\emailWorker.ts:14:  ? new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: null })
+server\_core\map.ts:22:  const baseUrl = process.env.BUILT_IN_FORGE_API_URL ?? "";
+server\_core\map.ts:23:  const apiKey = process.env.ANTHROPIC_API_KEY ?? "";
+server\_core\llm.ts:35:    process.env.CEREBRAS_API_KEY,
+server\_core\llm.ts:36:    process.env.CEREBRAS_API_KEY_2,
+server\_core\llm.ts:37:    process.env.CEREBRAS_API_KEY_3,
+server\_core\llm.ts:38:    process.env.CEREBRAS_API_KEY_4,
+server\_core\llm.ts:39:    process.env.CEREBRAS_API_KEY_5,
+server\_core\llm.ts:45:    params.maxTokens ?? parseInt(process.env.LLM_MAX_TOKENS || "2048", 10),
+server\_core\vite.ts:52:    process.env.NODE_ENV === "development"
+server\webhooksRouter.test.ts:14:  const prevSecret = process.env.WEBHOOK_SECRET;
+server\webhooksRouter.test.ts:17:    if (prevSecret === undefined) delete process.env.WEBHOOK_SECRET;
+server\webhooksRouter.test.ts:18:    else process.env.WEBHOOK_SECRET = prevSecret;
+server\webhooksRouter.test.ts:22:    delete process.env.WEBHOOK_SECRET;
+server\webhooksRouter.test.ts:34:    process.env.WEBHOOK_SECRET = "expected-secret";
+server\webhooksRouter.test.ts:45:    process.env.WEBHOOK_SECRET = "expected-secret";
+server\_core\index.ts:49:  if (!process.env.DATABASE_URL) {
+server\_core\index.ts:60:      uri: process.env.DATABASE_URL,
+server\_core\index.ts:61:      ssl: process.env.DATABASE_URL?.includes('railway') || process.env.NODE_ENV === 'production'
+server\_core\index.ts:69:      process.env.NODE_ENV === "production"
+server\_core\index.ts:80:    if (process.env.NODE_ENV === "production") {
+server\_core\index.ts:142:  console.log(`  STT:         ${ENV.sttEnabled ? `✅ Deepgram ready (model=${process.env.VOICE_DEEPGRAM_MODEL ?? "nova-3"})` : "⚠️  disabled (set DEEPGRAM_API_KEY)"}`);
+server\_core\index.ts:174:    const redisConnection = process.env.REDIS_URL ? { url: process.env.REDIS_URL } : null;
+server\_core\index.ts:611:        calendar: (process.env.GCAL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID) ? "ready (Google Calendar)" : "ready (add-to-calendar links)",
+server\_core\index.ts:612:        stt:      ENV.sttEnabled    ? `ready (Deepgram ${process.env.VOICE_DEEPGRAM_MODEL ?? "nova-3"})` : "disabled — add DEEPGRAM_API_KEY",
+server\_core\index.ts:627:      if (secret !== (process.env.E2E_TEST_SECRET || "apexai-e2e-2026")) {
+server\_core\index.ts:720:          uri: process.env.DATABASE_URL,
+server\_core\index.ts:914:            complianceRecordingPending: process.env.VOICE_COMPLIANCE_RECORDING_NOTICE === "true",
+server\_core\index.ts:930:    const wsHost = process.env.RAILWAY_PUBLIC_DOMAIN || req.get("host");
+server\_core\index.ts:978:    const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+server\_core\index.ts:979:      ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+server\_core\index.ts:1155:    const wsHost = process.env.RAILWAY_PUBLIC_DOMAIN || req.get("host");
+server\_core\index.ts:1590:    if (secret !== process.env.ADMIN_SECRET && secret !== "apexai-force-migrate-2024") {
+server\_core\index.ts:1596:        uri: process.env.DATABASE_URL,
+server\_core\index.ts:1885:  if (process.env.NODE_ENV === "development") {
+server\_core\index.ts:1897:  const preferredPort = parseInt(process.env.PORT || "3000");
+server\_core\index.ts:1899:  if (process.env.NODE_ENV === "production") {
+server\voice.realtime.test.ts:56:    process.env.INTERRUPTION_ENERGY_THRESHOLD = "50";
+server\storage.ts:9:  const baseUrl = process.env.BUILT_IN_FORGE_API_URL ?? "";
+server\storage.ts:10:  const apiKey = process.env.ANTHROPIC_API_KEY ?? "";
+server\_core\env.ts:9:  if (process.env.RAILWAY_PUBLIC_DOMAIN?.trim()) {
+server\_core\env.ts:10:    return `https://${process.env.RAILWAY_PUBLIC_DOMAIN.trim()}`;
+server\_core\env.ts:13:  if (process.env.PUBLIC_URL?.trim()) {
+server\_core\env.ts:14:    return process.env.PUBLIC_URL.trim().replace(/\/$/, "");
+server\_core\env.ts:17:  const port = process.env.PORT?.trim() || "3000";
+server\_core\env.ts:23:  nodeEnv:      process.env.NODE_ENV ?? "development",
+server\_core\env.ts:24:  isProduction: process.env.NODE_ENV === "production",
+server\_core\env.ts:27:  cookieSecret: process.env.JWT_SECRET ?? "",
+server\_core\env.ts:28:  ownerOpenId:  process.env.OWNER_OPEN_ID ?? "",
+server\_core\env.ts:31:  googleClientId:     process.env.GOOGLE_CLIENT_ID ?? "",
+server\_core\env.ts:32:  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+server\_core\env.ts:33:  redirectUri: process.env.REDIRECT_URI ?? `${resolvePublicUrl()}/api/auth/callback`,
+server\_core\env.ts:36:  databaseUrl: process.env.DATABASE_URL ?? "",
+server\_core\env.ts:37:  forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
+server\_core\env.ts:38:  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+server\_core\env.ts:39:  googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? process.env.REDIRECT_URI ?? `${resolvePublicUrl()}/api/auth/callback`,
+server\_core\env.ts:42:  redisUrl: process.env.REDIS_URL ?? "",
+server\_core\env.ts:47:  signalwireProjectId:   process.env.SIGNALWIRE_PROJECT_ID ?? "",
+server\_core\env.ts:48:  signalwireToken:       process.env.SIGNALWIRE_TOKEN ?? "",
+server\_core\env.ts:49:  signalwireSpaceUrl:    process.env.SIGNALWIRE_SPACE_URL ?? "",
+server\_core\env.ts:50:  signalwirePhoneNumber: normalizeToE164US(process.env.SIGNALWIRE_PHONE_NUMBER ?? "") || (process.env.SIGNALWIRE_PHONE_NUMBER ?? "").trim(),
+server\_core\env.ts:51:  signalwireSigningKey:  process.env.SIGNALWIRE_SIGNING_KEY ?? "",
+server\_core\env.ts:54:  thinqAccountId:  process.env.THINQ_ACCOUNT_ID ?? "",
+server\_core\env.ts:55:  thinqAuthToken:  process.env.THINQ_AUTH_TOKEN ?? "",
+server\_core\env.ts:56:  thinqSipDomain:  process.env.THINQ_SIP_DOMAIN ?? "sip.thinq.com",
+server\_core\env.ts:59:  resendApiKey:     process.env.RESEND_API_KEY ?? "",
+server\_core\env.ts:60:  resendFromEmail:  process.env.RESEND_FROM_EMAIL ?? "",
+server\_core\env.ts:61:  resendFromName:   process.env.RESEND_FROM_NAME ?? "ApexAI",
+server\_core\env.ts:64:  elevenLabsApiKey: process.env.ELEVENLABS_API_KEY ?? "",
+server\_core\env.ts:67:  openAiApiKey: process.env.OPENAI_API_KEY ?? "",
+server\_core\env.ts:70:  deepgramApiKey:  process.env.DEEPGRAM_API_KEY ?? "",
+server\_core\env.ts:71:  cartesiaApiKey:  process.env.CARTESIA_API_KEY ?? "",
+server\_core\env.ts:74:  publicDomain: process.env.RAILWAY_PUBLIC_DOMAIN ?? "",
+server\_core\env.ts:78:  adminEmail: process.env.ADMIN_EMAIL ?? "",
+server\_core\env.ts:79:  adminName:  process.env.ADMIN_NAME ?? "ApexAI Admin",
+server\_core\env.ts:85:  voicePlayRingBeforeStream: process.env.VOICE_PLAY_RING_BEFORE_STREAM !== "false",
+server\_core\env.ts:87:  voiceTtsSpeedScale: Math.min(1.25, Math.max(0.55, parseFloat(process.env.VOICE_TTS_SPEED_SCALE ?? "1.0") || 1.0)),
+server\_core\env.ts:89:  voiceResponseMicroPauseMs: Math.max(0, parseInt(process.env.VOICE_RESPONSE_MICRO_PAUSE_MS ?? "0", 10) || 0),
+server\_core\env.ts:94:  voiceUserSilenceReengageEnabled: process.env.VOICE_USER_SILENCE_REENGAGE_ENABLED !== "false",
+server\_core\env.ts:98:    Math.min(30000, parseInt(process.env.VOICE_USER_SILENCE_REENGAGE_MS ?? "10000", 10) || 12000)
+server\_core\env.ts:108:      parseInt(process.env.VOICE_BARGE_IN_ENERGY_THRESHOLD || process.env.INTERRUPTION_ENERGY_THRESHOLD || "104", 10) || 104;
+server\_core\env.ts:113:  voiceBargeInSustainFrames: Math.max(1, Math.min(10, parseInt(process.env.VOICE_BARGE_IN_SUSTAIN_FRAMES ?? "2", 10) || 2)),
+server\_core\env.ts:116:  voiceDeepgramEndpointingMs: Math.max(100, Math.min(2000, parseInt(process.env.VOICE_DEEPGRAM_ENDPOINTING_MS ?? "180", 10) || 180)),
+server\_core\env.ts:118:  voiceDeepgramUtteranceEndMs: Math.max(300, Math.min(3000, parseInt(process.env.VOICE_DEEPGRAM_UTTERANCE_END_MS ?? "1000", 10) || 1000)),
+server\_core\env.ts:120:  voiceSttMinConfidence: Math.max(0, Math.min(1, parseFloat(process.env.VOICE_STT_MIN_CONFIDENCE ?? "0.38") || 0.38)),
+server\_core\env.ts:122:  voiceBargeInClassifierEnabled: process.env.VOICE_BARGE_IN_CLASSIFIER_ENABLED !== "false",
+server\_core\env.ts:124:  voiceWebInterruptEnabled: process.env.VOICE_WEB_INTERRUPT_ENABLED !== "false",
+server\_core\env.ts:126:  voiceWebVadEnabled: process.env.VOICE_WEB_VAD_ENABLED !== "false",
+server\_core\env.ts:128:  voiceBargeInClassifierRequireModel: process.env.VOICE_BARGE_IN_CLASSIFIER_REQUIRE_MODEL === "true",
+server\_core\env.ts:131:    (process.env.VOICE_BARGE_IN_CLASSIFIER_MODEL_PATH ?? "server/models/bargein_classifier.onnx").trim(),
+server\_core\env.ts:134:    (process.env.VOICE_BARGE_IN_CLASSIFIER_TOKENIZER_PATH ?? "server/models/bargein_classifier_tokenizer").trim(),
+server\_core\env.ts:136:  voiceInterruptContextChars: Math.max(80, Math.min(500, parseInt(process.env.VOICE_INTERRUPT_CONTEXT_CHARS ?? "220", 10) || 220)),
+server\_core\env.ts:138:  voiceBargeInContinueSilenceMs: Math.max(250, Math.min(1500, parseInt(process.env.VOICE_BARGE_IN_CONTINUE_SILENCE_MS ?? "700", 10) || 700)),
+server\_core\env.ts:140:  voiceInterruptAbortLlm: process.env.VOICE_INTERRUPT_ABORT_LLM !== "false",
+server\_core\env.ts:142:  voiceLlmMaxTokens: Math.min(1200, Math.max(200, parseInt(process.env.VOICE_LLM_MAX_TOKENS ?? "600", 10) || 350)),
+server\_core\env.ts:147:  voiceLlmTemperature: Math.min(0.85, Math.max(0.05, parseFloat(process.env.VOICE_LLM_TEMPERATURE ?? "0.15") || 0.15)),
+server\_core\env.ts:158:  voiceJitterBufferFrames: Math.max(0, Math.min(24, parseInt(process.env.VOICE_JITTER_BUFFER_FRAMES ?? "0", 10) || 0)),
+server\_core\env.ts:160:  voiceOutboundAllowHours: (process.env.VOICE_OUTBOUND_ALLOW_HOURS ?? "").trim(),
+server\_core\env.ts:162:  voiceOutboundBlocklistCheck: process.env.VOICE_OUTBOUND_BLOCKLIST_CHECK !== "false",
+server\_core\env.ts:165:    process.env.VOICE_LLM_JSON_ENVELOPE === "true" ||
+server\_core\env.ts:166:    process.env.VOICE_GROK_JSON_ENVELOPE === "true",
+server\_core\env.ts:168:  voiceCartesiaEmotion: process.env.VOICE_CARTESIA_EMOTION !== "false",
+server\_core\env.ts:170:  voiceMetricsServiceUrl: (process.env.VOICE_METRICS_URL ?? "").replace(/\/$/, ""),
+server\_core\env.ts:173:  hubspotClientId:     process.env.HUBSPOT_CLIENT_ID ?? "",
+server\_core\env.ts:174:  hubspotClientSecret: process.env.HUBSPOT_CLIENT_SECRET ?? "",
+server\_core\env.ts:176:  hubspotRedirectUri:  process.env.HUBSPOT_REDIRECT_URI ?? "",
+server\_core\env.ts:179:  salesforceClientId:     process.env.SALESFORCE_CLIENT_ID ?? "",
+server\_core\env.ts:180:  salesforceClientSecret: process.env.SALESFORCE_CLIENT_SECRET ?? "",
+server\_core\env.ts:181:  salesforceRedirectUri:  process.env.SALESFORCE_REDIRECT_URI ?? "",
+server\_core\env.ts:183:  salesforceLoginUrl: process.env.SALESFORCE_LOGIN_URL ?? "login.salesforce.com",
+server\_core\env.ts:186:  pipedriveClientId: process.env.PIPEDRIVE_CLIENT_ID ?? "",
+server\_core\env.ts:187:  pipedriveClientSecret: process.env.PIPEDRIVE_CLIENT_SECRET ?? "",
+server\_core\env.ts:188:  pipedriveRedirectUri: process.env.PIPEDRIVE_REDIRECT_URI ?? "",
+server\_core\env.ts:191:  cerebrasApiKey: (process.env.CEREBRAS_API_KEY ?? "").trim(),
+server\_core\env.ts:194:      process.env.CEREBRAS_API_KEY,
+server\_core\env.ts:195:      process.env.CEREBRAS_API_KEY_2,
+server\_core\env.ts:196:      process.env.CEREBRAS_API_KEY_3,
+server\_core\env.ts:197:      process.env.CEREBRAS_API_KEY_4,
+server\_core\env.ts:198:      process.env.CEREBRAS_API_KEY_5,
+server\_core\env.ts:204:  cerebrasModel: (process.env.CEREBRAS_MODEL ?? "llama3.1-8b").trim(),
+server\_core\env.ts:205:  cerebrasBaseUrl: (process.env.CEREBRAS_BASE_URL ?? "https://api.cerebras.ai/v1").replace(/\/$/, ""),
+server\_core\env.ts:210:  groqApiKey: (process.env.CEREBRAS_API_KEY ?? "").trim() ? "__cerebras__" : "",
+server\_core\env.ts:211:  groqModel: (process.env.CEREBRAS_MODEL ?? "llama3.1-8b").trim(),
+server\_core\env.ts:227:  ttsProvider: (process.env.TTS_PROVIDER ?? "cartesia").trim(),
+server\_core\env.ts:230:  interruptAckEnabled: process.env.INTERRUPT_ACK_ENABLED !== "false",
+server\_core\env.ts:231:  interruptAckMinSpeechMs: Math.max(200, parseInt(process.env.INTERRUPT_ACK_MIN_SPEECH_MS ?? "1200", 10) || 1200),
+server\_core\env.ts:233:  interruptAckOnLowConfidenceOnly: process.env.INTERRUPT_ACK_ON_LOW_CONFIDENCE_ONLY === "true",
+server\_core\env.ts:235:  voiceSttConfidenceLowThreshold: Math.min(0.99, Math.max(0.5, parseFloat(process.env.VOICE_STT_CONFIDENCE_LOW ?? "0.82") || 0.82)),
+server\_core\env.ts:237:  voiceSttConfidenceHighThreshold: Math.min(0.99, Math.max(0.6, parseFloat(process.env.VOICE_STT_CONFIDENCE_HIGH ?? "0.92") || 0.92)),
+server\_core\env.ts:239:  bookingScoreThreshold: Math.min(0.99, Math.max(0.2, parseFloat(process.env.BOOKING_SCORE_THRESHOLD ?? "0.65") || 0.65)),
+server\_core\env.ts:242:  stripeSecretKey: (process.env.STRIPE_SECRET_KEY ?? "").trim(),
+server\_core\env.ts:243:  stripeWebhookSecret: (process.env.STRIPE_WEBHOOK_SECRET ?? "").trim(),
+server\_core\env.ts:245:  stripePriceStarter: (process.env.STRIPE_PRICE_STARTER ?? "").trim(),
+server\_core\env.ts:246:  stripePriceGrowth: (process.env.STRIPE_PRICE_GROWTH ?? "").trim(),
+server\_core\env.ts:247:  stripePriceEnterprise: (process.env.STRIPE_PRICE_ENTERPRISE ?? "").trim(),
+server\_core\env.ts:248:  stripeCheckoutSuccessPath: process.env.STRIPE_CHECKOUT_SUCCESS_PATH ?? "/settings?billing=success",
+server\_core\env.ts:249:  stripeCheckoutCancelPath: process.env.STRIPE_CHECKOUT_CANCEL_PATH ?? "/settings?billing=cancel",
+server\_core\env.ts:252:  appId: process.env.VITE_APP_ID ?? "",
+server\_core\env.ts:258:  get ttsEnabled()    { return (process.env.CARTESIA_API_KEY ?? "").trim() !== ""; },
+server\_core\env.ts:272:  liveTransferEnabled: process.env.LIVE_TRANSFER_ENABLED === "true",
+server\_core\env.ts:274:  liveTransferNumber: (process.env.LIVE_TRANSFER_NUMBER ?? "").trim(),
+server\_core\cookies.ts:45:  const isProduction = process.env.NODE_ENV === "production";
+server\tts.service.test.ts:5:    CARTESIA_API_KEY: process.env.CARTESIA_API_KEY,
+server\tts.service.test.ts:6:    CARTESIA_VOICE_ID: process.env.CARTESIA_VOICE_ID,
+server\tts.service.test.ts:12:    process.env.CARTESIA_API_KEY = "cartesia-test";
+server\tts.service.test.ts:13:    delete process.env.CARTESIA_VOICE_ID;
+server\tts.service.test.ts:17:    process.env.CARTESIA_API_KEY = originalEnv.CARTESIA_API_KEY;
+server\tts.service.test.ts:18:    process.env.CARTESIA_VOICE_ID = originalEnv.CARTESIA_VOICE_ID;
+server\_core\cerebras.test.ts:7:    delete process.env.CEREBRAS_API_KEY;
+server\_core\cerebras.test.ts:8:    delete process.env.CEREBRAS_API_KEY_2;
+server\_core\cerebras.test.ts:9:    delete process.env.CEREBRAS_MODEL;
+server\_core\cerebras.test.ts:13:    process.env.CEREBRAS_API_KEY = "key-1";
+server\_core\cerebras.test.ts:14:    process.env.CEREBRAS_API_KEY_2 = "key-2";
+server\_core\cerebras.test.ts:15:    process.env.CEREBRAS_MODEL = "llama3.1-8b";
+server\_core\notification.ts:71:  if (!process.env.BUILT_IN_FORGE_API_URL) {
+server\_core\notification.ts:78:  if (!process.env.ANTHROPIC_API_KEY) {
+server\_core\notification.ts:85:  const endpoint = buildEndpointUrl(process.env.BUILT_IN_FORGE_API_URL ?? "");
+server\_core\notification.ts:92:        authorization: `Bearer ${process.env.ANTHROPIC_API_KEY ?? ""}`,
+server\_core\oauth.ts:76:    const clientId = ENV.googleClientId || process.env.VITE_APP_ID || "";
+server\realtime\deepgramVoiceAgent.ts:102:  const apiKey = process.env.DEEPGRAM_API_KEY!;
+server\realtime\deepgramVoiceAgent.ts:140:            model: process.env.CLAUDE_MODEL || "claude-opus-4-5",
+server\_core\sdk.ts:45:    const clientId = ENV.googleClientId || process.env.VITE_APP_ID || "";
+server\_core\services\adminNotificationService.ts:28:const ADMIN_EMAIL = process.env.ADMIN_EMAIL || '';
+server\_core\services\adminNotificationService.ts:29:const ADMIN_NAME = process.env.ADMIN_NAME || 'Admin';
+server\_core\services\appointmentService.ts:28:    uri: process.env.DATABASE_URL,
+server\_core\services\appointmentService.ts:73:    uri: process.env.DATABASE_URL,
+server\_core\services\appointmentService.ts:90:    uri: process.env.DATABASE_URL,
+server\_core\services\appointmentService.ts:104:    uri: process.env.DATABASE_URL,
+server\_core\services\googleCalendar.ts:15:  return process.env.GCAL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || "";
+server\_core\services\googleCalendar.ts:18:  return process.env.GCAL_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || "";
+server\_core\services\queue.test.ts:6:    const originalRedisUrl = process.env.REDIS_URL;
+server\_core\services\queue.test.ts:7:    delete process.env.REDIS_URL;
+server\_core\services\queue.test.ts:18:      process.env.REDIS_URL = originalRedisUrl;
+server\_core\services\queue.ts:20:  const redisUrl = process.env.REDIS_URL;
+server\realtime\realtimeVoiceEngine.ts:1181:      `wss://api.cartesia.ai/tts/websocket?api_key=${process.env.CARTESIA_API_KEY}&cartesia_version=2024-11-13`
+server\realtime\realtimeVoiceEngine.ts:1385:    const apiKey = (process.env.DEEPGRAM_API_KEY ?? "").trim();
+server\realtime\realtimeVoiceEngine.ts:1395:    const model = (process.env.VOICE_DEEPGRAM_MODEL ?? "nova-3").trim();
+server\realtime\realtimeVoiceEngine.ts:1407:    if (process.env.VOICE_DEEPGRAM_USE_UTTERANCE_END === "true") {
+server\realtime\realtimeVoiceEngine.ts:1410:    if (process.env.VOICE_DEEPGRAM_VAD_EVENTS === "true") {
+server\realtime\realtimeVoiceEngine.ts:1413:    if (process.env.VOICE_DEEPGRAM_SMART_FORMAT === "true") {
+server\realtime\realtimeVoiceEngine.ts:1417:    if (process.env.VOICE_DEEPGRAM_REDACT !== "false") {
+server\realtime\realtimeVoiceEngine.ts:1449:    if (process.env.VOICE_DEEPGRAM_KEYWORDS !== "false") {
+server\realtime\realtimeVoiceEngine.ts:2008:      parseInt(process.env.VOICE_LATENCY_BUDGET_MS ?? "", 10) || 0;
+server\_core\services\sttService.ts:13:  if (process.env.DEEPGRAM_API_KEY) {
+server\_core\services\sttService.ts:20:  const apiKey = process.env.DEEPGRAM_API_KEY!;
+server\_core\services\sttService.ts:26:  const model = (process.env.VOICE_DEEPGRAM_MODEL ?? "nova-3").trim();
+server\_core\services\sttService.ts:38:  if (process.env.VOICE_DEEPGRAM_REDACT !== "false") {
+server\_core\services\sttService.ts:58:    if (process.env.OPENAI_API_KEY) {
+server\_core\services\sttService.ts:117:  if (!process.env.OPENAI_API_KEY) {
+server\_core\services\sttService.ts:149:      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+server\_core\services\timezoneService.ts:65:  const envTz = process.env.DEFAULT_TIMEZONE;
+server\_core\services\ttsService.ts:40:  cartesia: process.env.CARTESIA_VOICE_ID || CARTESIA_VOICES.sarah,
+server\_core\services\ttsService.ts:41:  elevenlabs: process.env.ELEVENLABS_VOICE_ID || ELEVENLABS_DEFAULT_VOICE,
+server\_core\services\ttsService.ts:46:  const pref = (override || process.env.TTS_PROVIDER || "").toLowerCase().trim();
+server\_core\services\ttsService.ts:47:  if (pref === "elevenlabs" && process.env.ELEVENLABS_API_KEY?.trim()) return "elevenlabs";
+server\_core\services\ttsService.ts:48:  if (pref === "cartesia" && process.env.CARTESIA_API_KEY?.trim()) return "cartesia";
+server\_core\services\ttsService.ts:50:  if (process.env.CARTESIA_API_KEY?.trim()) return "cartesia";
+server\_core\services\ttsService.ts:51:  if (process.env.ELEVENLABS_API_KEY?.trim()) return "elevenlabs";
+server\_core\services\ttsService.ts:58:  const apiKey = process.env.CARTESIA_API_KEY;
+server\_core\services\ttsService.ts:95:  const apiKey = process.env.ELEVENLABS_API_KEY;
+server\_core\services\ttsService.ts:99:  const model = process.env.ELEVENLABS_MODEL || "eleven_turbo_v2";
+server\_core\services\ttsService.ts:154:        ? Boolean(process.env.CARTESIA_API_KEY?.trim())
+server\_core\services\ttsService.ts:155:        : Boolean(process.env.ELEVENLABS_API_KEY?.trim());
+server\realtime\tenantMessagingStatus.test.ts:9:  const original10Dlc = process.env.SIGNALWIRE_10DLC_READY;
+server\realtime\tenantMessagingStatus.test.ts:10:  const originalTollFree = process.env.SIGNALWIRE_TOLL_FREE_VERIFIED;
+server\realtime\tenantMessagingStatus.test.ts:13:    delete process.env.SIGNALWIRE_10DLC_READY;
+server\realtime\tenantMessagingStatus.test.ts:14:    delete process.env.SIGNALWIRE_TOLL_FREE_VERIFIED;
+server\realtime\tenantMessagingStatus.test.ts:18:    if (original10Dlc === undefined) delete process.env.SIGNALWIRE_10DLC_READY;
+server\realtime\tenantMessagingStatus.test.ts:19:    else process.env.SIGNALWIRE_10DLC_READY = original10Dlc;
+server\realtime\tenantMessagingStatus.test.ts:20:    if (originalTollFree === undefined) delete process.env.SIGNALWIRE_TOLL_FREE_VERIFIED;
+server\realtime\tenantMessagingStatus.test.ts:21:    else process.env.SIGNALWIRE_TOLL_FREE_VERIFIED = originalTollFree;
+server\realtime\tenantVoiceRuntime.test.ts:15:  const originalPublicDemoNumber = process.env.PUBLIC_DEMO_PHONE_NUMBER;
+server\realtime\tenantVoiceRuntime.test.ts:18:    delete process.env.PUBLIC_DEMO_PHONE_NUMBER;
+server\realtime\tenantVoiceRuntime.test.ts:23:      delete process.env.PUBLIC_DEMO_PHONE_NUMBER;
+server\realtime\tenantVoiceRuntime.test.ts:25:      process.env.PUBLIC_DEMO_PHONE_NUMBER = originalPublicDemoNumber;
+server\_core\services\voiceRealtimePipeline.ts:192:    const apiKey = process.env.DEEPGRAM_API_KEY;
+server\_core\services\voiceRealtimePipeline.ts:199:    const model = (process.env.VOICE_DEEPGRAM_MODEL ?? "nova-3").trim();
+server\_core\services\voiceRealtimePipeline.ts:210:    if (process.env.VOICE_DEEPGRAM_USE_UTTERANCE_END === "true") {
+server\_core\services\voiceRealtimePipeline.ts:213:    if (process.env.VOICE_DEEPGRAM_VAD_EVENTS === "true") {
+server\_core\services\voiceRealtimePipeline.ts:216:    if (process.env.VOICE_DEEPGRAM_SMART_FORMAT === "true") {
+server\_core\services\voiceRealtimePipeline.ts:283:    const apiKey = process.env.CARTESIA_API_KEY;
+server\_core\services\voiceRealtimePipeline.ts:992:    if (!session?.userId) return process.env.TRANSFER_NUMBER || null;
+server\realtime\tenantVoiceRuntime.ts:307:    cleanString(process.env.PUBLIC_DEMO_MODE)?.toLowerCase() ?? "both";
+server\realtime\tenantVoiceRuntime.ts:313:    cleanString(process.env.PUBLIC_DEMO_PHONE_NUMBER) ??
+server\realtime\tenantVoiceRuntime.ts:331:  const raw = Number(process.env.PUBLIC_DEMO_USER_ID || DEFAULT_PUBLIC_DEMO_OWNER_ID);
+server\realtime\voiceMetrics.ts:137:  if (process.env.VOICE_METRICS_PERSIST === "false") return;
+scripts\voice-ci-smoke.mjs:13:  const command = isWindows ? (process.env.ComSpec || "cmd.exe") : cmd;
+scripts\verify-integrations.mjs:40:      const hasPublicUrl = !!String(process.env.PUBLIC_URL ?? "").trim();
+scripts\verify-integrations.mjs:41:      const hasRailwayDomain = !!String(process.env.RAILWAY_PUBLIC_DOMAIN ?? "").trim();
+scripts\verify-integrations.mjs:45:          ? `using PUBLIC_URL=${String(process.env.PUBLIC_URL).trim()}`
+scripts\verify-integrations.mjs:47:            ? `using RAILWAY_PUBLIC_DOMAIN=${String(process.env.RAILWAY_PUBLIC_DOMAIN).trim()}`
+scripts\verify-integrations.mjs:86:      const hasStt = !!String(process.env.DEEPGRAM_API_KEY ?? "").trim();
+scripts\verify-integrations.mjs:88:        process.env.CEREBRAS_API_KEY,
+scripts\verify-integrations.mjs:89:        process.env.CEREBRAS_API_KEY_2,
+scripts\verify-integrations.mjs:90:        process.env.CEREBRAS_API_KEY_3,
+scripts\verify-integrations.mjs:91:        process.env.CEREBRAS_API_KEY_4,
+scripts\verify-integrations.mjs:92:        process.env.CEREBRAS_API_KEY_5,
+scripts\verify-integrations.mjs:96:        !!String(process.env.CARTESIA_API_KEY ?? "").trim() ||
+scripts\verify-integrations.mjs:97:        !!String(process.env.ELEVENLABS_API_KEY ?? "").trim();
+scripts\verify-integrations.mjs:106:          : `provider=cerebras (${cerebrasKeys.length} key${cerebrasKeys.length === 1 ? "" : "s"}); TTS=${String(process.env.CARTESIA_API_KEY ?? "").trim() ? "cartesia" : "elevenlabs"}`,
+scripts\verify-integrations.mjs:191:  if (process.env.VERIFY_STRICT === "1") {
+
+

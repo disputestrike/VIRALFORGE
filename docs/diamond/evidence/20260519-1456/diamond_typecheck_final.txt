@@ -1,0 +1,8 @@
+
+> apexai@1.0.0 type-check C:\Users\benxp\OneDrive\Documents\New project 3
+> pnpm run check
+
+
+> apexai@1.0.0 check C:\Users\benxp\OneDrive\Documents\New project 3
+> node --max-old-space-size=8192 ./node_modules/typescript/bin/tsc --noEmit
+

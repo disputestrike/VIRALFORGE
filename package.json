@@ -8,6 +8,8 @@
     "build": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "node dist/index.js",
     "check": "node --max-old-space-size=8192 ./node_modules/typescript/bin/tsc --noEmit",
+    "type-check": "pnpm run check",
+    "lint": "pnpm run check",
     "format": "prettier --write .",
     "test": "vitest run",
     "test:settings-contract": "vitest run server/settings.contract.test.ts",

@@ -134,7 +134,7 @@ async function startServer() {
 
   // ── Feature flags — logged on every startup ───────────────
   console.log("[ApexAI] Starting with feature flags:");
-  console.log(`  Database:   ✅ (DATABASE_URL set)`);
+  console.log(`  Database:   ${ENV.databaseUrl ? "configured" : "missing (set DATABASE_URL)"}`);
   console.log(`  Redis/Queue: ${ENV.queueEnabled ? "✅ BullMQ + Redis" : "⚠️  In-memory fallback (set REDIS_URL)"}`);
   console.log(`  Google Auth: ${ENV.googleClientId ? "✅ enabled" : "❌ disabled (set GOOGLE_CLIENT_ID)"}`);
   console.log(`  Voice/SMS:   ${ENV.voiceEnabled ? "✅ SignalWire ready" : "⚠️  disabled (set SIGNALWIRE_PROJECT_ID)"}`);
@@ -144,7 +144,7 @@ async function startServer() {
   console.log(`  TTS:         ${ENV.ttsEnabled || ENV.elevenLabsApiKey ? `✅ ${activeTts}` : "⚠️  disabled (set CARTESIA_API_KEY or ELEVENLABS_API_KEY)"}`);
   const activeLlm = ENV.aiEnabled ? `Cerebras (${ENV.cerebrasModel})` : "NONE";
   console.log(
-    `  AI/LLM:      ${ENV.aiEnabled ? `✅ ${activeLlm} [LLM_PROVIDER=${ENV.llmProvider}]` : "⚠️  disabled — set GROQ_API_KEY and/or XAI_API_KEY (LLM_PROVIDER=xai) and/or ANTHROPIC_API_KEY"}`
+    `  AI/LLM:      ${ENV.aiEnabled ? `✅ ${activeLlm} [LLM_PROVIDER=${ENV.llmProvider}]` : "⚠️  disabled — set CEREBRAS_API_KEY"}`
   );
   console.log("");
 
@@ -604,7 +604,7 @@ async function startServer() {
         voice:    ENV.voiceEnabled  ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         voiceRealtime: ENV.voiceRealtimeReady
           ? `ready (Deepgram nova-3 STT + ${ENV.llmProvider} LLM + ${ENV.ttsProvider} TTS)`
-          : "incomplete — set DEEPGRAM_API_KEY + GROQ_API_KEY or (XAI_API_KEY + LLM_PROVIDER=xai) + one TTS key (CARTESIA/ELEVENLABS)",
+          : "incomplete — set DEEPGRAM_API_KEY + CEREBRAS_API_KEY + one TTS key (CARTESIA/ELEVENLABS)",
         sms:      ENV.smsEnabled    ? "ready (signalwire)"  : "disabled — add SIGNALWIRE_PROJECT_ID",
         email:    ENV.emailEnabled  ? "ready"  : "disabled — add RESEND_API_KEY",
         stripe:   ENV.stripeEnabled ? "ready — webhook POST /api/stripe/webhook" : "disabled — add STRIPE_SECRET_KEY + price ids",
@@ -612,8 +612,8 @@ async function startServer() {
         stt:      ENV.sttEnabled    ? `ready (Deepgram ${process.env.VOICE_DEEPGRAM_MODEL ?? "nova-3"})` : "disabled — add DEEPGRAM_API_KEY",
         tts:      (ENV.ttsEnabled || ENV.elevenLabsApiKey) ? `ready (${ENV.ttsProvider})` : "disabled — add CARTESIA_API_KEY or ELEVENLABS_API_KEY",
         ai:       ENV.aiEnabled
-          ? `ready (${ENV.llmProvider} — ${ENV.llmProvider === "xai" ? ENV.xaiModel : ENV.groqApiKey ? ENV.groqModel : "anthropic"})`
-          : "disabled — add GROQ_API_KEY and/or XAI_API_KEY (LLM_PROVIDER=xai) and/or ANTHROPIC_API_KEY",
+          ? `ready (${ENV.llmProvider} — ${ENV.cerebrasModel})`
+          : "disabled — add CEREBRAS_API_KEY",
       },
     });
   });

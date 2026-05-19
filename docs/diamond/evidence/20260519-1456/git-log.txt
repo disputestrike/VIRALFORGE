@@ -1,0 +1,13 @@
+$ git log --oneline -8
+exit=0
+
+31b56ac Implement OmniPulse OS engine
+b90b4ff Restore world-class voice continuity and barge-in handling
+a6e9744 Tighten voice turn handling and direct-fit answers
+d6374a2 CRITICAL: FIX A+B+C - Call termination + Cartesia lifecycle + state injection
+f05b1e1 WIRE: Inject response truncation into LLM output + block discovery questions
+7847360 CRITICAL FIX: implement conversation state machine + stay/pivot controller
+6a487a4 update wave completion report
+84cba1a add admin disable controls audit export and readiness panel
+
+

@@ -1,0 +1,27 @@
+{
+  "generatedAt": "2026-05-19T21:01:47.388Z",
+  "packageName": "apexai",
+  "packageVersion": "1.0.0",
+  "docs": [
+    "SOURCE_OF_TRUTH.md",
+    "PRODUCT_OVERVIEW.md",
+    "USER_FLOWS.md",
+    "FRONTEND_ROUTE_MAP.md",
+    "BACKEND_ROUTE_MAP.md",
+    "DATABASE_SCHEMA_MAP.md",
+    "ENVIRONMENT_VARIABLES.md",
+    "API_AND_INTEGRATION_MAP.md",
+    "AUTHORIZATION_AND_ROLES.md",
+    "BACKGROUND_JOBS_AND_CRON.md",
+    "OBSERVABILITY_AND_OPERATIONS.md",
+    "SECURITY_AND_COMPLIANCE.md",
+    "TESTING_AND_QUALITY.md",
+    "KNOWN_GAPS_AND_RISKS.md",
+    "GO_LIVE_READINESS.md",
+    "RAILWAY_DEPLOYMENT.md",
+    "CHANGELOG_DIAMOND.md",
+    "RUNBOOK_DIAMOND.md",
+    "DIAMOND_FIX_CERTIFICATION.md"
+  ],
+  "evidenceDir": "docs/diamond/evidence/20260519-1456"
+}

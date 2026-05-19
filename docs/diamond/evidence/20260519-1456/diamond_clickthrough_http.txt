@@ -1,0 +1,10 @@
+/ 200 367853
+/about 200 367853
+/platform 200 367853
+/solutions 200 367853
+/resources 200 367853
+/pricing 200 367853
+/privacy 200 367853
+/terms 200 367853
+/security 200 367853
+/api/health 200 631

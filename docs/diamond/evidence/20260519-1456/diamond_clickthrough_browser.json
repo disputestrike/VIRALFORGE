@@ -1,0 +1,80 @@
+[
+  {
+    "label": "home direct",
+    "title": "ApexAI — Inbound + Outbound AI Sales Platform",
+    "url": "http://127.0.0.1:4173/",
+    "h1": "Turn every call into revenue.On autopilot. 24/7. Zero effort."
+  },
+  {
+    "label": "nav pricing locator count",
+    "count": 1
+  },
+  {
+    "label": "clicked nav pricing",
+    "title": "ApexAI — Inbound + Outbound AI Sales Platform",
+    "url": "http://127.0.0.1:4173/pricing",
+    "h1": "Capture and convert inbound demand with one platform"
+  },
+  {
+    "label": "nav sign in locator count",
+    "count": 1
+  },
+  {
+    "label": "clicked nav sign in",
+    "title": "127.0.0.1:4173/api/auth/google/login",
+    "url": "http://127.0.0.1:4173/api/auth/google/login",
+    "h1": ""
+  },
+  {
+    "label": "demo anchor locator count",
+    "count": 2
+  },
+  {
+    "label": "direct /about",
+    "title": "ApexAI — Inbound + Outbound AI Sales Platform",
+    "url": "http://127.0.0.1:4173/about",
+    "h1": "Built for businesses that win or lose on the phone"
+  },
+  {
+    "label": "direct /platform",
+    "title": "ApexAI — Inbound + Outbound AI Sales Platform",
+    "url": "http://127.0.0.1:4173/platform",
+    "h1": "The Unified Voice Platform"
+  },
+  {
+    "label": "direct /solutions",
+    "title": "ApexAI — Inbound + Outbound AI Sales Platform",
+    "url": "http://127.0.0.1:4173/solutions",
+    "h1": "One engine, every industry"
+  },
+  {
+    "label": "direct /resources",
+    "title": "ApexAI — Inbound + Outbound AI Sales Platform",
+    "url": "http://127.0.0.1:4173/resources",
+    "h1": "Customer Stories & FAQ"
+  },
+  {
+    "label": "direct /pricing",
+    "title": "ApexAI — Inbound + Outbound AI Sales Platform",
+    "url": "http://127.0.0.1:4173/pricing",
+    "h1": "Capture and convert inbound demand with one platform"
+  },
+  {
+    "label": "direct /privacy",
+    "title": "ApexAI — Inbound + Outbound AI Sales Platform",
+    "url": "http://127.0.0.1:4173/privacy",
+    "h1": "Privacy Policy"
+  },
+  {
+    "label": "direct /terms",
+    "title": "ApexAI — Inbound + Outbound AI Sales Platform",
+    "url": "http://127.0.0.1:4173/terms",
+    "h1": "Terms of Service"
+  },
+  {
+    "label": "direct /security",
+    "title": "ApexAI — Inbound + Outbound AI Sales Platform",
+    "url": "http://127.0.0.1:4173/security",
+    "h1": "Security & Compliance"
+  }
+]

@@ -1,0 +1,8 @@
+
+> apexai@1.0.0 release:gate C:\Users\benxp\OneDrive\Documents\New project 3
+> node scripts/release-six-sigma-gate.mjs
+
+[SixSigmaGate] Report written: C:\Users\benxp\OneDrive\Documents\New project 3\docs\internal\WAVE_COMPLETION_REPORT.md
+[SixSigmaGate] Decision: APPROVED
+(node:25068) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)

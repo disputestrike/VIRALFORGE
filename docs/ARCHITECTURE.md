@@ -23,7 +23,7 @@ Caller → SignalWire → ApexAI Server → WebSocket → AI Pipeline
               → Optional PII redaction (VOICE_DEEPGRAM_REDACT=true)
 
    PROCESSING (text → response text, streaming):
-   transcript → Groq (OpenAI-compatible API, token streaming, GROQ_API_KEY / GROQ_MODEL)
+   transcript → configured LLM provider (Cerebras in the current runtime)
               → Token stream → sentence splitter → clause-by-clause
 
    OUTBOUND (text → speech → caller):
@@ -45,16 +45,14 @@ Caller → SignalWire → ApexAI Server → WebSocket → AI Pipeline
 ## AI Voice Pipeline — Batch/Processing Path
 ```
 Audio buffer → Deepgram REST pre-recorded (nova-3)
-             → LLM Router (Groq / Claude)
+             → LLM Router (Cerebras-backed)
              → Cartesia batch REST TTS (sonic-2, pcm_mulaw)
 ```
 
 ## LLM Provider Abstraction
 ```
-Provider selection: LLM_PROVIDER env var
-  groq       (default) — llama-3.1-8b-instant (OpenAI-compatible Groq API)
-  anthropic  — claude-3-5-haiku (complex reasoning when ANTHROPIC_API_KEY set)
-  Legacy LLM_PROVIDER=cerebras is treated as groq.
+Provider selection: current runtime is Cerebras-backed through CEREBRAS_API_KEY.
+  cerebras   — CEREBRAS_MODEL, default llama3.1-8b
 
 Routing heuristics (chooseRoute):
   "fast"  — short utterances, no objections
@@ -142,10 +140,10 @@ VOICE_DEEPGRAM_MODEL=nova-3           # nova-3 | nova-2-phonecall
 VOICE_DEEPGRAM_REDACT=true            # PII redaction
 
 # LLM
-GROQ_API_KEY                          # Required for live voice + invokeLLM
-GROQ_MODEL=llama-3.1-8b-instant
-ANTHROPIC_API_KEY                     # Optional: router “smart” route + fallback
-LLM_PROVIDER=groq                     # groq | anthropic (cerebras → groq)
+CEREBRAS_API_KEY                      # Required for live voice + invokeLLM
+CEREBRAS_API_KEY_2..5                 # Optional rotation/fallback keys
+CEREBRAS_MODEL=llama3.1-8b
+LLM_PROVIDER=cerebras
 
 # TTS
 CARTESIA_API_KEY                      # Primary TTS
@@ -161,7 +159,7 @@ RAILWAY_PUBLIC_DOMAIN                 # for SignalWire callbacks
 ## Latency Budget (Target: sub-700ms end-to-end)
 ```
 Deepgram STT:    ~100–200ms (streaming, speech_final)
-Groq LLM:        ~150–300ms (first token streaming, model-dependent)
+Cerebras LLM:    ~150–300ms (first token streaming, model-dependent)
 Cartesia TTS:    ~80–150ms  (first audio chunk)
 Network + μ-law: ~50–100ms
 Total target:    ≤ 700ms

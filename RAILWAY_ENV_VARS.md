@@ -41,25 +41,29 @@ Once set: outbound calls, inbound calls, SMS all activate. No code changes neede
 
 Once set: email confirmations, reminders, follow-ups activate.
 
-### Voice AI — Speech to Text (OpenAI Whisper)
+### Voice AI - Speech to Text (Deepgram)
 | Variable | Notes |
 |---|---|
-| `OPENAI_API_KEY` | From platform.openai.com |
+| `DEEPGRAM_API_KEY` | From Deepgram |
+| `VOICE_DEEPGRAM_MODEL` | Optional, defaults to `nova-3` |
 
 Once set: live call transcription activates.
 
-### Voice AI — Text to Speech (ElevenLabs)
+### Voice AI - Text to Speech
 | Variable | Notes |
 |---|---|
-| `ELEVENLABS_API_KEY` | From elevenlabs.io → Profile → API Key |
+| `CARTESIA_API_KEY` | Primary TTS provider |
+| `ELEVENLABS_API_KEY` | Optional fallback provider |
+| `TTS_PROVIDER` | Optional, defaults to `cartesia` |
 
-Once set: AI voice responses activate (natural-sounding speech).
+Once set: AI voice responses activate.
 
 ### AI Conversation + Script Generation
 | Variable | Notes |
 |---|---|
-| `BUILT_IN_FORGE_API_KEY` | Your LLM API key |
-| `BUILT_IN_FORGE_API_URL` | LLM API base URL |
+| `CEREBRAS_API_KEY` | Primary LLM API key |
+| `CEREBRAS_API_KEY_2` through `CEREBRAS_API_KEY_5` | Optional rotation/fallback keys |
+| `CEREBRAS_MODEL` | Optional, defaults to `llama3.1-8b` |
 
 Once set: AI script generation, conversation engine, lead search activate.
 

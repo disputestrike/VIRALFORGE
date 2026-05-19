@@ -1,0 +1,3 @@
+[Migration] DATABASE_URL not set — skipping migrations
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Server] Redis not available — workers not started

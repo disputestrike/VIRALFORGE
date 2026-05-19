@@ -1,6 +1,6 @@
 # Railway Deployment
 
-## Configured Deploy Path
+## Configured deploy path
 
 - Railway config file: `railway.json`
 - Builder: Dockerfile
@@ -10,7 +10,7 @@
 - Healthcheck timeout: 120 seconds
 - Restart policy: on failure, max 3 retries
 
-## Build Path
+## Build path
 
 1. Docker builder installs pnpm.
 2. Installs dependencies with `pnpm install --frozen-lockfile`.
@@ -20,24 +20,16 @@
 6. Copies `dist/`, `drizzle/`, and `drizzle.config.ts`.
 7. Runs `node dist/index.js`.
 
-## Runtime Migration Path
+## Runtime migration path
 
 `server/_core/index.ts` runs migrations on startup when `DATABASE_URL` is set. In production, migration failure throws and blocks startup.
 
-Fatal startup errors now exit with code 1, so Railway can mark the deploy failed or restart instead of allowing a silent clean exit.
-
-## Required Railway Services
+## Required Railway services
 
 - App service.
-- MySQL-compatible database. The active runtime uses Drizzle MySQL/mysql2, so `DATABASE_URL` must be MySQL-compatible unless the schema/runtime are migrated.
-- Redis service for BullMQ queue durability.
+- MySQL/Postgres-compatible DB note: this code currently uses Drizzle MySQL/mysql2, so the active `DATABASE_URL` must be MySQL-compatible unless the schema/runtime are migrated.
+- Redis service.
 
-## Current Railway Blockers
+## Certification note
 
-- `drizzle/meta/_journal.json` is stale relative to migration SQL files. Do not promote a production migration change until this is tested against a staging copy of the Railway database.
-- `REDIS_URL` is required for production queue durability. Local memory queue fallback is acceptable only for dev/test.
-- `/api/health` is a liveness endpoint. Treat queue/provider readiness as separate release proof from `pnpm run verify:integrations` and live smoke tests.
-
-## Certification Note
-
-The repo is Railway-ready by config shape, port binding, start command, and local code gates. Full Railway-live certification requires access to deployed service logs, variables, health endpoint, live database migration output, Redis, and provider smoke tests.
+The repo is Railway-ready by config and local build evidence. Full Railway-live certification requires access to the deployed service logs, variables, health endpoint, and live database.

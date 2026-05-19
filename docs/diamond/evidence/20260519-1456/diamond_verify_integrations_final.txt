@@ -1,0 +1,86 @@
+
+> apexai@1.0.0 verify:integrations C:\Users\benxp\OneDrive\Documents\New project 3
+> node scripts/verify-integrations.mjs
+
+Integration env check (ApexAI)
+
+○ Public base URL
+    ! PUBLIC_URL
+    ! RAILWAY_PUBLIC_DOMAIN
+    set PUBLIC_URL or RAILWAY_PUBLIC_DOMAIN
+
+✓ Database
+    · DATABASE_URL
+    configured
+
+○ Redis (queues)
+    ! REDIS_URL
+    not configured
+
+○ Auth / session
+    ! JWT_SECRET
+    ! GOOGLE_CLIENT_ID
+    ! GOOGLE_CLIENT_SECRET
+    not configured
+
+○ Telephony core (SignalWire)
+    ! SIGNALWIRE_PROJECT_ID
+    ! SIGNALWIRE_TOKEN
+    ! SIGNALWIRE_SPACE_URL
+    ! SIGNALWIRE_PHONE_NUMBER
+    not configured
+
+○ Realtime voice AI core
+    ! DEEPGRAM_API_KEY
+    ! CEREBRAS_API_KEY
+    ! CEREBRAS_API_KEY_2
+    ! CEREBRAS_API_KEY_3
+    ! CEREBRAS_API_KEY_4
+    ! CEREBRAS_API_KEY_5
+    ! CARTESIA_API_KEY
+    ! ELEVENLABS_API_KEY
+    missing DEEPGRAM_API_KEY, CEREBRAS_API_KEY, CARTESIA_API_KEY or ELEVENLABS_API_KEY
+
+○ Email (Resend)
+    ! RESEND_API_KEY
+    ! RESEND_FROM_EMAIL
+    ! RESEND_FROM_NAME
+    not configured
+
+○ Knowledge base embeddings [optional]
+    ! OPENAI_API_KEY
+    not configured
+
+○ Stripe (billing) [optional]
+    ! STRIPE_SECRET_KEY
+    ! STRIPE_WEBHOOK_SECRET
+    ! STRIPE_PRICE_STARTER
+    ! STRIPE_PRICE_GROWTH
+    ! STRIPE_PRICE_ENTERPRISE
+    not configured
+
+○ HubSpot OAuth [optional]
+    ! HUBSPOT_CLIENT_ID
+    ! HUBSPOT_CLIENT_SECRET
+    ! HUBSPOT_REDIRECT_URI
+    not configured
+
+○ Salesforce OAuth [optional]
+    ! SALESFORCE_CLIENT_ID
+    ! SALESFORCE_CLIENT_SECRET
+    ! SALESFORCE_REDIRECT_URI
+    not configured
+
+○ Pipedrive OAuth [optional]
+    ! PIPEDRIVE_CLIENT_ID
+    ! PIPEDRIVE_CLIENT_SECRET
+    ! PIPEDRIVE_REDIRECT_URI
+    not configured
+
+Strict mode policy:
+  - required groups must be complete
+  - optional groups may be fully absent, but partially configured groups fail
+
+Tip: copy Railway env into .env before running strict verification.
+Live voice requires telephony + Deepgram + Cerebras + Cartesia/ElevenLabs to be complete.
+

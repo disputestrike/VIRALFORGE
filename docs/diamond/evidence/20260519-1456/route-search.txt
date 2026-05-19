@@ -1,0 +1,255 @@
+$ rg -n app\.(get|post|put|patch|delete)|<Route|path=|publicProcedure|protectedProcedure server client/src -g *.ts -g *.tsx
+exit=0
+
+client/src\App.tsx:66:      <Route path="/" component={RootPage} />
+client/src\App.tsx:67:      <Route path="/login" component={Login} />
+client/src\App.tsx:68:      <Route path="/about" component={About} />
+client/src\App.tsx:69:      <Route path="/platform" component={Platform} />
+client/src\App.tsx:70:      <Route path="/solutions" component={Solutions} />
+client/src\App.tsx:71:      <Route path="/resources" component={Resources} />
+client/src\App.tsx:72:      <Route path="/pricing" component={Pricing} />
+client/src\App.tsx:73:      <Route path="/privacy" component={Privacy} />
+client/src\App.tsx:74:      <Route path="/terms" component={Terms} />
+client/src\App.tsx:75:      <Route path="/security" component={Security} />
+client/src\App.tsx:76:      <Route path="/viralforge" component={ViralForgeLanding} />
+client/src\App.tsx:77:      <Route path="/omnipulse-preview" component={ViralForgeLanding} />
+client/src\App.tsx:78:      <Route path="/omnipulse-console" component={OmniPulseOS} />
+client/src\App.tsx:81:      <Route path="/app">
+client/src\App.tsx:86:      <Route path="/dashboard">
+client/src\App.tsx:89:      <Route path="/leads">
+client/src\App.tsx:92:      <Route path="/campaigns">
+client/src\App.tsx:95:      <Route path="/appointments">
+client/src\App.tsx:98:      <Route path="/campaigns/:id">
+client/src\App.tsx:101:      <Route path="/voice-ai">
+client/src\App.tsx:104:      <Route path="/messages">
+client/src\App.tsx:107:      <Route path="/templates">
+client/src\App.tsx:110:      <Route path="/analytics">
+client/src\App.tsx:113:      <Route path="/omnipulse">
+client/src\App.tsx:116:      <Route path="/testimonials">
+client/src\App.tsx:119:      <Route path="/onboarding">
+client/src\App.tsx:122:      <Route path="/admin">
+client/src\App.tsx:125:      <Route path="/settings">
+client/src\App.tsx:128:      <Route path="/agency">
+client/src\App.tsx:131:      <Route path="/knowledge-base">
+client/src\App.tsx:134:      <Route path="/workflows">
+client/src\App.tsx:137:      <Route path="/integrations">
+client/src\App.tsx:141:      <Route path="/404" component={NotFound} />
+client/src\App.tsx:142:      <Route component={NotFound} />
+client/src\App.tsx:153:          <Router />
+server\routers\zapierRouter.ts:6:import { protectedProcedure, router } from "../_core/trpc";
+server\routers\zapierRouter.ts:10:  get: protectedProcedure.query(async ({ ctx }) => {
+server\routers\zapierRouter.ts:14:  save: protectedProcedure
+server\routers\zapierRouter.ts:38:  test: protectedProcedure.mutation(async ({ ctx }) => {
+server\routers\workflowRouter.ts:4:import { protectedProcedure, router } from "../_core/trpc";
+server\routers\workflowRouter.ts:8:  list: protectedProcedure.query(async ({ ctx }) => db.listWorkflows(ctx.user.id)),
+server\routers\workflowRouter.ts:10:  upsert: protectedProcedure
+server\routers\workflowRouter.ts:27:  remove: protectedProcedure
+server\routers\memoryRouter.ts:4:import { protectedProcedure, router } from "../_core/trpc";
+server\routers\memoryRouter.ts:8:  list: protectedProcedure
+server\routers\memoryRouter.ts:12:  add: protectedProcedure
+server\routers\memoryRouter.ts:32:  search: protectedProcedure
+server\routers\webhooksRouter.ts:13:import { router, publicProcedure } from '../_core/trpc';
+server\routers\webhooksRouter.ts:19:  omniAiLead: publicProcedure
+server\_core\webchatPublicApi.ts:62:  app.get("/api/public/webchat/config", async (req: Request, res: Response) => {
+server\_core\webchatPublicApi.ts:83:  app.post("/api/public/webchat/lead", async (req: Request, res: Response) => {
+server\routers\leadScoringRouter.ts:6:import { protectedProcedure, router } from "../_core/trpc";
+server\routers\leadScoringRouter.ts:17:  list: protectedProcedure.query(async ({ ctx }) => {
+server\routers\leadScoringRouter.ts:21:  upsert: protectedProcedure
+server\routers\webchatRouter.ts:4:import { protectedProcedure, router } from "../_core/trpc";
+server\routers\webchatRouter.ts:8:  list: protectedProcedure.query(async ({ ctx }) => db.listWebchatWidgets(ctx.user.id)),
+server\routers\webchatRouter.ts:10:  create: protectedProcedure
+server\routers\webchatRouter.ts:26:  update: protectedProcedure
+server\routers\webchatRouter.ts:46:  remove: protectedProcedure
+server\_core\vite-prod.ts:21:  app.get("/api/voice-stream", (req, res) => {
+server\_core\vite-prod.ts:31:  app.get("*", (req, res, next) => {
+server\routers\knowledgeBaseRouter.ts:8:import { protectedProcedure, router } from "../_core/trpc";
+server\routers\knowledgeBaseRouter.ts:21:  list: protectedProcedure.query(async ({ ctx }) => {
+server\routers\knowledgeBaseRouter.ts:31:  create: protectedProcedure
+server\routers\knowledgeBaseRouter.ts:60:  addWebsiteSource: protectedProcedure
+server\routers\knowledgeBaseRouter.ts:97:  addPdfUrlSource: protectedProcedure
+server\routers\knowledgeBaseRouter.ts:134:  addTextUrlSource: protectedProcedure
+server\routers\knowledgeBaseRouter.ts:171:  reprocessSource: protectedProcedure
+server\routers\knowledgeBaseRouter.ts:196:  listSources: protectedProcedure
+server\routers\knowledgeBaseRouter.ts:216:  stats: protectedProcedure
+server\routers\knowledgeBaseRouter.ts:249:  search: protectedProcedure
+server\routers\ticketsRouter.ts:4:import { protectedProcedure, router } from "../_core/trpc";
+server\routers\ticketsRouter.ts:8:  list: protectedProcedure.query(async ({ ctx }) => db.listSupportTickets(ctx.user.id)),
+server\routers\ticketsRouter.ts:10:  create: protectedProcedure
+server\routers\ticketsRouter.ts:26:  setStatus: protectedProcedure
+server\routers\escalationRouter.ts:6:import { protectedProcedure, router } from "../_core/trpc";
+server\routers\escalationRouter.ts:11:  list: protectedProcedure.query(async ({ ctx }) => {
+server\routers\escalationRouter.ts:15:  upsert: protectedProcedure
+server\routers\escalationRouter.ts:46:  remove: protectedProcedure
+server\routers\socialRouter.ts:4:import { protectedProcedure, router } from "../_core/trpc";
+server\routers\socialRouter.ts:10:  list: protectedProcedure.query(async ({ ctx }) => db.listSocialConnections(ctx.user.id)),
+server\routers\socialRouter.ts:12:  startConnect: protectedProcedure.input(z.object({ provider })).mutation(async ({ ctx, input }) => {
+server\routers\socialRouter.ts:21:  disconnect: protectedProcedure.input(z.object({ provider })).mutation(async ({ ctx, input }) => {
+server\_core\index.ts:536:  app.post(
+server\_core\index.ts:589:  app.get("/api/voice/ring-tone.wav", (_req, res) => {
+server\_core\index.ts:596:  app.get("/api/health", (_req, res) => {
+server\_core\index.ts:624:  app.post("/api/e2e-test", async (req, res) => {
+server\_core\index.ts:786:  app.post("/api/voice/start", validateTwilioSignature, async (req, res) => {
+server\_core\index.ts:959:  app.post("/api/voice/status", validateTwilioSignature, async (req, res) => {
+server\_core\index.ts:974:  app.post("/api/voice/process-recording", validateTwilioSignature, async (req, res) => {
+server\_core\index.ts:1045:  app.post("/api/voice/transcription", validateTwilioSignature, (req, res) => {
+server\_core\index.ts:1050:  app.post("/api/voice/recording", validateTwilioSignature, (req, res) => {
+server\_core\index.ts:1061:  app.post("/api/voice/inbound", validateTwilioSignature, async (req, res) => {
+server\_core\index.ts:1181:  app.post("/api/voice/inbound-dtmf", validateTwilioSignature, async (req, res) => {
+server\_core\index.ts:1228:  app.post("/api/voice/voicemail-received", validateTwilioSignature, async (req, res) => {
+server\_core\index.ts:1242:  app.post("/api/voice/queue-wait", validateTwilioSignature, (req, res) => {
+server\_core\index.ts:1253:  app.post("/api/voice/amd-status", validateTwilioSignature, async (req, res) => {
+server\_core\index.ts:1270:  app.post("/api/voice/transfer", validateTwilioSignature, async (req, res) => {
+server\_core\index.ts:1288:  app.post("/api/knowledge-base/upload", apiRateLimiter, async (req, res) => {
+server\_core\index.ts:1336:  app.post("/api/extract/document", async (req, res) => {
+server\_core\index.ts:1387:  app.post("/api/sms/inbound", validateTwilioSignature, async (req, res) => {
+server\_core\index.ts:1441:  app.get("/api/crm/callback", async (req, res) => {
+server\_core\index.ts:1545:  app.get("/api/auth/gcal/callback", async (req, res) => {
+server\_core\index.ts:1588:  app.post("/api/admin/force-migrate", async (req, res) => {
+server\routers.ts:6:import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+server\routers.ts:52:const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+server\routers.ts:59:  list: protectedProcedure
+server\routers.ts:65:  get: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
+server\routers.ts:71:  create: protectedProcedure
+server\routers.ts:133:  update: protectedProcedure
+server\routers.ts:158:  blast: protectedProcedure
+server\routers.ts:210:  delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
+server\routers.ts:216:  verify: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
+server\routers.ts:229:  aiSearch: protectedProcedure.input(z.object({ query: z.string() })).mutation(async ({ input, ctx }) => {
+server\routers.ts:284:  importBulk: protectedProcedure
+server\routers.ts:316:  list: protectedProcedure
+server\routers.ts:320:  get: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
+server\routers.ts:326:  create: protectedProcedure
+server\routers.ts:349:  update: protectedProcedure
+server\routers.ts:375:  blast: protectedProcedure
+server\routers.ts:418:  delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
+server\routers.ts:424:  getContacts: protectedProcedure.input(z.object({ campaignId: z.number() })).query(async ({ input }) => {
+server\routers.ts:428:  addContact: protectedProcedure.input(z.object({ campaignId: z.number(), leadId: z.number() })).mutation(async ({ input, ctx }) => {
+server\routers.ts:434:  removeContact: protectedProcedure.input(z.object({ campaignId: z.number(), leadId: z.number() })).mutation(async ({ input, ctx }) => {
+server\routers.ts:440:  launch: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
+server\routers.ts:448:  pause: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
+server\routers.ts:457:  list: protectedProcedure
+server\routers.ts:461:  send: protectedProcedure
+server\routers.ts:522:  updateStatus: protectedProcedure
+server\routers.ts:530:  getCallRecordings: protectedProcedure
+server\routers.ts:534:  clearTestRecordings: protectedProcedure
+server\routers.ts:547:  bulkSend: protectedProcedure
+server\routers.ts:625:  aiCompose: protectedProcedure
+server\routers.ts:664:  initiateCall: protectedProcedure
+server\routers.ts:732:  agentChat: protectedProcedure
+server\routers.ts:810:  getValuePropSuggestions: protectedProcedure
+server\routers.ts:837:  generateScript: protectedProcedure
+server\routers.ts:905:  list: protectedProcedure
+server\routers.ts:909:  create: protectedProcedure
+server\routers.ts:923:  update: protectedProcedure
+server\routers.ts:932:  delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input, ctx }) => {
+server\routers.ts:938:  generateWithAI: protectedProcedure
+server\routers.ts:959:  globalMetrics: protectedProcedure.query(async ({ ctx }) => db.getGlobalMetrics(ctx.user.id)),
+server\routers.ts:961:  dashboardBreakdown: protectedProcedure.query(async ({ ctx }) => db.getDashboardBreakdown(ctx.user.id)),
+server\routers.ts:964:  sentimentSummary: protectedProcedure.query(async ({ ctx }) => db.getSentimentSummary(ctx.user.id)),
+server\routers.ts:966:  snapshots: protectedProcedure
+server\routers.ts:970:  campaignFunnel: protectedProcedure.input(z.object({ campaignId: z.number() })).query(async ({ input }) => {
+server\routers.ts:993:  recordSnapshot: protectedProcedure
+server\routers.ts:1012:  costPerCall: protectedProcedure.query(async ({ ctx }) => db.getCostPerCallStats(ctx.user.id)),
+server\routers.ts:1015:  roiPerCampaign: protectedProcedure.query(async ({ ctx }) => db.getRoiPerCampaign(ctx.user.id)),
+server\routers.ts:1018:  dailyTrend: protectedProcedure
+server\routers.ts:1025:  list: publicProcedure.input(z.object({ featuredOnly: z.boolean().optional() }).optional()).query(async ({ input }) => db.getTestimonials(input?.featuredOnly)),
+server\routers.ts:1061:  list: protectedProcedure.query(async ({ ctx }) => {
+server\routers.ts:1066:  create: protectedProcedure
+server\routers.ts:1081:  updateStep: protectedProcedure
+server\routers.ts:1097:  provisionNumber: protectedProcedure
+server\routers.ts:1587:  list: protectedProcedure
+server\routers.ts:1595:  create: protectedProcedure
+server\routers.ts:1658:  update: protectedProcedure
+server\routers.ts:1674:  stats: protectedProcedure.query(async ({ ctx }) => {
+server\routers.ts:1689:  workspaceHealth: protectedProcedure.query(async () => {
+server\routers.ts:1697:  get: protectedProcedure.query(async ({ ctx }) => {
+server\routers.ts:1717:  setupStatus: protectedProcedure.query(async ({ ctx }) => {
+server\routers.ts:1808:  voiceProfiles: protectedProcedure.query(async () => {
+server\routers.ts:1814:  voicePreview: protectedProcedure
+server\routers.ts:1846:  update: protectedProcedure
+server\routers.ts:1906:  listPhoneNumbers: protectedProcedure.query(async ({ ctx }) => db.listUserPhoneNumbers(ctx.user.id)),
+server\routers.ts:1908:  setPhoneNumberActive: protectedProcedure
+server\routers.ts:1926:  registerOwnPhoneNumber: protectedProcedure
+server\routers.ts:1957:  calendarStatus: protectedProcedure.query(async ({ ctx }) => {
+server\routers.ts:1968:  messagingStatus: protectedProcedure.query(async ({ ctx }) => {
+server\routers.ts:1980:  calendarConnectUrl: protectedProcedure.mutation(async ({ ctx }) => {
+server\routers.ts:1990:  calendarDisconnect: protectedProcedure.mutation(async ({ ctx }) => {
+server\routers.ts:2009:  listClients: protectedProcedure.query(async ({ ctx }) => {
+server\routers.ts:2020:  addClient: protectedProcedure
+server\routers.ts:2062:  updateClient: protectedProcedure
+server\routers.ts:2092:  provisionClientNumber: protectedProcedure
+server\routers.ts:2147:  removeClient: protectedProcedure
+server\routers.ts:2163:  stats: protectedProcedure.query(async ({ ctx }) => {
+server\routers.ts:2188:  fromUrl: protectedProcedure
+server\routers.ts:2197:  fromText: protectedProcedure
+server\routers.ts:2220:  config: publicProcedure.query(() => getPublicDemoConfig()),
+server\routers.ts:2223:  request: publicProcedure
+server\routers.ts:2350:  triggerCall: publicProcedure
+server\routers.ts:2425:    me: publicProcedure.query((opts) => opts.ctx.user),
+server\routers.ts:2426:    logout: publicProcedure.mutation(({ ctx }) => {
+server\_core\trpc.ts:11:export const publicProcedure = t.procedure;
+server\_core\trpc.ts:28:export const protectedProcedure = t.procedure.use(requireUser);
+server\routers\saasRouter.ts:7:import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
+server\routers\saasRouter.ts:23:  create: publicProcedure
+server\routers\saasRouter.ts:52:  get: protectedProcedure.query(async ({ ctx }) => {
+server\routers\saasRouter.ts:64:  getUsage: protectedProcedure.query(async ({ ctx }) => {
+server\routers\saasRouter.ts:77:  connectGoogleAds: protectedProcedure
+server\routers\saasRouter.ts:83:  list: protectedProcedure.query(async () => {
+server\routers\saasRouter.ts:89:  stats: protectedProcedure
+server\routers\saasRouter.ts:110:  pricing: publicProcedure.query(() => {
+server\routers\saasRouter.ts:117:  status: protectedProcedure.query(async ({ ctx }) => {
+server\routers\saasRouter.ts:124:  createCheckoutSession: protectedProcedure
+server\routers\saasRouter.ts:146:  createPortalSession: protectedProcedure.mutation(async ({ ctx }) => {
+server\routers\saasRouter.ts:163:  currentInvoice: protectedProcedure.query(async ({ ctx }) => {
+server\routers\saasRouter.ts:182:  list: protectedProcedure
+server\routers\saasRouter.ts:194:  get: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
+server\routers\emailSequencesRouter.ts:4:import { protectedProcedure, router } from "../_core/trpc";
+server\routers\emailSequencesRouter.ts:8:  list: protectedProcedure.query(async ({ ctx }) => db.listEmailSequences(ctx.user.id)),
+server\routers\emailSequencesRouter.ts:10:  upsert: protectedProcedure
+server\routers\emailSequencesRouter.ts:28:  remove: protectedProcedure
+server\routers\rcsRouter.ts:4:import { protectedProcedure, router } from "../_core/trpc";
+server\routers\rcsRouter.ts:8:  get: protectedProcedure.query(async ({ ctx }) => db.getRcsRegistration(ctx.user.id)),
+server\routers\rcsRouter.ts:10:  upsert: protectedProcedure
+server\routers\crmRouter.ts:12:import { protectedProcedure, router } from "../_core/trpc";
+server\routers\crmRouter.ts:334:  list: protectedProcedure.query(async ({ ctx }) => {
+server\routers\crmRouter.ts:339:  getAuthUrl: protectedProcedure
+server\routers\crmRouter.ts:360:  startConnect: protectedProcedure.input(z.object({ provider })).mutation(async ({ ctx, input }) => {
+server\routers\crmRouter.ts:370:  exchangeToken: protectedProcedure
+server\routers\crmRouter.ts:427:  disconnect: protectedProcedure.input(z.object({ provider })).mutation(async ({ ctx, input }) => {
+server\routers\crmRouter.ts:437:  syncLead: protectedProcedure
+server\routers\crmRouter.ts:539:  syncAll: protectedProcedure
+server\_core\systemRouter.ts:3:import { adminProcedure, publicProcedure, router } from "./trpc";
+server\_core\systemRouter.ts:6:  health: publicProcedure
+server\routers\phoneBlocklistRouter.ts:6:import { protectedProcedure, router } from "../_core/trpc";
+server\routers\phoneBlocklistRouter.ts:11:  list: protectedProcedure.query(async ({ ctx }) => {
+server\routers\phoneBlocklistRouter.ts:15:  add: protectedProcedure
+server\routers\phoneBlocklistRouter.ts:31:  remove: protectedProcedure
+server\routers\abTestingRouter.ts:7:import { protectedProcedure, router } from "../_core/trpc";
+server\routers\abTestingRouter.ts:12:  list: protectedProcedure
+server\routers\abTestingRouter.ts:17:  create: protectedProcedure
+server\routers\abTestingRouter.ts:36:  delete: protectedProcedure
+server\routers\abTestingRouter.ts:44:  summary: protectedProcedure
+server\routers\abTestingRouter.ts:49:  selectVariant: protectedProcedure
+server\routers\omnipulseRouter.ts:2:import { publicProcedure, router } from "../_core/trpc";
+server\routers\omnipulseRouter.ts:9:  overview: publicProcedure.query(() => createOmniPulseSnapshot()),
+server\routers\omnipulseRouter.ts:11:  run: publicProcedure
+server\routers\mobileRouter.ts:4:import { protectedProcedure, router } from "../_core/trpc";
+server\routers\mobileRouter.ts:8:  list: protectedProcedure.query(async ({ ctx }) => db.listMobileDevices(ctx.user.id)),
+server\routers\mobileRouter.ts:10:  register: protectedProcedure
+server\routers\mobileRouter.ts:28:  remove: protectedProcedure
+client/src\components\ui\sidebar.tsx:85:      document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+server\_core\routes\metricsRouter.ts:13:import { protectedProcedure, router } from "../trpc";
+server\_core\routes\metricsRouter.ts:105:  getQueueHealth: protectedProcedure.query(async () => {
+server\_core\routes\metricsRouter.ts:111:  getAutomationOps: protectedProcedure
+server\_core\routes\metricsRouter.ts:167:  retryLeadCreatedAutomation: protectedProcedure
+server\_core\routes\metricsRouter.ts:236:  getCallLatencies: protectedProcedure
+server\_core\routes\metricsRouter.ts:274:  getCallQuality: protectedProcedure
+server\_core\routes\metricsRouter.ts:308:  getProviderMetrics: protectedProcedure
+server\_core\routes\metricsRouter.ts:377:  getLatencyTrend: protectedProcedure
+server\_core\oauth.ts:75:  app.get("/api/auth/google/login", (_req: Request, res: Response) => {
+server\_core\oauth.ts:127:  app.get("/api/auth/callback", handleCodeCallback);
+server\_core\oauth.ts:129:  app.get("/api/auth/google/callback", handleCodeCallback);
+server\_core\oauth.ts:132:  app.post("/api/auth/google/callback", async (req: Request, res: Response) => {
+server\_core\oauth.ts:171:  app.post("/api/auth/logout", (_req: Request, res: Response) => {
+
+

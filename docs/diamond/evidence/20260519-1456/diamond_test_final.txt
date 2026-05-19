@@ -1,0 +1,1563 @@
+
+> apexai@1.0.0 test C:\Users\benxp\OneDrive\Documents\New project 3
+> vitest run
+
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/benxp/OneDrive/Documents/New project 3[39m
+
+ [32m✓[39m server/realtime/apexStrictBlueprint.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 350[2mms[22m[39m
+ [32m✓[39m server/realtime/guardrails.test.ts [2m([22m[2m51 tests[22m[2m)[22m[33m 952[2mms[22m[39m
+ [32m✓[39m server/realtime/strictController.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 2189[2mms[22m[39m
+   [33m[2m✓[22m[39m dateAuthority[2m > [22manswers from clock without guessing year [33m1941[2mms[22m[39m
+ [32m✓[39m server/realtime/bargeInClassifier.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 1041[2mms[22m[39m
+   [33m[2m✓[22m[39m BargeInClassifier[2m > [22muses ONNX provider when model path is available [33m737[2mms[22m[39m
+ [32m✓[39m server/realtime/answerDirectGuard.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 512[2mms[22m[39m
+ [32m✓[39m server/realtime/vaqsEngineering.test.ts [2m([22m[2m26 tests[22m[2m)[22m[33m 744[2mms[22m[39m
+[90mstdout[2m | server/voice.realtime.test.ts[2m > [22m[2mVoiceRealtimePipeline[2m > [22m[2msends a greeting when the stream starts
+[22m[39m[VoiceSession] Created session session_1 for lead 1
+[PIPE] START { sessionId: [32m'session_1'[39m, streamSid: [32m'stream_1'[39m, callSid: [32m'call_1'[39m }
+
+[90mstderr[2m | server/voice.realtime.test.ts[2m > [22m[2mVoiceRealtimePipeline[2m > [22m[2msends a greeting when the stream starts
+[22m[39m[PIPE] No DEEPGRAM_API_KEY — using silence-timer STT fallback
+
+ [32m✓[39m server/realtime/voiceQaScore.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 104[2mms[22m[39m
+[90mstdout[2m | server/voice.realtime.test.ts[2m > [22m[2mVoiceRealtimePipeline[2m > [22m[2msends a greeting when the stream starts
+[22m[39m[PIPE] greeting sent
+
+[90mstdout[2m | server/voice.realtime.test.ts[2m > [22m[2mVoiceRealtimePipeline[2m > [22m[2minterrupts assistant playback and sends a reply after caller audio
+[22m[39m[VoiceSession] Created session session_2 for lead 1
+[PIPE] START { sessionId: [32m'session_2'[39m, streamSid: [32m'stream_2'[39m, callSid: [32m'session_2'[39m }
+
+[90mstderr[2m | server/voice.realtime.test.ts[2m > [22m[2mVoiceRealtimePipeline[2m > [22m[2minterrupts assistant playback and sends a reply after caller audio
+[22m[39m[PIPE] No DEEPGRAM_API_KEY — using silence-timer STT fallback
+
+[90mstderr[2m | server/voice.realtime.test.ts[2m > [22m[2mVoiceRealtimePipeline[2m > [22m[2minterrupts assistant playback and sends a reply after caller audio
+[22m[39m[PIPE] speaking timeout — forcing idle
+
+[90mstdout[2m | server/voice.realtime.test.ts[2m > [22m[2mVoiceRealtimePipeline[2m > [22m[2minterrupts assistant playback and sends a reply after caller audio
+[22m[39m[PIPE] greeting sent
+[PIPE] barge-in energy=126 (threshold=104, sustained=2f)
+[PIPE] speech interrupted, epoch= [33m1[39m
+[VOICE-CTRL] {"ts":"2026-05-19T20:46:21.477Z","scope":"voice_controller","callId":"session_2","event":"info","bucket":"tts_ack_too_talky","detail":"silent_stop","extra":{"speechMs":0}}
+[PIPE] barge-in energy=126 (threshold=104, sustained=2f)
+[PIPE] speech interrupted, epoch= [33m2[39m
+[VOICE-CTRL] {"ts":"2026-05-19T20:46:21.489Z","scope":"voice_controller","callId":"session_2","event":"info","bucket":"tts_ack_too_talky","detail":"silent_stop","extra":{"speechMs":0}}
+
+[90mstderr[2m | server/voice.realtime.test.ts[2m > [22m[2mVoiceRealtimePipeline[2m > [22m[2minterrupts assistant playback and sends a reply after caller audio
+[22m[39m[PIPE] speaking timeout — forcing idle
+
+[90mstderr[2m | server/voice.realtime.test.ts[2m > [22m[2mVoiceRealtimePipeline[2m > [22m[2minterrupts assistant playback and sends a reply after caller audio
+[22m[39m[PIPE] batch STT error Error: No STT provider configured — add DEEPGRAM_API_KEY or OPENAI_API_KEY
+    at transcribeWhisper [90m(C:\Users\benxp\OneDrive\Documents\New project 3\[39mserver\_core\services\sttService.ts:118:11[90m)[39m
+    at transcribeAudio [90m(C:\Users\benxp\OneDrive\Documents\New project 3\[39mserver\_core\services\sttService.ts:16:10[90m)[39m
+    at VoiceRealtimePipeline.processBufferedAudio [90m(C:\Users\benxp\OneDrive\Documents\New project 3\[39mserver\_core\services\voiceRealtimePipeline.ts:728:20[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+
+ [32m✓[39m server/voice.realtime.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 8835[2mms[22m[39m
+   [33m[2m✓[22m[39m VoiceRealtimePipeline[2m > [22msends a greeting when the stream starts [33m2603[2mms[22m[39m
+   [33m[2m✓[22m[39m VoiceRealtimePipeline[2m > [22minterrupts assistant playback and sends a reply after caller audio [33m6229[2mms[22m[39m
+ [32m✓[39m server/realtime/tenantVoiceRuntime.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 67[2mms[22m[39m
+ [32m✓[39m server/realtime/callPolicy.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 201[2mms[22m[39m
+ [32m✓[39m server/_core/omnipulse/engine.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 221[2mms[22m[39m
+ [32m✓[39m server/realtime/fastIntentRouter.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 410[2mms[22m[39m
+ [32m✓[39m server/realtime/clientConfig.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 607[2mms[22m[39m
+ [32m✓[39m server/settings.contract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 498[2mms[22m[39m
+   [33m[2m✓[22m[39m CONTRACT: settings BYOC + voice agent name[2m > [22msettings.update persists voiceAgentDisplayName for settings.get [33m448[2mms[22m[39m
+ [32m✓[39m server/_core/services/billingPolicy.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 112[2mms[22m[39m
+[90mstdout[2m | server/apexai.test.ts[2m > [22m[2mlead scoring logic[2m > [22m[2mscores a complete lead higher than incomplete
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223600939
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223600955
+
+[90mstderr[2m | server/apexai.test.ts[2m > [22m[2mlead scoring logic[2m > [22m[2mscores a complete lead higher than incomplete
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/apexai.test.ts[2m > [22m[2mlead scoring logic[2m > [22m[2massigns hot segment to high-score leads
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223600971
+
+[90mstderr[2m | server/apexai.test.ts[2m > [22m[2mlead scoring logic[2m > [22m[2massigns hot segment to high-score leads
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/apexai.test.ts[2m > [22m[2mleads[2m > [22m[2mcreates and retrieves a lead
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223601087
+
+[90mstderr[2m | server/apexai.test.ts[2m > [22m[2mleads[2m > [22m[2mcreates and retrieves a lead
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/apexai.test.ts[2m > [22m[2mleads[2m > [22m[2mupdates a lead's status
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223601104
+
+[90mstderr[2m | server/apexai.test.ts[2m > [22m[2mleads[2m > [22m[2mupdates a lead's status
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/apexai.test.ts[2m > [22m[2mleads[2m > [22m[2mdeletes a lead
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223601134
+
+[90mstderr[2m | server/apexai.test.ts[2m > [22m[2mleads[2m > [22m[2mdeletes a lead
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+ [32m✓[39m server/apexai.test.ts [2m([22m[2m30 tests[22m[2m)[22m[33m 1365[2mms[22m[39m
+[90mstdout[2m | server/security-stress.test.ts[2m > [22m[2mSECURITY: Privilege Escalation Prevention[2m > [22m[2muser cannot modify another user's lead by guessing ID
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223600652
+
+[90mstderr[2m | server/security-stress.test.ts[2m > [22m[2mSECURITY: Privilege Escalation Prevention[2m > [22m[2muser cannot modify another user's lead by guessing ID
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/security-stress.test.ts[2m > [22m[2mSECURITY: NoSQL/JSON Injection Prevention[2m > [22m[2mJSON-like payloads in string fields are stored as text
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223600919
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223600920
+[Queue] Automation job added (in-memory): automation_lead.created_3_1779223600920
+[Queue] Automation job added (in-memory): automation_lead.created_4_1779223600921
+[Queue] Automation job added (in-memory): automation_lead.created_5_1779223600922
+
+[90mstderr[2m | server/security-stress.test.ts[2m > [22m[2mSECURITY: NoSQL/JSON Injection Prevention[2m > [22m[2mJSON-like payloads in string fields are stored as text
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/security-stress.test.ts[2m > [22m[2mSECURITY: Path Traversal Prevention[2m > [22m[2mpath traversal in lead fields does not expose files
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223600939
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223600939
+[Queue] Automation job added (in-memory): automation_lead.created_3_1779223600940
+[Queue] Automation job added (in-memory): automation_lead.created_4_1779223600941
+[Queue] Automation job added (in-memory): automation_lead.created_5_1779223600942
+
+[90mstderr[2m | server/security-stress.test.ts[2m > [22m[2mSECURITY: Path Traversal Prevention[2m > [22m[2mpath traversal in lead fields does not expose files
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/security-stress.test.ts[2m > [22m[2mSECURITY: Header Injection Prevention[2m > [22m[2mCRLF injection in lead fields does not inject headers
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223600953
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223600954
+[Queue] Automation job added (in-memory): automation_lead.created_3_1779223600954
+[Queue] Automation job added (in-memory): automation_lead.created_4_1779223600954
+
+[90mstderr[2m | server/security-stress.test.ts[2m > [22m[2mSECURITY: Header Injection Prevention[2m > [22m[2mCRLF injection in lead fields does not inject headers
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/security-stress.test.ts[2m > [22m[2mSECURITY: Prototype Pollution Prevention[2m > [22m[2m__proto__ in input does not pollute Object prototype
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223600965
+
+[90mstderr[2m | server/security-stress.test.ts[2m > [22m[2mSECURITY: Prototype Pollution Prevention[2m > [22m[2m__proto__ in input does not pollute Object prototype
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/security-stress.test.ts[2m > [22m[2mBOUNDARY: Maximum Length Inputs[2m > [22m[2maccepts firstName at exactly 100 chars
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223601021
+
+[90mstderr[2m | server/security-stress.test.ts[2m > [22m[2mBOUNDARY: Maximum Length Inputs[2m > [22m[2maccepts firstName at exactly 100 chars
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/security-stress.test.ts[2m > [22m[2mBOUNDARY: Maximum Length Inputs[2m > [22m[2mhandles very long notes field
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223601066
+
+[90mstderr[2m | server/security-stress.test.ts[2m > [22m[2mBOUNDARY: Maximum Length Inputs[2m > [22m[2mhandles very long notes field
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstderr[2m | server/security-stress.test.ts[2m > [22m[2mBOUNDARY: Unicode & Special Characters[2m > [22m[2mhandles Unicode names (Chinese, Arabic, Emoji)
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/security-stress.test.ts[2m > [22m[2mBOUNDARY: Unicode & Special Characters[2m > [22m[2mhandles Unicode names (Chinese, Arabic, Emoji)
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223601365
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223601366
+[Queue] Automation job added (in-memory): automation_lead.created_3_1779223601381
+[Queue] Automation job added (in-memory): automation_lead.created_4_1779223601382
+[Queue] Automation job added (in-memory): automation_lead.created_5_1779223601383
+[Queue] Automation job added (in-memory): automation_lead.created_6_1779223601383
+
+[90mstdout[2m | server/security-stress.test.ts[2m > [22m[2mBOUNDARY: Unicode & Special Characters[2m > [22m[2mhandles zero-width characters
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223601397
+
+[90mstderr[2m | server/security-stress.test.ts[2m > [22m[2mBOUNDARY: Unicode & Special Characters[2m > [22m[2mhandles zero-width characters
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/security-stress.test.ts[2m > [22m[2mBOUNDARY: Unicode & Special Characters[2m > [22m[2mhandles RTL text (Hebrew, Arabic)
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223601449
+
+[90mstderr[2m | server/security-stress.test.ts[2m > [22m[2mBOUNDARY: Unicode & Special Characters[2m > [22m[2mhandles RTL text (Hebrew, Arabic)
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/security-stress.test.ts[2m > [22m[2mSTRESS: Rapid Fire Operations[2m > [22m[2mhandles 50 rapid lead creations
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_3_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_4_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_5_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_6_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_7_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_8_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_9_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_10_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_11_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_12_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_13_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_14_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_15_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_16_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_17_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_18_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_19_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_20_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_21_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_22_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_23_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_24_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_25_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_26_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_27_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_28_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_29_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_30_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_31_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_32_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_33_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_34_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_35_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_36_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_37_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_38_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_39_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_40_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_41_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_42_1779223601703
+[Queue] Automation job added (in-memory): automation_lead.created_43_1779223601704
+[Queue] Automation job added (in-memory): automation_lead.created_44_1779223601704
+[Queue] Automation job added (in-memory): automation_lead.created_45_1779223601704
+[Queue] Automation job added (in-memory): automation_lead.created_46_1779223601704
+[Queue] Automation job added (in-memory): automation_lead.created_47_1779223601704
+[Queue] Automation job added (in-memory): automation_lead.created_48_1779223601704
+[Queue] Automation job added (in-memory): automation_lead.created_49_1779223601704
+[Queue] Automation job added (in-memory): automation_lead.created_50_1779223601704
+
+[90mstderr[2m | server/security-stress.test.ts[2m > [22m[2mSTRESS: Rapid Fire Operations[2m > [22m[2mhandles 50 rapid lead creations
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/security-stress.test.ts[2m > [22m[2mSTRESS: Rapid Fire Operations[2m > [22m[2mhandles mixed read/write operations concurrently
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223601920
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223601920
+[Queue] Automation job added (in-memory): automation_lead.created_3_1779223601920
+[Queue] Automation job added (in-memory): automation_lead.created_4_1779223601920
+[Queue] Automation job added (in-memory): automation_lead.created_5_1779223601920
+[Queue] Automation job added (in-memory): automation_lead.created_6_1779223601920
+[Queue] Automation job added (in-memory): automation_lead.created_7_1779223601920
+[Queue] Automation job added (in-memory): automation_lead.created_8_1779223601920
+[Queue] Automation job added (in-memory): automation_lead.created_9_1779223601920
+[Queue] Automation job added (in-memory): automation_lead.created_10_1779223601920
+
+[90mstderr[2m | server/security-stress.test.ts[2m > [22m[2mSTRESS: Rapid Fire Operations[2m > [22m[2mhandles mixed read/write operations concurrently
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/security-stress.test.ts[2m > [22m[2mDATA CONSISTENCY: Campaign Contact Management[2m > [22m[2mcannot add same lead to campaign twice
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602013
+
+[90mstderr[2m | server/security-stress.test.ts[2m > [22m[2mDATA CONSISTENCY: Campaign Contact Management[2m > [22m[2mcannot add same lead to campaign twice
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/security-stress.test.ts[2m > [22m[2mDATA CONSISTENCY: Campaign Contact Management[2m > [22m[2mremoving a contact from campaign works
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602099
+
+[90mstderr[2m | server/security-stress.test.ts[2m > [22m[2mDATA CONSISTENCY: Campaign Contact Management[2m > [22m[2mremoving a contact from campaign works
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/security-stress.test.ts[2m > [22m[2mDATA CONSISTENCY: Message Tracking[2m > [22m[2mmessage status updates correctly
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602109
+
+[90mstderr[2m | server/security-stress.test.ts[2m > [22m[2mDATA CONSISTENCY: Message Tracking[2m > [22m[2mmessage status updates correctly
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/security-stress.test.ts[2m > [22m[2mVOICE AI: Call Management[2m > [22m[2minitiating call on lead without phone throws error
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602260
+
+[90mstderr[2m | server/security-stress.test.ts[2m > [22m[2mVOICE AI: Call Management[2m > [22m[2minitiating call on lead without phone throws error
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+ [32m✓[39m server/security-stress.test.ts [2m([22m[2m32 tests[22m[2m)[22m[33m 1859[2mms[22m[39m
+[90mstdout[2m | server/comprehensive.test.ts[2m > [22m[2mSECURITY: SQL Injection Prevention[2m > [22m[2mSQL injection in lead creation fields
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223601458
+
+[90mstderr[2m | server/comprehensive.test.ts[2m > [22m[2mSECURITY: SQL Injection Prevention[2m > [22m[2mSQL injection in lead creation fields
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/comprehensive.test.ts[2m > [22m[2mSECURITY: XSS Prevention[2m > [22m[2mXSS in lead fields should be stored as-is (sanitized on render)
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223601486
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223601487
+[Queue] Automation job added (in-memory): automation_lead.created_3_1779223601488
+[Queue] Automation job added (in-memory): automation_lead.created_4_1779223601489
+[Queue] Automation job added (in-memory): automation_lead.created_5_1779223601490
+
+[90mstderr[2m | server/comprehensive.test.ts[2m > [22m[2mSECURITY: XSS Prevention[2m > [22m[2mXSS in lead fields should be stored as-is (sanitized on render)
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/comprehensive.test.ts[2m > [22m[2mEDGE CASES: Unicode & Special Characters[2m > [22m[2mhandles Unicode names in leads
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223601982
+
+[90mstderr[2m | server/comprehensive.test.ts[2m > [22m[2mEDGE CASES: Unicode & Special Characters[2m > [22m[2mhandles Unicode names in leads
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/comprehensive.test.ts[2m > [22m[2mEDGE CASES: Unicode & Special Characters[2m > [22m[2mhandles very long strings
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602120
+
+[90mstderr[2m | server/comprehensive.test.ts[2m > [22m[2mEDGE CASES: Unicode & Special Characters[2m > [22m[2mhandles very long strings
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/comprehensive.test.ts[2m > [22m[2mEDGE CASES: Unicode & Special Characters[2m > [22m[2mhandles newlines and tabs in text fields
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602249
+
+[90mstderr[2m | server/comprehensive.test.ts[2m > [22m[2mEDGE CASES: Unicode & Special Characters[2m > [22m[2mhandles newlines and tabs in text fields
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/comprehensive.test.ts[2m > [22m[2mEDGE CASES: Boundary Values[2m > [22m[2mlead score is capped at 100
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602269
+
+[90mstderr[2m | server/comprehensive.test.ts[2m > [22m[2mEDGE CASES: Boundary Values[2m > [22m[2mlead score is capped at 100
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/comprehensive.test.ts[2m > [22m[2mEDGE CASES: Boundary Values[2m > [22m[2mlead with no optional fields gets minimum score
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602346
+
+[90mstderr[2m | server/comprehensive.test.ts[2m > [22m[2mEDGE CASES: Boundary Values[2m > [22m[2mlead with no optional fields gets minimum score
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/comprehensive.test.ts[2m > [22m[2mINTEGRATION: Lead → Campaign → Message Workflow[2m > [22m[2mfull workflow: create lead, create campaign, add contact, send message
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602469
+
+[90mstderr[2m | server/comprehensive.test.ts[2m > [22m[2mINTEGRATION: Lead → Campaign → Message Workflow[2m > [22m[2mfull workflow: create lead, create campaign, add contact, send message
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m🟢 SMOKE TESTS: Basic Click-Through & API Endpoints[2m > [22m[2m✓ Create lead works
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223601751
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m🟢 SMOKE TESTS: Basic Click-Through & API Endpoints[2m > [22m[2m✓ Create lead works
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m📊 LOAD TESTS: Concurrent Operations & Throughput[2m > [22m[2m✓ Handle 100 rapid lead creations
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602347
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223602347
+[Queue] Automation job added (in-memory): automation_lead.created_3_1779223602347
+[Queue] Automation job added (in-memory): automation_lead.created_4_1779223602347
+[Queue] Automation job added (in-memory): automation_lead.created_5_1779223602347
+[Queue] Automation job added (in-memory): automation_lead.created_6_1779223602347
+[Queue] Automation job added (in-memory): automation_lead.created_7_1779223602347
+[Queue] Automation job added (in-memory): automation_lead.created_8_1779223602347
+[Queue] Automation job added (in-memory): automation_lead.created_9_1779223602347
+[Queue] Automation job added (in-memory): automation_lead.created_10_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_11_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_12_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_13_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_14_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_15_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_16_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_17_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_18_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_19_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_20_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_21_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_22_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_23_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_24_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_25_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_26_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_27_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_28_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_29_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_30_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_31_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_32_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_33_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_34_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_35_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_36_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_37_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_38_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_39_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_40_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_41_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_42_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_43_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_44_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_45_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_46_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_47_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_48_1779223602348
+[Queue] Automation job added (in-memory): automation_lead.created_49_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_50_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_51_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_52_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_53_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_54_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_55_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_56_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_57_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_58_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_59_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_60_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_61_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_62_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_63_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_64_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_65_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_66_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_67_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_68_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_69_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_70_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_71_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_72_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_73_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_74_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_75_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_76_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_77_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_78_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_79_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_80_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_81_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_82_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_83_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_84_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_85_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_86_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_87_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_88_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_89_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_90_1779223602349
+[Queue] Automation job added (in-memory): automation_lead.created_91_1779223602350
+[Queue] Automation job added (in-memory): automation_lead.created_92_1779223602350
+[Queue] Automation job added (in-memory): automation_lead.created_93_1779223602350
+[Queue] Automation job added (in-memory): automation_lead.created_94_1779223602350
+[Queue] Automation job added (in-memory): automation_lead.created_95_1779223602350
+[Queue] Automation job added (in-memory): automation_lead.created_96_1779223602350
+[Queue] Automation job added (in-memory): automation_lead.created_97_1779223602350
+[Queue] Automation job added (in-memory): automation_lead.created_98_1779223602350
+[Queue] Automation job added (in-memory): automation_lead.created_99_1779223602350
+[Queue] Automation job added (in-memory): automation_lead.created_100_1779223602350
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m📊 LOAD TESTS: Concurrent Operations & Throughput[2m > [22m[2m✓ Handle 100 rapid lead creations
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m📊 LOAD TESTS: Concurrent Operations & Throughput[2m > [22m[2m✓ Handle mixed concurrent reads and writes
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602512
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223602512
+[Queue] Automation job added (in-memory): automation_lead.created_3_1779223602512
+[Queue] Automation job added (in-memory): automation_lead.created_4_1779223602512
+[Queue] Automation job added (in-memory): automation_lead.created_5_1779223602512
+[Queue] Automation job added (in-memory): automation_lead.created_6_1779223602512
+[Queue] Automation job added (in-memory): automation_lead.created_7_1779223602512
+[Queue] Automation job added (in-memory): automation_lead.created_8_1779223602512
+[Queue] Automation job added (in-memory): automation_lead.created_9_1779223602512
+[Queue] Automation job added (in-memory): automation_lead.created_10_1779223602512
+[Queue] Automation job added (in-memory): automation_lead.created_11_1779223602512
+[Queue] Automation job added (in-memory): automation_lead.created_12_1779223602512
+[Queue] Automation job added (in-memory): automation_lead.created_13_1779223602512
+[Queue] Automation job added (in-memory): automation_lead.created_14_1779223602512
+[Queue] Automation job added (in-memory): automation_lead.created_15_1779223602513
+[Queue] Automation job added (in-memory): automation_lead.created_16_1779223602513
+[Queue] Automation job added (in-memory): automation_lead.created_17_1779223602513
+[Queue] Automation job added (in-memory): automation_lead.created_18_1779223602513
+[Queue] Automation job added (in-memory): automation_lead.created_19_1779223602513
+[Queue] Automation job added (in-memory): automation_lead.created_20_1779223602513
+[Queue] Automation job added (in-memory): automation_lead.created_21_1779223602513
+[Queue] Automation job added (in-memory): automation_lead.created_22_1779223602513
+[Queue] Automation job added (in-memory): automation_lead.created_23_1779223602513
+[Queue] Automation job added (in-memory): automation_lead.created_24_1779223602513
+[Queue] Automation job added (in-memory): automation_lead.created_25_1779223602513
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m📊 LOAD TESTS: Concurrent Operations & Throughput[2m > [22m[2m✓ Handle mixed concurrent reads and writes
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m📊 LOAD TESTS: Concurrent Operations & Throughput[2m > [22m[2m✓ Throughput: 100 operations complete in reasonable time
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602605
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223602605
+[Queue] Automation job added (in-memory): automation_lead.created_3_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_4_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_5_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_6_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_7_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_8_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_9_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_10_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_11_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_12_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_13_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_14_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_15_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_16_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_17_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_18_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_19_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_20_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_21_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_22_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_23_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_24_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_25_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_26_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_27_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_28_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_29_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_30_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_31_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_32_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_33_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_34_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_35_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_36_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_37_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_38_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_39_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_40_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_41_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_42_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_43_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_44_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_45_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_46_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_47_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_48_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_49_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_50_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_51_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_52_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_53_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_54_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_55_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_56_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_57_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_58_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_59_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_60_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_61_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_62_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_63_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_64_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_65_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_66_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_67_1779223602606
+[Queue] Automation job added (in-memory): automation_lead.created_68_1779223602637
+[Queue] Automation job added (in-memory): automation_lead.created_69_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_70_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_71_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_72_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_73_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_74_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_75_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_76_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_77_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_78_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_79_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_80_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_81_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_82_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_83_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_84_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_85_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_86_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_87_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_88_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_89_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_90_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_91_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_92_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_93_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_94_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_95_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_96_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_97_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_98_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_99_1779223602638
+[Queue] Automation job added (in-memory): automation_lead.created_100_1779223602638
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m📊 LOAD TESTS: Concurrent Operations & Throughput[2m > [22m[2m✓ Throughput: 100 operations complete in reasonable time
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔒 SECURITY TESTS: Injection & Privilege Escalation Prevention[2m > [22m[2m✓ SQL injection in lead firstName stored safely
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602690
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔒 SECURITY TESTS: Injection & Privilege Escalation Prevention[2m > [22m[2m✓ SQL injection in lead firstName stored safely
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔒 SECURITY TESTS: Injection & Privilege Escalation Prevention[2m > [22m[2m✓ XSS payload stored as-is (escaped on render)
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602711
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔒 SECURITY TESTS: Injection & Privilege Escalation Prevention[2m > [22m[2m✓ XSS payload stored as-is (escaped on render)
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔒 SECURITY TESTS: Injection & Privilege Escalation Prevention[2m > [22m[2m✓ JSON injection in notes field stored as text
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602866
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔒 SECURITY TESTS: Injection & Privilege Escalation Prevention[2m > [22m[2m✓ JSON injection in notes field stored as text
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔒 SECURITY TESTS: Injection & Privilege Escalation Prevention[2m > [22m[2m✓ Prototype pollution: __proto__ does not affect Object prototype
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602872
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔒 SECURITY TESTS: Injection & Privilege Escalation Prevention[2m > [22m[2m✓ Prototype pollution: __proto__ does not affect Object prototype
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔒 SECURITY TESTS: Injection & Privilege Escalation Prevention[2m > [22m[2m✓ User cannot modify another user's lead by ID guessing
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602883
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔒 SECURITY TESTS: Injection & Privilege Escalation Prevention[2m > [22m[2m✓ User cannot modify another user's lead by ID guessing
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔒 SECURITY TESTS: Injection & Privilege Escalation Prevention[2m > [22m[2m✓ Path traversal in lead fields does not expose files
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602890
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔒 SECURITY TESTS: Injection & Privilege Escalation Prevention[2m > [22m[2m✓ Path traversal in lead fields does not expose files
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔒 SECURITY TESTS: Injection & Privilege Escalation Prevention[2m > [22m[2m✓ CRLF injection in lead fields does not inject headers
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602900
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔒 SECURITY TESTS: Injection & Privilege Escalation Prevention[2m > [22m[2m✓ CRLF injection in lead fields does not inject headers
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔒 SECURITY TESTS: Injection & Privilege Escalation Prevention[2m > [22m[2m✓ Unicode: Chinese, Arabic, Emoji names stored correctly
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602906
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223602906
+[Queue] Automation job added (in-memory): automation_lead.created_3_1779223602907
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔒 SECURITY TESTS: Injection & Privilege Escalation Prevention[2m > [22m[2m✓ Unicode: Chinese, Arabic, Emoji names stored correctly
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔒 SECURITY TESTS: Injection & Privilege Escalation Prevention[2m > [22m[2m✓ RTL text (Hebrew/Arabic) handled correctly
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602951
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223602951
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔒 SECURITY TESTS: Injection & Privilege Escalation Prevention[2m > [22m[2m✓ RTL text (Hebrew/Arabic) handled correctly
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m⚡ CHAOS TESTS: Edge Cases & Boundary Conditions[2m > [22m[2m✓ firstName at exactly 100 chars accepted
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602975
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m⚡ CHAOS TESTS: Edge Cases & Boundary Conditions[2m > [22m[2m✓ firstName at exactly 100 chars accepted
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m⚡ CHAOS TESTS: Edge Cases & Boundary Conditions[2m > [22m[2m✓ Very long notes field (5000 chars)
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223602985
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m⚡ CHAOS TESTS: Edge Cases & Boundary Conditions[2m > [22m[2m✓ Very long notes field (5000 chars)
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m⚡ CHAOS TESTS: Edge Cases & Boundary Conditions[2m > [22m[2m✓ Lead with all null optional fields
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223603012
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m⚡ CHAOS TESTS: Edge Cases & Boundary Conditions[2m > [22m[2m✓ Lead with all null optional fields
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m⚡ CHAOS TESTS: Edge Cases & Boundary Conditions[2m > [22m[2m✓ Lead with newlines and tabs in notes
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223603030
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m⚡ CHAOS TESTS: Edge Cases & Boundary Conditions[2m > [22m[2m✓ Lead with newlines and tabs in notes
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m⚡ CHAOS TESTS: Edge Cases & Boundary Conditions[2m > [22m[2m✓ Zero-width characters don't break system
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223603039
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m⚡ CHAOS TESTS: Edge Cases & Boundary Conditions[2m > [22m[2m✓ Zero-width characters don't break system
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m⚡ CHAOS TESTS: Edge Cases & Boundary Conditions[2m > [22m[2m✓ Duplicate emails allowed (no unique constraint on leads.email)
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223603052
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223603053
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m⚡ CHAOS TESTS: Edge Cases & Boundary Conditions[2m > [22m[2m✓ Duplicate emails allowed (no unique constraint on leads.email)
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔗 DATA INTEGRITY TESTS: Relationships & Consistency[2m > [22m[2m✓ CEO title gets high lead score
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223603071
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔗 DATA INTEGRITY TESTS: Relationships & Consistency[2m > [22m[2m✓ CEO title gets high lead score
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔗 DATA INTEGRITY TESTS: Relationships & Consistency[2m > [22m[2m✓ VP title gets bonus lead score
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223603082
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔗 DATA INTEGRITY TESTS: Relationships & Consistency[2m > [22m[2m✓ VP title gets bonus lead score
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔗 DATA INTEGRITY TESTS: Relationships & Consistency[2m > [22m[2m✓ Segment assigned based on score: hot/warm/cold
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223603092
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223603096
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔗 DATA INTEGRITY TESTS: Relationships & Consistency[2m > [22m[2m✓ Segment assigned based on score: hot/warm/cold
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔗 DATA INTEGRITY TESTS: Relationships & Consistency[2m > [22m[2m✓ Activity log is created on lead creation
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223603123
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m🔗 DATA INTEGRITY TESTS: Relationships & Consistency[2m > [22m[2m✓ Activity log is created on lead creation
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/enterprise-tests.test.ts[2m > [22m[2m🏢 ENTERPRISE STRESS TESTS: Fortune 500 Level[2m > [22m[2m✓ 200 leads created and listed with pagination
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_3_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_4_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_5_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_6_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_7_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_8_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_9_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_10_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_11_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_12_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_13_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_14_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_15_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_16_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_17_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_18_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_19_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_20_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_21_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_22_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_23_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_24_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_25_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_26_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_27_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_28_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_29_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_30_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_31_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_32_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_33_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_34_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_35_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_36_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_37_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_38_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_39_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_40_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_41_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_42_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_43_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_44_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_45_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_46_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_47_1779223603216
+[Queue] Automation job added (in-memory): automation_lead.created_48_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_49_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_50_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_51_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_52_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_53_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_54_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_55_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_56_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_57_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_58_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_59_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_60_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_61_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_62_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_63_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_64_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_65_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_66_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_67_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_68_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_69_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_70_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_71_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_72_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_73_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_74_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_75_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_76_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_77_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_78_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_79_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_80_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_81_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_82_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_83_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_84_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_85_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_86_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_87_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_88_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_89_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_90_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_91_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_92_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_93_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_94_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_95_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_96_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_97_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_98_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_99_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_100_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_101_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_102_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_103_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_104_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_105_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_106_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_107_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_108_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_109_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_110_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_111_1779223603217
+[Queue] Automation job added (in-memory): automation_lead.created_112_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_113_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_114_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_115_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_116_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_117_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_118_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_119_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_120_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_121_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_122_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_123_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_124_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_125_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_126_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_127_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_128_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_129_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_130_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_131_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_132_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_133_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_134_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_135_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_136_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_137_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_138_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_139_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_140_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_141_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_142_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_143_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_144_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_145_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_146_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_147_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_148_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_149_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_150_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_151_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_152_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_153_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_154_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_155_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_156_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_157_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_158_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_159_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_160_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_161_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_162_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_163_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_164_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_165_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_166_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_167_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_168_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_169_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_170_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_171_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_172_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_173_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_174_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_175_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_176_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_177_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_178_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_179_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_180_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_181_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_182_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_183_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_184_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_185_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_186_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_187_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_188_1779223603218
+[Queue] Automation job added (in-memory): automation_lead.created_189_1779223603219
+[Queue] Automation job added (in-memory): automation_lead.created_190_1779223603219
+[Queue] Automation job added (in-memory): automation_lead.created_191_1779223603219
+[Queue] Automation job added (in-memory): automation_lead.created_192_1779223603219
+[Queue] Automation job added (in-memory): automation_lead.created_193_1779223603219
+[Queue] Automation job added (in-memory): automation_lead.created_194_1779223603219
+[Queue] Automation job added (in-memory): automation_lead.created_195_1779223603219
+[Queue] Automation job added (in-memory): automation_lead.created_196_1779223603219
+[Queue] Automation job added (in-memory): automation_lead.created_197_1779223603219
+[Queue] Automation job added (in-memory): automation_lead.created_198_1779223603219
+[Queue] Automation job added (in-memory): automation_lead.created_199_1779223603219
+[Queue] Automation job added (in-memory): automation_lead.created_200_1779223603219
+
+[90mstderr[2m | server/enterprise-tests.test.ts[2m > [22m[2m🏢 ENTERPRISE STRESS TESTS: Fortune 500 Level[2m > [22m[2m✓ 200 leads created and listed with pagination
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+ [32m✓[39m server/enterprise-tests.test.ts [2m([22m[2m56 tests[22m[2m)[22m[33m 2349[2mms[22m[39m
+   [33m[2m✓[22m[39m ═══════════════════════════════════════════════════════════════[2m > [22mplaceholder [33m385[2mms[22m[39m
+   [33m[2m✓[22m[39m 📊 LOAD TESTS: Concurrent Operations & Throughput[2m > [22m✓ Handle 100 rapid lead creations [33m477[2mms[22m[39m
+ [32m✓[39m server/realtime/industryFitAnswer.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 124[2mms[22m[39m
+ [32m✓[39m server/realtime/promptEnvelope.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 119[2mms[22m[39m
+ [32m✓[39m server/_core/services/domainPacks.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 69[2mms[22m[39m
+ [32m✓[39m server/realtime/conversationState.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 650[2mms[22m[39m
+   [33m[2m✓[22m[39m conversationState[2m > [22mmarks a topic answered after a substantive direct answer with no follow-up question [33m447[2mms[22m[39m
+ [32m✓[39m server/realtime/voiceOpeningLines.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 693[2mms[22m[39m
+[90mstdout[2m | server/tts.service.test.ts[2m > [22m[2mttsService[2m > [22m[2muses Cartesia when CARTESIA_API_KEY is set
+[22m[39m[TTS] Provider: cartesia | Voice: 694f9389-aac1-45b6-b726-9d9369183238
+
+[90mstdout[2m | server/tts.service.test.ts[2m > [22m[2mttsService[2m > [22m[2mdoes not fall back to another provider when Cartesia fails
+[22m[39m[TTS] Provider: cartesia | Voice: cartesia-voice
+
+ [32m✓[39m server/tts.service.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 920[2mms[22m[39m
+   [33m[2m✓[22m[39m ttsService[2m > [22muses Cartesia when CARTESIA_API_KEY is set [33m320[2mms[22m[39m
+   [33m[2m✓[22m[39m ttsService[2m > [22mdoes not fall back to another provider when Cartesia fails [33m598[2mms[22m[39m
+ [32m✓[39m server/realtime/outboundCompliance.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 189[2mms[22m[39m
+ [32m✓[39m server/realtime/tenantMessagingStatus.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 80[2mms[22m[39m
+[90mstderr[2m | server/comprehensive.test.ts[2m > [22m[2mINTEGRATION: Lead → Campaign → Message Workflow[2m > [22m[2mfull workflow: create lead, create campaign, add contact, send message
+[22m[39m[messages.send] SMS failed: Error: SIGNALWIRE_PROJECT_ID and SIGNALWIRE_TOKEN are required. Add them to Railway Variables.
+    at getSignalWireClient [90m(C:\Users\benxp\OneDrive\Documents\New project 3\[39mserver\_core\services\signalwireService.ts:17:11[90m)[39m
+    at sendSMS [90m(C:\Users\benxp\OneDrive\Documents\New project 3\[39mserver\_core\services\signalwireService.ts:135:18[90m)[39m
+    at [90mC:\Users\benxp\OneDrive\Documents\New project 3\[39mserver\routers.ts:484:17
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+    at resolveMiddleware [90m(file:///C:/Users/benxp/OneDrive/Documents/New%20project%203/[39mnode_modules/[4m.pnpm[24m/@trpc+server@11.6.0_typescript@5.9.3/node_modules/[4m@trpc/server[24m/dist/initTRPC-CB9uBez5.mjs:221:17[90m)[39m
+    at callRecursive [90m(file:///C:/Users/benxp/OneDrive/Documents/New%20project%203/[39mnode_modules/[4m.pnpm[24m/@trpc+server@11.6.0_typescript@5.9.3/node_modules/[4m@trpc/server[24m/dist/initTRPC-CB9uBez5.mjs:256:18[90m)[39m
+    at callRecursive [90m(file:///C:/Users/benxp/OneDrive/Documents/New%20project%203/[39mnode_modules/[4m.pnpm[24m/@trpc+server@11.6.0_typescript@5.9.3/node_modules/[4m@trpc/server[24m/dist/initTRPC-CB9uBez5.mjs:256:18[90m)[39m
+    at callRecursive [90m(file:///C:/Users/benxp/OneDrive/Documents/New%20project%203/[39mnode_modules/[4m.pnpm[24m/@trpc+server@11.6.0_typescript@5.9.3/node_modules/[4m@trpc/server[24m/dist/initTRPC-CB9uBez5.mjs:256:18[90m)[39m
+    at procedure [90m(file:///C:/Users/benxp/OneDrive/Documents/New%20project%203/[39mnode_modules/[4m.pnpm[24m/@trpc+server@11.6.0_typescript@5.9.3/node_modules/[4m@trpc/server[24m/dist/initTRPC-CB9uBez5.mjs:281:18[90m)[39m
+    at [90mfile:///C:/Users/benxp/OneDrive/Documents/New%20project%203/[39mnode_modules/[4m.pnpm[24m/@trpc+server@11.6.0_typescript@5.9.3/node_modules/[4m@trpc/server[24m/dist/tracked-Blz8XOf1.mjs:298:13
+
+[90mstdout[2m | server/comprehensive.test.ts[2m > [22m[2mINTEGRATION: Lead → Campaign → Message Workflow[2m > [22m[2mbulk send personalizes messages for each contact
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223612999
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223613000
+[Queue] Email job added (in-memory): email_1_1779223613048
+[BulkSend] Email job created → jobId: email_1_1779223613048 | leadId: 1 | msgId: undefined
+[Queue] Email job added (in-memory): email_2_1779223613048
+[BulkSend] Email job created → jobId: email_2_1779223613048 | leadId: 2 | msgId: undefined
+
+[90mstderr[2m | server/comprehensive.test.ts[2m > [22m[2mINTEGRATION: Lead → Campaign → Message Workflow[2m > [22m[2mbulk send personalizes messages for each contact
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/comprehensive.test.ts[2m > [22m[2mDATA INTEGRITY: Lead Scoring[2m > [22m[2mCEO title gets bonus points
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223613269
+
+[90mstderr[2m | server/comprehensive.test.ts[2m > [22m[2mDATA INTEGRITY: Lead Scoring[2m > [22m[2mCEO title gets bonus points
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/comprehensive.test.ts[2m > [22m[2mDATA INTEGRITY: Lead Scoring[2m > [22m[2mVP title gets bonus points
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223613402
+
+[90mstderr[2m | server/comprehensive.test.ts[2m > [22m[2mDATA INTEGRITY: Lead Scoring[2m > [22m[2mVP title gets bonus points
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/comprehensive.test.ts[2m > [22m[2mDATA INTEGRITY: Lead Scoring[2m > [22m[2msegment assignment based on score
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223613448
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223613450
+
+[90mstderr[2m | server/comprehensive.test.ts[2m > [22m[2mDATA INTEGRITY: Lead Scoring[2m > [22m[2msegment assignment based on score
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/comprehensive.test.ts[2m > [22m[2mSTABILITY: Concurrent Operations[2m > [22m[2mhandles multiple simultaneous lead creations
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223613652
+[Queue] Automation job added (in-memory): automation_lead.created_2_1779223613652
+[Queue] Automation job added (in-memory): automation_lead.created_3_1779223613652
+[Queue] Automation job added (in-memory): automation_lead.created_4_1779223613652
+[Queue] Automation job added (in-memory): automation_lead.created_5_1779223613652
+[Queue] Automation job added (in-memory): automation_lead.created_6_1779223613652
+[Queue] Automation job added (in-memory): automation_lead.created_7_1779223613652
+[Queue] Automation job added (in-memory): automation_lead.created_8_1779223613652
+[Queue] Automation job added (in-memory): automation_lead.created_9_1779223613652
+[Queue] Automation job added (in-memory): automation_lead.created_10_1779223613652
+
+[90mstderr[2m | server/comprehensive.test.ts[2m > [22m[2mSTABILITY: Concurrent Operations[2m > [22m[2mhandles multiple simultaneous lead creations
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/comprehensive.test.ts[2m > [22m[2mSTABILITY: Concurrent Operations[2m > [22m[2mhandles rapid sequential operations on same lead
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223614037
+
+[90mstderr[2m | server/comprehensive.test.ts[2m > [22m[2mSTABILITY: Concurrent Operations[2m > [22m[2mhandles rapid sequential operations on same lead
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/comprehensive.test.ts[2m > [22m[2mFILTERS: Lead Filtering[2m > [22m[2msearch is case-insensitive
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223614190
+
+[90mstderr[2m | server/comprehensive.test.ts[2m > [22m[2mFILTERS: Lead Filtering[2m > [22m[2msearch is case-insensitive
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstdout[2m | server/comprehensive.test.ts[2m > [22m[2mACTIVITY LOGGING: Operations are logged[2m > [22m[2mlead creation generates activity log
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223614319
+
+[90mstderr[2m | server/comprehensive.test.ts[2m > [22m[2mACTIVITY LOGGING: Operations are logged[2m > [22m[2mlead creation generates activity log
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+ [32m✓[39m server/comprehensive.test.ts [2m([22m[2m70 tests[22m[2m)[22m[33m 14031[2mms[22m[39m
+   [33m[2m✓[22m[39m INTEGRATION: Lead → Campaign → Message Workflow[2m > [22mfull workflow: create lead, create campaign, add contact, send message [33m10539[2mms[22m[39m
+   [33m[2m✓[22m[39m STABILITY: Concurrent Operations[2m > [22mhandles multiple simultaneous campaign creations [33m314[2mms[22m[39m
+ [32m✓[39m server/realtime/interruptAck.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 54[2mms[22m[39m
+[90mstderr[2m | server/_core/cerebras.test.ts[2m > [22m[2mcerebras client[2m > [22m[2mrotates to a second key after a rate limit response
+[22m[39m[Cerebras] Cerebras request failed (429 Too Many Requests): too many requests
+
+ [32m✓[39m server/_core/cerebras.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 120[2mms[22m[39m
+ [32m✓[39m server/realtime/dynamicPrompt.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 173[2mms[22m[39m
+ [32m✓[39m server/sentimentInfer.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 59[2mms[22m[39m
+ [32m✓[39m server/realtime/outboundBlocklist.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 56[2mms[22m[39m
+ [32m✓[39m server/_core/phoneE164.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 50[2mms[22m[39m
+[90mstdout[2m | server/webhooksRouter.test.ts[2m > [22m[2mwebhooks.omniAiLead[2m > [22m[2mcreates a lead when WEBHOOK_SECRET is unset
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223619212
+[Webhooks] Lead ingested → insertId: 1 | source: omniAiLead
+
+[90mstderr[2m | server/webhooksRouter.test.ts[2m > [22m[2mwebhooks.omniAiLead[2m > [22m[2mcreates a lead when WEBHOOK_SECRET is unset
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+[90mstderr[2m | server/webhooksRouter.test.ts[2m > [22m[2mwebhooks.omniAiLead[2m > [22m[2mreturns unauthorized when secret is required but wrong
+[22m[39m[Webhooks] Rejected — invalid x-webhook-secret from 127.0.0.1
+
+[90mstdout[2m | server/webhooksRouter.test.ts[2m > [22m[2mwebhooks.omniAiLead[2m > [22m[2maccepts x-webhook-secret when WEBHOOK_SECRET is set
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_1_1779223619357
+[Webhooks] Lead ingested → insertId: 1 | source: omniAiLead
+
+[90mstderr[2m | server/webhooksRouter.test.ts[2m > [22m[2mwebhooks.omniAiLead[2m > [22m[2maccepts x-webhook-secret when WEBHOOK_SECRET is set
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+ [32m✓[39m server/webhooksRouter.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 174[2mms[22m[39m
+ [32m✓[39m server/realtime/classifyTurn.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 34[2mms[22m[39m
+ [32m✓[39m server/realtime/stayPivotController.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 187[2mms[22m[39m
+[90mstdout[2m | server/_core/services/queue.test.ts[2m > [22m[2mqueue health[2m > [22m[2mreports memory mode and pending growth when Redis is unavailable
+[22m[39m[Queue] Automation job added (in-memory): automation_lead.created_999001_1779223620097
+
+[90mstderr[2m | server/_core/services/queue.test.ts[2m > [22m[2mqueue health[2m > [22m[2mreports memory mode and pending growth when Redis is unavailable
+[22m[39m[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+[Queue] REDIS_URL not set — using in-memory queue (jobs will not survive restarts)
+
+ [32m✓[39m server/_core/services/queue.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 57[2mms[22m[39m
+ [32m✓[39m server/realtime/callQueueOutbound.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 18[2mms[22m[39m
+ [32m✓[39m server/knowledgeBaseIngestion.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 236[2mms[22m[39m
+ [32m✓[39m server/auth.logout.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 25[2mms[22m[39m
+ [32m✓[39m server/realtime/voiceResponseEnvelope.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 50[2mms[22m[39m
+ [32m✓[39m server/_core/services/voiceBookingPipeline.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 32[2mms[22m[39m
+ [32m✓[39m server/webchatPublicApi.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 99[2mms[22m[39m
+ [32m✓[39m server/emailSequenceTrigger.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 15[2mms[22m[39m
+ [32m✓[39m server/realtime/speakability.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 252[2mms[22m[39m
+ [32m✓[39m server/realtime/outboundCallContext.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 248[2mms[22m[39m
+ [32m✓[39m server/_core/services/voiceProfiles.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 95[2mms[22m[39m
+ [32m✓[39m server/realtime/turnManager.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 19[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m48 passed[39m[22m[90m (48)[39m
+[2m      Tests [22m [1m[32m441 passed[39m[22m[90m (441)[39m
+[2m   Start at [22m 15:45:54
+[2m   Duration [22m 71.74s[2m (transform 76.65s, setup 10.04s, collect 300.94s, tests 41.34s, environment 73ms, prepare 45.36s)[22m
+
