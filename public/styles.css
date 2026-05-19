@@ -886,3 +886,235 @@ section {
     display: block;
   }
 }
+
+/* Landing page enhancements */
+.hero-showcase {
+  position: relative;
+  transform: rotate(-1deg);
+  box-shadow: 0 34px 95px rgba(71, 25, 91, 0.18), 0 0 0 12px rgba(243, 181, 243, 0.18);
+}
+
+.hero-media-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(90deg, #151326, #272044);
+  color: white;
+  padding: 12px 16px;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #23d18b;
+  box-shadow: 0 0 0 5px rgba(35, 209, 139, 0.12);
+}
+
+.hero-proof-row .proof {
+  min-height: 105px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.proof-strip-section {
+  border-top: 0;
+  padding: 0 0 28px;
+}
+
+.proof-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: -34px;
+  position: relative;
+  z-index: 3;
+}
+
+.proof-strip article {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 22px;
+  box-shadow: 0 18px 50px rgba(16, 17, 31, 0.08);
+}
+
+.proof-strip strong,
+.proof-strip span,
+.proof-strip p {
+  display: block;
+}
+
+.proof-strip strong {
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.proof-strip span {
+  margin-top: 6px;
+  color: #8f0784;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.proof-strip p {
+  margin: 12px 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.feature-grid .feature-tile {
+  min-height: 260px;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.feature-grid .feature-tile:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 24px 55px rgba(188, 18, 189, 0.11);
+}
+
+.workflow-section {
+  background:
+    radial-gradient(circle at 85% 8%, rgba(243, 181, 243, 0.42), transparent 28rem),
+    linear-gradient(180deg, #fff 0%, #fbf7ff 100%);
+}
+
+.workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.workflow-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: white;
+  padding: 22px;
+  box-shadow: 0 16px 46px rgba(16, 17, 31, 0.06);
+}
+
+.workflow-card::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 4px;
+  background: var(--gradient);
+}
+
+.workflow-card span {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(203, 25, 175, 0.1);
+  color: #8f0784;
+  font-weight: 950;
+}
+
+.workflow-card h3 {
+  margin: 18px 0 0;
+  font-size: 24px;
+}
+
+.workflow-card p {
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.channel-section {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(203, 25, 175, 0.34), transparent 30rem),
+    linear-gradient(135deg, #111020 0%, #17142d 55%, #23143a 100%);
+}
+
+.channel-row span {
+  min-height: 86px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.proof-cta-section {
+  border-top: 1px solid var(--line);
+  background:
+    radial-gradient(circle at 80% 20%, rgba(243, 181, 243, 0.48), transparent 26rem),
+    #fff;
+}
+
+.proof-cta {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 24px;
+  align-items: center;
+}
+
+.proof-cta h2 {
+  margin: 12px 0 0;
+  max-width: 680px;
+  font-size: clamp(38px, 5vw, 64px);
+  line-height: 1;
+  letter-spacing: -0.055em;
+}
+
+.proof-cta p {
+  max-width: 720px;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.7;
+}
+
+.proof-cta-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(203, 25, 175, 0.22);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 24px;
+  box-shadow: 0 24px 70px rgba(188, 18, 189, 0.14);
+}
+
+.proof-cta-card strong {
+  font-size: 22px;
+}
+
+.proof-cta-card span {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.footer {
+  background:
+    linear-gradient(180deg, #fff 0%, #fbf8ff 100%);
+}
+
+@media (max-width: 900px) {
+  .proof-strip,
+  .workflow-grid,
+  .proof-cta {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .hero-showcase {
+    transform: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .proof-strip,
+  .workflow-grid,
+  .proof-cta {
+    grid-template-columns: 1fr;
+  }
+
+  .proof-strip {
+    margin-top: 0;
+  }
+}

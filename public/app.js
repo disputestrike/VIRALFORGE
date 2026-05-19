@@ -233,6 +233,17 @@ function signupPage() {
 }
 
 function marketingPage() {
+  const workflow = [
+    ["01", "Scout", "Viral Radar pulls public trend signals, scores opportunities, and keeps the strongest topics visible in the workspace."],
+    ["02", "Produce", "A selected topic becomes a complete content run with brief, script, image, audio, MP4 video, captions, and metadata."],
+    ["03", "Review", "Release checks create a traceable review path so held, failed, approved, and retried packages are never hidden."],
+    ["04", "Package", "The same run prepares channel-specific packages for YouTube, TikTok, Instagram, X, LinkedIn, Pinterest, Reddit, and Telegram."],
+  ];
+  const proofMetrics = [
+    ["Server-backed", "workspace data", "The landing page and private app use the same API surface instead of disconnected mock screens."],
+    ["Real MP4", "video output", "The render path creates local video assets with FFmpeg and falls back safely when live providers are not configured."],
+    ["Audit trail", "review history", "Runs, assets, posts, policy events, quality checks, and learning records are persisted for evidence."],
+  ];
   return `
     <div class="shell">
       ${publicNav()}
@@ -241,24 +252,37 @@ function marketingPage() {
           <div class="eyebrow">AI media command center</div>
           <h1>Find what is taking off. Turn it into video first.</h1>
           <p>
-            ViralForge watches trend signals, ranks what has momentum, generates faceless videos,
-            prepares channel packages, and learns which formats deserve more volume.
+            ViralForge connects trend discovery, automated production, quality review, channel packaging,
+            and learning into one operating system for faceless media brands and content networks.
           </p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="/signup" data-link>Start free trial</a>
             <a class="btn btn-secondary" href="/app" data-link>Sign in</a>
           </div>
-          <div class="proof-row">
-            <div class="proof"><strong>Trend-first</strong><span>no guessing what to post</span></div>
-            <div class="proof"><strong>Videos</strong><span>MP4 assets and packages</span></div>
-            <div class="proof"><strong>Review</strong><span>quality gates before release</span></div>
-            <div class="proof"><strong>Learning</strong><span>winners feed the next cycle</span></div>
+          <div class="proof-row hero-proof-row">
+            <div class="proof"><strong>Trend-first</strong><span>server-ranked ideas</span></div>
+            <div class="proof"><strong>Video output</strong><span>MP4 assets generated</span></div>
+            <div class="proof"><strong>Review gates</strong><span>quality before release</span></div>
+            <div class="proof"><strong>Learning loop</strong><span>winners guide volume</span></div>
           </div>
         </section>
-        <aside class="hero-media">
+        <aside class="hero-media hero-showcase">
+          <div class="hero-media-label"><span class="status-dot"></span>Connected ViralForge workspace</div>
           <img src="/assets/viralforge-dashboard.svg" alt="ViralForge dashboard preview" />
         </aside>
       </main>
+
+      <section class="proof-strip-section">
+        <div class="container proof-strip">
+          ${proofMetrics.map(([value, label, copy]) => `
+            <article>
+              <strong>${value}</strong>
+              <span>${label}</span>
+              <p>${copy}</p>
+            </article>
+          `).join("")}
+        </div>
+      </section>
 
       <section id="product">
         <div class="container">
@@ -267,29 +291,50 @@ function marketingPage() {
               <div class="eyebrow">Product</div>
               <h2>Built for people running content networks, not one-off posts.</h2>
             </div>
-            <p>After sign-in, the first screen shows what the system thinks is worth making next.</p>
+            <p>After sign-in, ViralForge opens into a private workspace that shows ranked opportunities, production controls, review queues, history, assets, schedules, evidence, and admin proof.</p>
           </div>
-          <div class="grid-4">
+          <div class="grid-4 feature-grid">
             ${[
               ["Viral Radar", "Ranked topic opportunities by score, pillar, region, and production fit."],
               ["Production", "Generate script, image, voice, video, captions, metadata, and platform packages."],
-              ["Review", "Hold risky content, approve safe content, and keep a release trail."],
-              ["Learning", "Use outcomes to make stronger follow-ups instead of repeating dead formats."]
-            ].map(([title, copy]) => `<article class="tile"><span class="tile-icon">${title.slice(0, 2).toUpperCase()}</span><h3>${title}</h3><p>${copy}</p></article>`).join("")}
+              ["Review", "Hold risky content, approve safe content, retry failed runs, and keep a release trail."],
+              ["Learning", "Use outcomes and recursive evaluation records to make stronger follow-ups instead of repeating dead formats."]
+            ].map(([title, copy]) => `<article class="tile feature-tile"><span class="tile-icon">${title.slice(0, 2).toUpperCase()}</span><h3>${title}</h3><p>${copy}</p></article>`).join("")}
           </div>
         </div>
       </section>
 
-      <section id="channels" class="dark">
+      <section id="workflow" class="workflow-section">
+        <div class="container">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Workflow</div>
+              <h2>From signal to release package without manual chasing.</h2>
+            </div>
+            <p>The system is designed to reduce the manual work of searching for trends, deciding what to make, creating the media, checking it, and preparing it for each channel.</p>
+          </div>
+          <div class="workflow-grid">
+            ${workflow.map(([num, title, copy]) => `
+              <article class="workflow-card">
+                <span>${num}</span>
+                <h3>${title}</h3>
+                <p>${copy}</p>
+              </article>
+            `).join("")}
+          </div>
+        </div>
+      </section>
+
+      <section id="channels" class="dark channel-section">
         <div class="container">
           <div class="section-head">
             <div>
               <div class="eyebrow">Channels</div>
               <h2>One run, many release packages.</h2>
             </div>
-            <p>Each platform gets its own caption, format, metadata, schedule status, and approval path.</p>
+            <p>Each platform gets its own caption, format, metadata, schedule status, and approval path. Live publishing remains gated by connected credentials and review status.</p>
           </div>
-          <div class="logo-row">
+          <div class="logo-row channel-row">
             ${platformNames.map(platform => `<span>${platform}</span>`).join("")}
           </div>
         </div>
@@ -302,7 +347,7 @@ function marketingPage() {
               <div class="eyebrow">Pricing</div>
               <h2>Priced like a media operating system.</h2>
             </div>
-            <p>Pay for production capacity, channels, automation, and learning. PayPal subscriptions are planned for SaaS billing.</p>
+            <p>Pay for production capacity, channels, automation, and learning. PayPal-backed SaaS billing is planned for production onboarding.</p>
           </div>
           <div class="pricing-grid">
             ${pricingPlans.map(([name, price, copy, ...features]) => `
@@ -320,16 +365,18 @@ function marketingPage() {
         </div>
       </section>
 
-      <section id="proof">
-        <div class="container">
-          <div class="section-head">
-            <div>
-              <div class="eyebrow">Proof</div>
-              <h2>Not a posting calendar. A production loop.</h2>
-            </div>
-            <p>The private workspace shows generated runs, produced assets, channel packages, quality checks, and what the system learned.</p>
+      <section id="proof" class="proof-cta-section">
+        <div class="container proof-cta">
+          <div>
+            <div class="eyebrow">Proof</div>
+            <h2>Not a posting calendar. A production loop.</h2>
+            <p>The protected workspace shows generated runs, produced assets, channel packages, quality checks, learning signals, and admin evidence from the same backend APIs that power the product.</p>
           </div>
-          <a class="btn btn-primary" href="/app" data-link>Sign in to see evidence</a>
+          <div class="proof-cta-card">
+            <strong>See the operating record</strong>
+            <span>Sign in to inspect persisted runs, assets, review events, schedules, and evidence.</span>
+            <a class="btn btn-primary" href="/app" data-link>Sign in to see evidence</a>
+          </div>
         </div>
       </section>
       ${footer()}

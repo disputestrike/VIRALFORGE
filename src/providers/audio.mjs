@@ -1,18 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { spawn } from "node:child_process";
-import ffmpegPath from "ffmpeg-static";
 import { config } from "../config.mjs";
-
-function run(cmd, args) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { windowsHide: true });
-    let stderr = "";
-    child.stderr.on("data", data => { stderr += data.toString(); });
-    child.on("error", reject);
-    child.on("close", code => code === 0 ? resolve() : reject(new Error(stderr || `Command failed: ${cmd}`)));
-  });
-}
+import { runFfmpeg } from "../runtime/ffmpeg.mjs";
 
 export async function generateVoiceAsset({ storage, runId, text }) {
   if (config.providers.deepgramApiKey) {
@@ -33,7 +22,7 @@ export async function generateVoiceAsset({ storage, runId, text }) {
   const scratch = path.join(config.app.dataDir, "scratch", runId);
   await fs.mkdir(scratch, { recursive: true });
   const output = path.join(scratch, "voice.wav");
-  await run(ffmpegPath, [
+  await runFfmpeg([
     "-y",
     "-f", "lavfi",
     "-i", "sine=frequency=620:duration=8",

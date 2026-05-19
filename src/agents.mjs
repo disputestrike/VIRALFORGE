@@ -6,6 +6,7 @@ import { renderTemplateVideo } from "./render/renderer.mjs";
 import { runPolicyOS } from "./policy.mjs";
 import { distribute } from "./connectors/index.mjs";
 import { updateRecursiveLearning, scoreTopic } from "./learning.mjs";
+import { collectTrendCandidates } from "./providers/trends.mjs";
 
 const pillars = [
   { name: "rage_bait", trigger: "anger/disbelief", platformFit: ["TikTok", "YouTube", "Instagram"] },
@@ -37,23 +38,55 @@ async function log(repo, runId, agent, status, message, metadata = {}) {
 
 export async function trendScout({ repo, run }) {
   await log(repo, run.id, "TrendScout", "started", "Collecting trend candidates.");
-  const trends = [];
-  for (const [topic, pillar, baseScore] of fallbackTrendSeeds) {
-    const trend = await repo.addTrend({
+  const collected = await collectTrendCandidates();
+  const liveCandidates = collected.candidates || [];
+  const sourceCandidates = liveCandidates.length
+    ? liveCandidates
+    : fallbackTrendSeeds.map(([topic, pillar, baseScore], index) => ({
       source: "local_seeded_trend_engine",
       topic,
       pillar,
       region: "global",
-      score: scoreTopic({ topic, pillar, score: baseScore }),
+      score: baseScore,
       metadata: {
         fallback: true,
-        reason: "Live trend provider keys are not configured yet.",
+        reason: collected.errors?.length ? `Live trend sources unavailable: ${collected.errors.join("; ")}` : "Live trend sources returned no candidates.",
         trendVelocity: baseScore / 100,
+        trendRank: index + 1,
+      },
+    }));
+
+  const evidence = await repo.evidence();
+  const existingTopics = new Set((evidence.trends || []).map(item => String(item.topic || "").trim().toLowerCase()));
+  const trends = [];
+  for (const candidate of sourceCandidates.slice(0, 10)) {
+    const key = String(candidate.topic || "").trim().toLowerCase();
+    if (!key || existingTopics.has(key)) {
+      const existing = (evidence.trends || []).find(item => String(item.topic || "").trim().toLowerCase() === key);
+      if (existing) trends.push(existing);
+      continue;
+    }
+    const trend = await repo.addTrend({
+      source: candidate.source,
+      topic: candidate.topic,
+      pillar: candidate.pillar,
+      region: candidate.region || "global",
+      score: scoreTopic({ topic: candidate.topic, pillar: candidate.pillar, score: candidate.score }),
+      metadata: {
+        ...(candidate.metadata || {}),
+        fallback: !liveCandidates.length,
+        liveTrendScan: Boolean(liveCandidates.length),
       },
     });
     trends.push(trend);
+    existingTopics.add(key);
   }
-  await log(repo, run.id, "TrendScout", "completed", `Ranked ${trends.length} trend candidates.`, { topTopic: trends[0]?.topic });
+  trends.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+  await log(repo, run.id, "TrendScout", "completed", `Ranked ${trends.length} trend candidates.`, {
+    topTopic: trends[0]?.topic,
+    liveSources: liveCandidates.length > 0,
+    sourceErrors: collected.errors || [],
+  });
   return trends;
 }
 

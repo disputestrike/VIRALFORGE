@@ -1,18 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { spawn } from "node:child_process";
-import ffmpegPath from "ffmpeg-static";
 import { config } from "../config.mjs";
-
-function runFfmpeg(args) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(ffmpegPath, args, { windowsHide: true });
-    let stderr = "";
-    child.stderr.on("data", data => { stderr += data.toString(); });
-    child.on("error", reject);
-    child.on("close", code => code === 0 ? resolve(stderr) : reject(new Error(stderr)));
-  });
-}
+import { runFfmpeg } from "../runtime/ffmpeg.mjs";
 
 function splitLines(text, maxLength = 22, maxLines = 4) {
   const words = String(text || "ViralForge").replace(/\s+/g, " ").trim().split(" ");
@@ -92,7 +81,7 @@ export async function renderTemplateVideo({ storage, runId, title, script, asset
     output,
   );
 
-  await runFfmpeg(args);
+  await runFfmpeg(args, { requireDrawtext: true });
 
   const stored = await storage.putBuffer(`runs/${runId}/video.mp4`, await fs.readFile(output), "video/mp4");
   return {
